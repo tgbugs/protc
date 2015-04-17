@@ -39,6 +39,10 @@ To this end we will also need to natively (stdlib style) support direct linking
 of identifiers or terminologies to code objects. In the same vein the syntax of
 the language will place human readability before all else (follow Python here).
 
+Should functions that categorize things take the categories or classes as inputs?
+I think they should, they need to be defined externally or better yet mapped to
+and information system. I guess those would count as Values.
+
 Can we support imperative constructs inside functions by only allowing variables
 to be accessed from within their defined namespace/scope? No global variables
 and no accessing variables not defined within scope. Example: could use a for
@@ -63,6 +67,8 @@ what the requirements on the input and output types is going to look like is
 going to require some very specific examples and then attempts to apply the system
 elsewhere. This may also come later.
 
+
+## Conservation of mass (or how to prevent a whole bunch of typing)
 Somehow this reminds me that we *may* need to do something about conservation of
 energy and mass. Specifically it is going to be really akward if the p20 enterns
 and never leaves that function. Maybe we can come up with a way to avoid having to
@@ -102,9 +108,13 @@ cleanup procedure if they don't want to (for example). We could also infer this
 automatically for functions called inside functions that return an object which
 is not returned by the enclosing function.
 
-Should functions that categorize things take the categories or classes as inputs?
-I think they should, they need to be defined externally or better yet mapped to
-and information system. I guess those would count as Values.
+
+##Alpha and Omega (generation, destruction, and friends)
+Protc needs to deal very thoroughly with the coming into being and ceasing to be
+of Beings. Everything in between is up to the user. We need to make it transparent
+for users to deal with the complexities of generation and destruction and procurement
+without getting sloppy in our accounting. It may be worth consider all the trasitions
+from n=>m for various types of begets functions and figure out what we need to consider.
 
 
 ## Asynchrony
