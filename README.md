@@ -1,8 +1,9 @@
 # Protc
-A language for writing protocols.
+A language for specifying protocols.
+
 
 ## Description
-Protc (prot see, pro tik, who cares) is a formal language for describing protocols,
+Protc (prot see, pro tik, who cares) is a formal language for specifying protocols,
 scientific or otherwise. Specifically it is intended to provide a formal way to
 record the inputs, outputs, and executors (human, computer, or otherwise) of a
 protocol.
