@@ -118,6 +118,26 @@ without getting sloppy in our accounting. It may be worth consider all the trasi
 from n=>m for various types of begets functions and figure out what we need to consider.
 
 
+## Denoting Modifiction
+How do we deal with modified beings? Eg a "human with stitches" or a "mouse with
+a subcutaneous bladder perssure meter" or a "subject who received treatment a."
+I think people have probably worked out the problem but within the language I
+think we will need some ability to compose types, not for inference but simply
+so that we do not force users to write them themselves, though, for outputs we
+would clearly need some nice notation to indicate that a modification has occured.
+Maybe a simple ```<human, substance_a>``` type could suffice basically you have
+the primary entity and simply use the being that modified it or that was consumed
+by it was a tag? Maybe it needs to be a tripple with ```<human, protocol, substance>```
+that is what actually gets returned as a result of a consumption step. For example
+an eat radiolabled cherrios protocol would bind have an ```eat(child, cherrios) ->
+child: destructor(cherrios) child``` but if eat was a consumption function then
+would during evlaution (not reasoning about the generation or consumption) simply
+return itself as a type for future inputs and reasoning until it was unpacked and
+the child was all that was left after any functions that cared about the child
+being radiolabled had been executed (including the recording of that fact in a
+database somehwere or something).
+
+
 ## Asynchrony
 One of the most important aspects to consider is that some protocols descrbied in
 Protc could take years to execute but might nevertheless need to be collecting data
