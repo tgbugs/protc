@@ -1,0 +1,116 @@
+# python style (is super awful) too flexible
+def protocol_atom(arg: TypeA, *args: expression, optarg: TypeB = DefaultValue, **kwargs: expression) -> Type:
+# haskell's system is too strong in one sense, we need one level on top of it support optional return values
+# or we can just pretend that the function ALWAYS returns that value even if we don't actualize it... that is the better way
+# THEN if there is a dependency on a specific part of the return value we can go and retrieve candidate methods for
+# actualizing the value
+# we want pattern matching yes yes (currying what?) typed lambda calculus please
+
+# a huge amount of this stuff is usually done with workflows :/
+# functional flow block diagrams etc
+# what you really needed was a better IDE :/
+
+# MUST be functional, __within__ a single file
+# IE: support imperative programming with a function namespace but variables do not survive return calls unless they are resources
+# only resources have global scope
+# data acquistion and input at each step should be managed with the resource type which will do io and mapping
+
+
+# Inheritance opperates on the level of BeingTypes and ProtocolTypes
+# so a generic 'weight' measurment applies to any being that has mass
+# and lives in a gravitaitonal field, and it will change depending on g
+# protocols for measuring weight can specify a BeingType parameter at the
+# most generic level for example 'scale' or something like that
+# again deriving their genericness by abstracting as far as possible
+# (somehwere in here in provenance about which instances of beings have
+# actually been tried)
+
+literals  # str, int, etc.
+values  # numerical/measurable values with units or unitless
+beings  # entities which exist only in the type system and are references to the real world, any checks to validate their realness should be expressed using values; a being type should probably be able to define a set of measurables and protocols/methods should opperate on being/measurable pairs beings are NOT to be treated as objects in OOP
+resources  # identifier sources, subprocess calls, databases
+parameters  # inputs to a function, can be values or beingtype, for a step/protocol defintions
+return values  # values returned by a function evaluation/protocol execution
+return beings  # beings returned by a function evaluation/protocol execution
+actualized values  # values which are required by a later step and must be actualized
+valuized beings  # replacement of a Type identifier with an instance -- OPTIONAL
+agent  # human, institution, company, computer, etc the "executor" of the protocol, this is part of the execution call
+
+
+# some experimental typedefs
+
+Identifier :: [Char] -> Identifier
+TypeIdentifier :: Identifier
+TokenIdentifier :: Identifier
+
+Value :: String | Num | Int | Float | UInt | Array | Matrix | Tensor  # syntax??
+
+#Being :: [Values]
+
+Universalizer :: TypeIdentifier -> BeingType  # being types are actually just going to be names... eg: data Universalizer = BeingType TypeIdentifier
+Detokenizer :: Token -> BeingType  # via Universalizer?
+Classifier :: [ValueType] -> BeingType  # via TypeIdentifier
+BeingType :: TypeIdentifier -> BeingType  #  Typeizer... Universalizer
+BeingType = BeingType TypeIdentifier
+#Being :: BeingType  # all beings in this system exist only at the type level
+
+
+Tool :: Being
+Reagent :: Being
+
+
+Actualizer :: ValueType -> Resource -> Value
+type Actualization = Actualizer
+
+Measurement :: Protocol
+BeingToken :: BeingType -> Resource -> TokenIdentifier  # tokenization -instantiation/valuization-
+Measurement :: Being -> TokenIdentifier -> Value  # actualization
+MeasurementType :: Being -> ValueType  # 
+
+
+
+Method :: 
+
+Protocol :: [Protocol] -> [Being] -> [Value] -> ([Being], [Value])
+Protocol :: Protocol -> Being -> Value -> (Being, Value)
+
+
+ResourceType :: Being -> IOProtocol
+DataFile :: ResourceType
+
+Protocol :: DataFile ->
+
+
+# what do we want out of this? we want ALL beings alive or dead (including "dead mouse" yay conservaiton of energy) that come out
+# we will automatically infer _all_ the possible values that can come out too
+# actualization of values happens at 
+# this is nice because we can raise compiler errors when a ValueType does not have an actualization method
+ProtocolType :: *BeingType -> *ValueType -> *BeingType, *ValueType
+ProtocolType :: *BeingType, *(ValueType parameter) -> 
+
+# function definition syntax
+# c style
+
+
+
+BeingType ProtocolName(BeingType1, BeingType2, ValueType parameter1, ValueType2 parameter2):
+BeingType ProtocolName(BeingType1, BeingType2, ProtocolType1, ProtocolType2, ValueType parameter1, ValueType2 parameter2):  # one way to encode dependencies
+BeingType ProtocolName(BeingType1, BeingType2, ToolType1, ReagentType1, ProtocolType1, ProtocolType2, ValueType parameter1, ValueType2 parameter2):  # how to encode/track instances of tools/reagents? # ALSO: order by convention
+[Slice] AcuteSlicePrep(Rodent, Microtome, CuttingBuffer, Razor, Foreceps, Agarose, PerfusionProtocol, 
+
+void ProtocolName():
+ValueType MeasurementName():  # if it returns a Value it is a measurement
+# ALL the return values are spawned based on the measurables for the BeingType returned 
+# how many being types allowed per function? structure?
+
+def ProtocolName(BeingType1, BeingType2, ValueType param1, ValueType2 param2) -> BeingType:  # semipython
+    return BeingType.values
+
+def ProtocolName(BeingType1, BeingType2, param1:ValueType, param2:ValueType2) BeingType:  # semipython
+    return BeingType.values
+
+ProtocolName(BeingType1, BeingType2, ValueType param1, ValueType2 param2) BeingType =  # nim stype
+ProtocolName(BeingType1, BeingType2, param1: ValueType, param2: ValueType2) BeingType =
+    result = BeingType -> values
+
+
