@@ -8,7 +8,7 @@ record the inputs, outputs, and executors (human, computer, or otherwise) of a
 protocol.
 
 
-## Ramblings
+## Ramblings (need to distill what goes in the lang and what goes elsewhere)
 The general aim is for the language to be functional. This is particularly important
 since Protc is supposed to serve as a sort of formal documentation language since in
 many cases the execution of a protocol by a human executor exists outside the digital
@@ -75,6 +75,49 @@ the computer that oversees the execution, assistant?) has been given access to
 inventory records and can identify that water bottle Z is being used, then the
 digital record for Z should be updated to reflect that change. If there is no
 digitization of a being then we can just ignore it.
+
+Should functions that categorize things take the categories or classes as inputs?
+I think they should, they need to be defined externally or better yet mapped to
+and information system. I guess those would count as Values.
+
+
+## Asynchrony
+One of the most important aspects to consider is that some protocols descrbied in
+Protc could take years to execute but might nevertheless need to be collecting data
+on a daily basis. Composition of Protc functions and files should be able to manage
+this without a user having to load up a specific script every time it was needed.
+The execution of the protocol will thus need to be portable across different observers.
+It might work out that using the 'resources' model for all digital io could make this
+easier because any Protcol (Protcall? heh) would be essentially stateless and could
+describe its own procedure for reloading from a long down time ('wake me when you
+need me').
+
+
+## Granulatiry and generalizability (composition elsewhere)
+Clearly a language for describing protocols can be used to say "here is exactly
+what I did" as well as to say "here is a general way to do something" in a sense
+you could infer how general a result was based on how general the set of protocols
+were that produced that result. Ideally we would strive for functions that were
+as general as possible and could produce the same result. In fact in some domains,
+for example manufacturing there might be two completely different ways to arrive
+at the same result (eg a metal figure 3d printed vs subtractive sculpting). Having
+a formal representation of the multiple ways to produce the same outputs is
+incredibly valuable for weighing options and comparing those approaches. The level
+of granularity probably will come from how exact someone is in describing their
+protocol. We *should* be able to generalize a protocol based on the type, this
+would need to be derived from the ontology. This seems to be deeply related to how
+we will ultimately classify or categorize different protocols.
+
+
+## Stability of mappings to information systems
+If we are going to do type inference on the types from ontologies or vocabularies
+then we are going to have to figure out how to provide a stable reference for
+users who write programs that assume certain things about the type hierarchy.
+Changes to the ontology could break type inference for some protocols! That would
+be really really bad. I think this means that we have to approach the development
+of the ontologies and their hierarchy very, very carefully OR we have to let users
+maintain their own type hierarchy either in code or in some other system so that
+they don't get destroyed by changes.
 
 
 ## License
