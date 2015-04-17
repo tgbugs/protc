@@ -81,6 +81,10 @@ DataFile :: ResourceType
 Protocol :: DataFile ->
 
 
+# XXX because every single protocol function could be executed by an unknown number of executors
+# every protocol function definition shall begin with a specfication of the Types of those executors
+# (these might someday change if, for example, robots replaced factory workers)
+
 # what do we want out of this? we want ALL beings alive or dead (including "dead mouse" yay conservaiton of energy) that come out
 # we will automatically infer _all_ the possible values that can come out too
 # actualization of values happens at 
