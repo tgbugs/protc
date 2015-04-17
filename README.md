@@ -76,6 +76,32 @@ inventory records and can identify that water bottle Z is being used, then the
 digital record for Z should be updated to reflect that change. If there is no
 digitization of a being then we can just ignore it.
 
+More on conservation of mass. One problem that we have is distinguishing between
+the outputs of a function that are GENERATED vs the outputs that merely persist.
+We can solve this problem by actually comparing inputs and outputs and simply
+taking I and not O as consumed inputs I and O as persistent inputs, and O and
+not I as generated outputs. Furthermore we can postulate that the consumed inputs
+should for the most part have contributed to the generation of the new outputs.
+One edge case to consider is maintainence where you have a single output and all
+other inputs are consumed. Clearly unless the individual is rapidly gaining weight
+there needs to be some representation that accounts for the fact that biology systems
+are continually executing a protocol that takes chemical energy stored in matter and
+converts it into energy which is a generated output of that protocol which then
+leaves the system. Not sure we *really* want to model all of this. It would be nice
+if we could just have the novel beings pop out of the function but that would seem
+to violate our desire for no external state. Well, technically using a tool in
+an experiment *does* modify the tool since it is a tool that has now been used
+n + 1 times, which is useful for maintainance protocols. Hrm, yes, when you do a
+dissection you don't get tools back from the dissection step, you get dirty tools
+back! You must do something with the dirty tools! Clean them! Put them away then
+you have no more tools. Yes, we need the opposite of procurement protocol. A
+disposal or "done with" protocol. This is how we can create functions that have
+a single return for generation purposes. We can then use the 'autodispose' type
+for persistent tools as a shorthand so that people don't have to include their
+cleanup procedure if they don't want to (for example). We could also infer this
+automatically for functions called inside functions that return an object which
+is not returned by the enclosing function.
+
 Should functions that categorize things take the categories or classes as inputs?
 I think they should, they need to be defined externally or better yet mapped to
 and information system. I guess those would count as Values.
