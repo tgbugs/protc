@@ -6,7 +6,8 @@ A language for specifying protocols.
 Protc (prot see, pro tik, who cares) is a formal language for specifying protocols,
 scientific or otherwise. Specifically it is intended to provide a formal way to
 record the inputs, outputs, and executors (human, computer, or otherwise) of a
-protocol.
+protocol. What is valuable is neither the fact nor the number, but how it came to
+be known.
 
 
 ## Ramblings (need to distill what goes in the lang and what goes elsewhere)
@@ -67,6 +68,33 @@ water. Thinking about how to make steps more composable for standard libs and
 what the requirements on the input and output types is going to look like is
 going to require some very specific examples and then attempts to apply the system
 elsewhere. This may also come later.
+
+
+## There are no facts there are only measurements (re: Rene Descartes)
+There are no facts. There are only measurements and assertions. Assertions and
+assignments will be flagged as such. For example, suppose you want to specify a
+protocol for building a car, the last step does not produce a car, the last step
+produces a boolean value that evaluates to true if the putative car passes the
+criteria (WHICH YOU SPECIFY and could be "quacks like a duck" -> True). This
+prevents all sorts of madness and forces explicit documentation of these critria
+which can the themselves be evaluated and improved. This will be REQUIRED because
+in order to enter that value into the digital realm there must be a protocol for
+how it is done and some resource must be specified. An under specificed classification
+will stick out like a sore thumb. This is much more useful for computer systems
+because computers don't know anything about the world, but if we give them the
+criteria and we can see it clearly doccumented then we know what they are talking
+about and can assess that. This is criticial for communication in science and
+cannot be overlooked. Ontologies by their fundamental nature conflate being with
+assertion. This is why the stumble so often. A language for science must enshrine
+the completely circumspect nature of assertions and facts by forcing them into
+the open and clearly labeling them. Sure, you can write a constant into a file
+and assert "pi = 3" and try to get people to agree with you but you will likely
+fail. The important thing is building a structure so that people can have the
+conversation. Now, if you can specify the protocol you used to come to the
+conclusion that "pi = 3" it is infinitely better because then the community and
+the asserter can go back and look and determine that there was indeed a rather
+nasty rounding bug in the code that was used rather than devolving into arguments
+about how stupid the Indiana legislature is.
 
 
 ## Conservation of mass (or how to prevent a whole bunch of typing)
