@@ -70,6 +70,23 @@ going to require some very specific examples and then attempts to apply the syst
 elsewhere. This may also come later.
 
 
+## Practical considerations for readability and execution
+Nothing but the interpreter. If at all possible it would be great to have the code
+itself be human readable. Translation to other representations such as a step by
+step list or a graph *might* be possible, but we'll see. Having looked over some
+of the bpmn stuff I think I can safely say that providing syntax highlighting and
+making it trivial to read and understand the raw code could be a much more productive
+way to address the problem of human readability. On the other hand if we are going
+to have data specialists then we can just expect them to be able to understand code.
+In that context the most important thing is the ability to translate a protocol into
+two different things: 1) something that can be executed by a human being or set of
+human beings, 2) something that can be executed by a macine or set of machines. 3)
+something that can be read and executed by a combination thereof (easy when you
+break each section into parts and label it with an executor). I imagine some strange
+world where the human beings are doing the addition and subtraction and the computers
+are lifting heavy objects.
+
+
 ## There are no facts there are only measurements (re: Rene Descartes)
 There are no facts. There are only measurements and assertions. Assertions and
 assignments will be flagged as such. For example, suppose you want to specify a
@@ -95,6 +112,22 @@ conclusion that "pi = 3" it is infinitely better because then the community and
 the asserter can go back and look and determine that there was indeed a rather
 nasty rounding bug in the code that was used rather than devolving into arguments
 about how stupid the Indiana legislature is.
+
+Facts do not and cannot have being. Processes can have being. So if you can
+communicate how to do a process then you have much better assurance that the
+result of the process is indeed about reality and not simply a hallucination.
+How do you learn something? -> Read it on the internet -> How do you know the
+internet is right? -> Look it up in a book -> How do you know the book is right?
+-> Check with another book. -> How about that book? -> Try to reproduce their
+methods IF there were methods -> Did they even specify their criteria for right?
+Other options are: believe, or proceed as if it were true and see what happens.
+Note that option 2 does not tell you that they were right only that if the
+assertion actually applies to your case that they were right. It may not apply.
+And you won't be able to find out.
+
+At the end of the day clear doccumentation of how something was determined or
+measured is far more convincing and practically useful than citation, assertion,
+or even data alone.
 
 
 ## Conservation of mass (or how to prevent a whole bunch of typing)
@@ -136,6 +169,17 @@ for persistent tools as a shorthand so that people don't have to include their
 cleanup procedure if they don't want to (for example). We could also infer this
 automatically for functions called inside functions that return an object which
 is not returned by the enclosing function.
+
+Leaving scope as a way to deal with Beings that aren't needed in a protocol anymore.
+Also the balance between doccumenting EVERYTHING and doccumenting what is actually
+relevant for science. I mean yes, performing manual memory managment on every single
+mouse carcass is ultimately needed, but surely we can do better? We do have to start
+out by writing down ALL the inputs and ALL the outputs and then seeing whether
+there are some that we can drop or find elegant ways to deal with so that the
+only thing that needs to be written down are the relevant (heh) i/o. Of course
+this presuposes that we can actually determine which elements are 'relevant.'
+Using Persist types and assuming implicity garbage cans and freezers for reagents
+or consumables does seem like it might be a viable.
 
 
 ##Alpha and Omega (generation, destruction, and friends)
