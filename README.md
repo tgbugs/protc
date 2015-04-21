@@ -1,6 +1,8 @@
 # Protc
 A language for specifying protocols.
 
+Where does data come from?
+
 
 ## Description
 Protc (prot see, pro tik, who cares) is a formal language for specifying protocols,
@@ -68,6 +70,40 @@ water. Thinking about how to make steps more composable for standard libs and
 what the requirements on the input and output types is going to look like is
 going to require some very specific examples and then attempts to apply the system
 elsewhere. This may also come later.
+
+We cannot measure or record everything. We often do not know all the variables.
+However, if there is a central repository of all measurement functions that have
+been used on an entity then we can reveal the gap between what is measured and
+what could have been measured. Preferably we would like to have those ranked by
+how commonly they are measured but we should be able to rank them along a number
+of axes. The reason this is important is becase we simply can't record every last
+possible detail of an experiment, we need to record the things that we think are
+important with some restrictions to make it clear what data we are actually using
+along the way to guide our steps. Usually the things we measure end up being the
+values that we need in order to calculate how much of something is needed in a
+later step. For example the reason we measure od280 for dna is that that can give
+us a quantitative measurement of the concentration which we need in the next step
+where we have to have a certain concentration of DNA for a transfection to work.
+
+These are the kinds of logical dependencies that need to be recorded and made
+explicit even though there are other features that could be measured or measured
+using other methods. In a sense this is why it is nice to work backward from the
+end result: you might discover a new and better way to get the inputs that you need
+in order to perform the next step.
+
+I think the key thing here is that protocols can be specified at varying levels
+of detail. Since many parts of a protocol may have a human executor as long as
+the inputs and outputs match then that is a start. Filling in the details and
+linking inputs and outputs along the way (and ultimately decomposing a nested
+function into a series of sequential functions) can come later or be pulled in
+from a community repository based on the inputs and outputs that are listed. I
+think getting people to think rigorously about the inputs and the outputs of their
+protocols would be a really solid first step, even if the exact details are not
+initially filled in.
+
+Automatic decoupling could be performed by looking to see whether an input variable
+is ever used in conjunction with another input variable. If it is not then it will
+be possible to split the inputs into multiple functions that are independent.
 
 
 ## Practical considerations for readability and execution
