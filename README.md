@@ -11,6 +11,39 @@ record the inputs, outputs, and executors (human, computer, or otherwise) of a
 protocol. What is valuable is neither the fact nor the number, but how it came to
 be known.
 
+## Dependencies
+A DSL for specifying _how_ to execute a series of steps. This is fundamentally what
+we are about here. The problem with laboratory science is that the practicalities of
+the execution of an expreiment, protocol, or process, are often entangled with the
+logical, temporal, and scientific, dependencies that will exist regardless of the
+execution environment. For example, if there are two experimental groups of mice that
+receive a treament, say a sham and a real surgury, then logically it does not matter
+what order those surguries were conducted in and we often assume in our interpretation
+that it was random. However, in reality it is often NOT random because, for example,
+there is a hard limit on how long some reagent is viable and it is expensive and needs
+to be prepared and used all at once within a certain time limit and thus all of one
+group is run first. Indeed there are many practicalities that are vital for producing
+data in science. However, those practicalities should NOT be confused with the experiemnt.
+Sometimes those practicalities mean that we must assume that they do not effect our results.
+It would be nice if we could clearly identify when we make those simplifying assumptions
+as we develop and refine a protocol.
+
+Thus it would be nice to have a clean way to specify different levels of dependency.
+A brief list of potential dependency types:
+1. Logistical, I need these reagents/tools 
+2. Temporal-Logical/-Experimental, these steps MUST be done in this order or
+BAD THINGS WILL HAPPEN
+3. Temporal-Practical/-Arbitrary, these are things that we assret don't actually
+matter but are convenient or are a product of the fact that a single human was the executor
+4. Data/Knowledge, I need to know this parameter so that I can calibrate/move to next step
+5. Skill/Learning, I need to be able to execute this task with a certain level of skill
+
+Note here that one VERY useful piece of information that we might want to help people collect
+is what happens when certain steps are done out of order or in a different order. In non obvious
+cases (an obvious case being , 'mice must have sex before you can do experiments on their offspring')
+being able to add an annotation that says "we didn't have this dependency and a blackhole ate my cat"
+would help future executors understand why certain dependencies are in point of fact not arbitrary.
+Knowing that certain features of a protocol have not been thoroughly explored is incredibly valuable.
 
 ## Ramblings (need to distill what goes in the lang and what goes elsewhere)
 The general aim is for the language to be functional. This is particularly important
