@@ -45,6 +45,16 @@ being able to add an annotation that says "we didn't have this dependency and a 
 would help future executors understand why certain dependencies are in point of fact not arbitrary.
 Knowing that certain features of a protocol have not been thoroughly explored is incredibly valuable.
 
+## Yogurt example
+To demonstrate a very practical example, one of my favorite quick meals is greek
+yogurt with honey, granola, and blueberries. In principle this is a very simple
+concoction, however, the order in which the ingredients are added and mixed makes
+and enormous difference in the outcome or vastly increases the difficulty of producing
+the desired outcome. What is a concise way to document the ingredients, the order,
+the actions, and the rationale (smushed blueberries)? Consider also that this does
+not even touch the process of measurement and data generation, only of concisely and
+correctly communicating a recipe using something other than the standard cookbook style.
+
 ## Ramblings (need to distill what goes in the lang and what goes elsewhere)
 The general aim is for the language to be functional. This is particularly important
 since Protc is supposed to serve as a sort of formal documentation language since in
