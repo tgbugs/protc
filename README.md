@@ -141,7 +141,7 @@ and are thus inhereantly functional (the RealWorld monad). Here is some potentia
   (mix spoon things-in-bowl)
   (put blueberries bowl)
   (mix-carefully spoon things-in-bowl)
-  (delicious-yogurt)) ; last s-exp is returned and possibly should be ided using map-identifiers
+  (return-from make-delicious-yogurt delicious-yogurt)) ; last s-exp is returned and possibly should be ided using map-identifiers
 
 ```
 ARGH, yes we have 'colored' functions, fortunately as long as the executor matches we should be ok.
