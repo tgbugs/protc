@@ -55,6 +55,124 @@ the actions, and the rationale (smushed blueberries)? Consider also that this do
 not even touch the process of measurement and data generation, only of concisely and
 correctly communicating a recipe using something other than the standard cookbook style.
 
+## Who or what can execute this code?
+What is an executor? An executor is anything that can interpert and execute a subset
+of a program (or representation there of) written in protc and produce outputs that match the specified outputs
+and any other criteria or restrictions on execution (e.g. time limits).
+The key here though is that the executor shall be explicit in protc rather than something
+that exists outside the language. In a sense this is rather like the shebang #! of a shell
+script (it cannot escape the fact that if the a protc program is to be run on a computer
+we do need a valid interpreter or compiler). Since protc programs should be executable
+by anything capable of interpreting them one key feature of protc is that it must have
+and extensive collection of 'hello world' style setups that make it possible to gurantee
+sane execution of a block of code that has been annotated to be runnable by some executor.
+One could think of these like ebuilds for anything, or a replacement for autotools/make.
+A code block that should be executable by an english speaking human being should simply
+print the code itself and show it to the human. Any values returned by that block come in
+as interrupts from the RealWorld. Note here that when I say code block I mean function
+because (unless the human has a device that can manually flip bits) blocks of code that
+are to be interpreted by a human being cannot possibly modify global state of the program
+and are thus inhereantly functional (the RealWorld monad). Here is some potential syntax:
+```
+#!/usr/bin/env protc   # this kills the repl ;_; some day we won't need the sheban
+[executor 20year] ; the first line of every protc file should list the expected executor and runtime upper bound
+;(RealWorld human yogurt honey blueberries granola bowl spoon) ; FIXME prefer defreal?
+(defreal human yogurt honey blueberries granola bowl spoon) ; this dumps names into our namespace without assertions
+(defreal something-not-specced-by-identifier-is-fine-too)
+(map-identifiers
+  (id1 id2 id3 id4 i5 i6 i7) ; or should this be (id1 human) (id2 yogur) etc?
+  ; note here that to make this lang useful we need to infer 'fridge' for yogurt
+  ; and spoon making process for the spoon, etc. However, this will be handled by
+  ; the identifier system, and anything referenced by identifier here should have
+  ; relevant type information imported if that type has an accompanying protc deftype
+  ; that deftype is where ALL the possible measurements would probably live for reals
+  (human yogurt honey blueberries granola bowl spoon))
+(executor human (RealWorld))   ; need to look up how to do RealWorld monad
+(executor python3 ("/usr/bin/env python3"))  ; insufficiently general, also, shells... :/
+(executor sh (defun sh_implemented_using_lisp_right_here_in_this_file)) ; you could do it if you were a madman
+[human (interval 1 20)year](defun learn_english (executor))
+
+[(learn_english human) 20min](defmon RTFM (executor)
+  ("This is the manual that you should read. It is plain
+   english and there is nothing else that needs to happen in here.
+   Hell, with a reasonable type system for the [executor, duration]
+   capture we wouldn't even need to have the qutoes because they would
+   be implied by the type of the executor??"))
+
+[python3 2sec](defmon SomePythonCode (executor)
+  ; when we pass executor we assert that anything inside is valid for that executor
+  (import antigravity)
+  (read-executor some_pipe_connected_to_the_running_program)) ; in this case there would be no return
+  ; NOTE: we REALLY do not want to try to reinvent pipes here stdout/stdin linking should be easy
+  ; ON THE OTHER HAND if you need stdout/stdin linking WTF are you using protc for!? just write some sh
+
+[sh 2sec](defmon why_not_bash_question_mark (executor) ; maybe we drop the (executor) here since we have defmon?
+  (cat /tmp/my_test_file | grep that\ was\ easy | sed 's/^.+$/dont try to recreate the wheel kids!/')
+  (read-executor)) ; read-executor should default to read from stdout of the executor and should be implict if not specced
+
+[human 1sec](defmon press-a-key (executor)
+  ("Yo dude, hit a key on your keyboard! This is your only job.")
+  (read-char))
+
+[human 1min](defmon mix (executor thing-to-mix-with &rest things-to-be-mixed)
+  "this is an underspecified mix function for a computer but human's got it!"
+  (use thing-to-mix-with to mix/stir/beat/whisk/agitate things-to-be-mixed)
+  (deftype (thing-to-mix-with 'things-to-be-mixed))) ; OOOOH does this return back into the interpreter or does it return the output of the mixing!?
+  ; FIXME since this is a language for documentation I think we really do need to have the output be the actual product
+  ; a nice default of course would be to simply return the verbed noun or simply (verb noun) as a type
+  ; THE USER SHOULD NOT HAVE TO INTERACT TO GO TO THE NEXT STEP UNLESS THEY ARE TO INPUT A VALUE
+
+[human 10sec](defmon put (executor thing-to-put thing-to-put-in)
+  (put/place thing-to-put in thing-to-put-in)
+  (deftype (thing-to-put thing-to-put-in))) ; does this even work!? NOTE the last value is what is actually returned
+
+[human 3min](defmon make-delicious-yogurt (executor yogurt honey granola blueberries bowl spoon)
+  "Notice that all of these things exist at the type level and the specificty is largely determined
+  by the identifier system, so the more general the protocol the more general the identifiers should be.
+  We do not handle this within protc"
+  (put yogurt bowl) ; TODO how do sequential... iirc lisp actually has a nice way to do this with (put honey (put yogurt bowl))?
+  (create indentation-in-yogurt) ; could use create as a way to create local names for use later in a sequence for human interp
+  (let indentation-in-yogurt) ; pretty sure let actually does something like creating a new name, but seems a bit off
+  ; create could be used as a logical place holder until a (defmon make-indentation (tool object)) was written
+  ; TODO I really need to review lisp naming/scope because I think I would need 
+  (put honey indentation-in-yogurt)
+  (mix executor spoon things-in-bowl) ; FIXME I want executor to be implicit for single executor functions, multi executor notation will be more complicated :/
+  (put granola bowl)
+  (mix spoon things-in-bowl)
+  (put blueberries bowl)
+  (mix-carefully spoon things-in-bowl)
+  (delicious-yogurt)) ; last s-exp is returned and possibly should be ided using map-identifiers
+
+```
+ARGH, yes we have 'colored' functions, fortunately as long as the executor matches we should be ok.
+Multiexecutor functions/defmons are going to have to accept a list object as the first argument.
+Since we fully specify the execution environment and all executor defined functions cannot
+-touch- access global state (unless they twiddle bits in memory directly) functions run by
+different executors are entirely isolated from eachother and may be freely composed at the
+level of their inputs and their outputs. Since they are monadic functions in protc (WITH
+specified return values!!!) we need to specify how we will handle linking return values.
+The stdlib will effectively be the implementation of various executors and doing the linkings.
+The simplest version of course is to convert everything to human and tell them to "run this
+code in bash" (for example). Having played with this a bit I'm not entirely sure we even
+need the capture syntax for this, we just need a way to... wait, no, we need to be able to
+write down the inputs and the outputs and make RealWorld things explict inputs to functions.
+Therefore we _must_ include the human as an input when we _call_ the function, that is why the
+(executor) is there, DUH, do you even lisp bro?
+
+This needs a bunch of work because we need to be able to have return values as well
+from functions that are executed by humans. If numbers are the output of a process that a
+human executes we would like to be able to get them and advance the state of the interpreter.
+Yes, all RealWorld monad transations are blocking on that thread. Do we need `executor`
+to be a reserved keyword for referencing the first element of the capture, or should we
+go all in on the types of the executor and allow ANYTHING inside the parens? No, we need a
+sane way to name things even if the function is going to be executed by something other than
+a computer (and there is no input). Another way to think of these things are as named comments
+or blocks of code that are conditionally commented out based on whether the current executor
+matches the one specified by the capture. No, that is not quite right. It is conditional on
+whether the specified executor is know to the interpreter and has a hello world that can be
+loaded in the computer. Unspecified blocks can simply be treated as regular old s expressions
+and default to the interpreter itself.
+
 ## Ramblings (need to distill what goes in the lang and what goes elsewhere)
 The general aim is for the language to be functional. This is particularly important
 since Protc is supposed to serve as a sort of formal documentation language since in
