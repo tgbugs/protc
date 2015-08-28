@@ -83,6 +83,25 @@
 (defun labor-pregnancy (pregnant-female)
   (
   )
+
+(defun organismal-development (environment zygote) (organism)) ; excellent example of where the FULL specification required for complete logical consistency within a language simply is not possible, we CANNOT write this down right now
+; somewhere we need a 'representation literal' which maps to some ontology identifier and is acceptable
+; I think the code itself works fine for that, there probably isnt really a need for a special type, but we'll see
+; basically we need something that can create something out of nothing because we don't actually know all the steps
+; and somewhere in there would be a step where we bound a name to the thing or would have classified it as a thing
+; ah nominalism
+
+; identifying the executor for many processes is going to be exceedinly hard
+; because for many of the processes down near the bottom the agent is nothing
+; more than a force, diffusion, gravity, entropy, energy minimization, gradients,
+; thermal energy... we really would have to break each function down and identify the
+; force that moved each part or oversaw each step
+; I think this clearly shows the limits of this model and that it may not be a good
+; tool for modeling physical processes since it implies agency where there really is none
+; on the other hand adding agency might help people think more clearly about some processes
+; since it makes for a better story
+
+
 [developmental-machinery](defun gestation (pregnant-female)
 	    (offspring)) ; where does the description go here?
 ; this is what we need to deal with because the syntax needs to be clean for specifying the processes involved in gestation
@@ -109,3 +128,4 @@
 
 ;; notes
 ;; http://www.cliki.net/case%20sensitivity
+
