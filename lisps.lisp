@@ -16,6 +16,9 @@
   ; macrotime syntax validation and scope checking etc.
   ; desired: (learn_english human) -> (learn_english human)
   `(defun ,name (,@args) (list ',name ,@args)))
+; FIXME this function has one problem which is that it will accept quoted names
+; which will then be undefined if the function is evaled again, we should detect this?
+; or is this feature ok?
 
 (defmacro Z (f x &body body)
   `(defun ,f (,@x) (',f ,@x)))
