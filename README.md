@@ -3,6 +3,14 @@ A language for specifying protocols.
 
 Where does data come from?
 
+##
+Measurement the sole
+arbiter of truth in
+this and all worlds.
+
+To measure is to see.
+To see all that was not measured is to know.
+(unfortunately this part has to be left to the information system)
 
 ## Description
 Protc (prot see, pro tik, who cares) is a formal language for specifying protocols,
