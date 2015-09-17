@@ -181,6 +181,47 @@ whether the specified executor is know to the interpreter and has a hello world 
 loaded in the computer. Unspecified blocks can simply be treated as regular old s expressions
 and default to the interpreter itself.
 
+## Function notation an execution order vs unordered applications
+`(college (highschool human))` works fine for most cases because there is an unwritten rule that
+you must complete highschool before going to college, expressed as the idea that
+`(defrw (college (highschool human)))`. However, we often don't care about the order in which
+certain things were done to an object. Now, to be fair, many of these cases are rare,
+especially in science where (heat (mix thing)) is in no way equivalent to (mix (heat thing)).
+The issue here is one of how we communicate what features of the ordering are in fact relevant
+at the time of declaration -- NOT at the time of evaluation. It would be trivial to implement
+that we don't care about the order of application by writing
+`(defrw (college (unordered (highschool (middleschool human)))))` but then we start inserting
+`(unordered <expression>)` all over the place which is no fun at all. So we want a way to assert
+that only the application but not the order matters while also preserving function notation so
+that we can communicate the order in which things _were actually done_. A good example of this
+would be that we need a mouse that has had two types of injections `(inj-a (inj-b mouse))` but
+we assert that the order does not matter. BUT we also want a way to record what was actually done
+so that after the fact we can go back and actually check whether the order mattered.
+
+Maybe the correct way to do things here is to borrow a bit from the ontology world and use an
+additional assertion system that adds a note in the type checker? For example:
+`(type-assertion (order-equiv (inj-b (inj-a mouse)) (inj-a (inj-b mouse))))` or something.
+Obviously pitfalls around the diversity within `mouse` and the need to enable people to record
+what mice we actually have data on and what we can measure/know about mice that might covary
+with any differences, but that is a different issue. Another though is how to handle assertions
+that regardless of the being being functioned whether such an assertion should hold, eg
+`(type-assertion (order-equiv (inj-b (inj-a human)) (inj-a (inj-b human))))` might actually
+turn out to be false (note here to include the ability to make it easy to collect all assertions
+so that you can see them and see whether they are true or untested). However in some other case
+we might like to be able to say `(type-assertion (order-equiv rw-func-1 rw-func-2))` which would
+mean that anywhere those two functions were called in either sequence the output types should
+be considered equivalent. I wish there was an easier way to embed this information in the protocol
+but written documents are linear, and maybe it is ok to put the assertions after the fact.
+
+Note that this is not an issue when dealing with concurrent/parallel functions that operate on
+discrete subsets of the universal state. For example `(verb1 (verb2 global-state))` where
+verb1 and verb2 act on different parts of the global state are NOT good ways to write
+protocols because they obscure function I/O. One complaint of course is that verb1 and verb2
+must be done sequentially by a single operator, but that is down to the executor spec
+not the nature of the functions. As a side note we will however need some notation to
+indicate that two functions can be run simultaneously by default with a 'preferred order'
+that can be specified into the scheduler, otherwise the order will be more or less aribrary.
+
 ## Ramblings (need to distill what goes in the lang and what goes elsewhere)
 The general aim is for the language to be functional. This is particularly important
 since Protc is supposed to serve as a sort of formal documentation language since in
