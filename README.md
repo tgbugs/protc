@@ -213,6 +213,20 @@ mean that anywhere those two functions were called in either sequence the output
 be considered equivalent. I wish there was an easier way to embed this information in the protocol
 but written documents are linear, and maybe it is ok to put the assertions after the fact.
 
+Unfortunately this does not get around the problem that from a human readability standpoint
+(a (b (c d))) looks like things should in fact be done a b c  in temporal order. Alternate
+way to articulate this might be `(apply-any-order '(a b c) d)`, the question is what the
+resulting object would look like and whether we could infer equivalences between them
+without having to declare them directly. This would mean that the apply-any-order call
+would have to modify global state behind the scenes to update the type information so
+that `(eq (a (b (c d))) (b (c (a d)))) -> #t`. This solution also doesn't resolve the
+issue of whether they are equivalent only under application to d or whether they are
+equivalent under any application. Nice extension of the apply-all is that it could
+provide a consistent way to talk about orders, eg
+`(apply-exec <executor> (practical-ordering a b c) d)` alternate syntax where apply
+function is defined per executor spec:
+`[<executor>](apply-all (practical-ordering a b c) d)`
+
 Note that this is not an issue when dealing with concurrent/parallel functions that operate on
 discrete subsets of the universal state. For example `(verb1 (verb2 global-state))` where
 verb1 and verb2 act on different parts of the global state are NOT good ways to write
