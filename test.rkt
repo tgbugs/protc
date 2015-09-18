@@ -1,3 +1,5 @@
+#lang racket
+(require racket/enter)  ; drracket can't find module->exports w/o this
 (define-syntax-rule (defrw name args body) `(define ,name (,@args) (list ',name ,@args)))
 
 ; a little != implementation why it is not default we will never know
@@ -31,7 +33,8 @@
   (append
     '(rkt-base)
     (map car (cdar (let-values ([(x y) (module->exports 'racket/enter)]) y)))
-    (map car (let-values ([(x y) (module->exports 'racket)])(append (cdaddr x) (cdaddr y))))))
+    (map car (let-values ([(x y) (module->exports 'racket)])
+			 (append (cdaddr x) (cdaddr y))))))
 
 (define (who)
   (let ([all-symbols (namespace-mapped-symbols (current-namespace))])
