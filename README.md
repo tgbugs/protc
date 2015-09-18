@@ -12,12 +12,14 @@ To measure is to see.
 To see all that was not measured is to know.
 (unfortunately this part has to be left to the information system)
 
+
 ## Description
 Protc (prot see, pro tik, who cares) is a formal language for specifying protocols,
 scientific or otherwise. Specifically it is intended to provide a formal way to
 record the inputs, outputs, and executors (human, computer, or otherwise) of a
 protocol. What is valuable is neither the fact nor the number, but how it came to
 be known.
+
 
 ## Dependencies
 A DSL for specifying _how_ to execute a series of steps. This is fundamentally what
@@ -53,6 +55,7 @@ being able to add an annotation that says "we didn't have this dependency and a 
 would help future executors understand why certain dependencies are in point of fact not arbitrary.
 Knowing that certain features of a protocol have not been thoroughly explored is incredibly valuable.
 
+
 ## Yogurt example
 To demonstrate a very practical example, one of my favorite quick meals is greek
 yogurt with honey, granola, and blueberries. In principle this is a very simple
@@ -62,6 +65,7 @@ the desired outcome. What is a concise way to document the ingredients, the orde
 the actions, and the rationale (smushed blueberries)? Consider also that this does
 not even touch the process of measurement and data generation, only of concisely and
 correctly communicating a recipe using something other than the standard cookbook style.
+
 
 ## Who or what can execute this code?
 What is an executor? An executor is anything that can interpert and execute a subset
@@ -181,7 +185,8 @@ whether the specified executor is know to the interpreter and has a hello world 
 loaded in the computer. Unspecified blocks can simply be treated as regular old s expressions
 and default to the interpreter itself.
 
-## Function notation an execution order vs unordered applications
+
+## Function notation and execution order vs unordered applications
 `(college (highschool human))` works fine for most cases because there is an unwritten rule that
 you must complete highschool before going to college, expressed as the idea that
 `(defrw (college (highschool human)))`. However, we often don't care about the order in which
@@ -235,6 +240,7 @@ must be done sequentially by a single operator, but that is down to the executor
 not the nature of the functions. As a side note we will however need some notation to
 indicate that two functions can be run simultaneously by default with a 'preferred order'
 that can be specified into the scheduler, otherwise the order will be more or less aribrary.
+
 
 ## Ramblings (need to distill what goes in the lang and what goes elsewhere)
 The general aim is for the language to be functional. This is particularly important
