@@ -1,6 +1,16 @@
 #lang racket
 (require racket/enter)  ; drracket can't find module->exports w/o this
-(define-syntax-rule (defrw name args body) `(define ,name (,@args) (list ',name ,@args)))
+(require (for-syntax racket/match))
+
+(define-syntax (defrw stx)
+  (match (syntax->datum stx)
+    [(list _ name-args body)
+     (match name-args
+       [(list-rest name rest) (datum->syntax stx `(define ,name-args (list ',name ,@rest)))])]))
+
+(test (hello thing1 thing2) ("A BODY"))
+
+`(define ,name (,@args) (list ',name ,@args))
 
 ; a little != implementation why it is not default we will never know
 (define (!= a b . rest-id)
