@@ -1,3 +1,4 @@
+;in xrepl use ,en "test.rkt" or (enter! "test.rkt")
 #lang racket
 (require racket/enter)  ; drracket can't find module->exports w/o this
 (require (for-syntax racket/match))
