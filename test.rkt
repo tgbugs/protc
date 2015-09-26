@@ -27,7 +27,7 @@
 
 ;; experimental code
 
-; FIXME define-syntax name doesn't seem to produce things that can be renamed with define ;_;
+; FIXME something about the way this is defined causes weirdness with match and referring to defrw independently also doesn't give bad syntax errors like it should, needs more work
 (define-syntax (defrw stx)  ; FIXME need to support (name arg . args) syntax here
   ; TODO do we want this to handle stuff like checking for defined renamings/synonyms?
   (match (syntax->datum stx)
