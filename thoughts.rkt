@@ -54,3 +54,9 @@
 
 (procure (bind name1 "external id 1"))  ; probably won't work given that don't like define in experssion context, which seems like a reasonable idea... though allowing more terse definintions would let you bind the name and procure the being at the same time, which would probably be nice... maybe
 (bind-procure name1 "external id 1") ; sure, that might work...
+
+(make-being name1 "external id 1" procure)
+(make-being name2 "external id 2" step1)  ; observe here that if this is defined in a block at the start of a protcol step1 is not currently in scope! which sucks but is not surprising...
+(make-being name1 (external "eid1") procure) ; validate the external id
+(make-being name2 (internal "name2") step1) ; don't try to look up and validate this, makes it simple to 'upgrade' when a real identifier is found...
+(make-being name2 "name2" step1) ; don't even need to call anything in this case, since in the end the external function is just a reality check and will return the string or maybe the full IRI at the end
