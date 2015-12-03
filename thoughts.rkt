@@ -45,3 +45,9 @@
 ; experiment definitions need to bind data-acquisition fucntions to steps...
 ; behind the scenes, the executors are for documentation purposes...
 
+
+; namespaces for beings
+(define-name-bindings (name1 name2 name3) ("external id 1" "eid2" "eid3"))
+
+(procure name1 name2)  ; magically get these and move the being to the namespace of accessible/real/can actually be used beings
+(produces step1 name3)  ; move name3 being into the accessible beings namespace but make using name3 pull in a dependency on step1. do we allow name3 to be referenced inside of step1?
