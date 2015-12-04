@@ -49,7 +49,7 @@
 ; namespaces for beings
 (define-name-bindings (name1 name2 name3) ("external id 1" "eid2" "eid3"))
 
-(procure name1 name2)  ; magically get these and move the being to the namespace of accessible/real/can actually be used beings
+(procure name1 name2)  ; magically get these and move the being to the namespace of accessible/real/can actually be used beings FIXME doesn't this break strong typing!? either way we want to make sure the concept -> 'being' transition is handled transparently while still retaining sensible typing (the specification language should not have explicit user accessible types)
 (produces step1 name3)  ; move name3 being into the accessible beings namespace but make using name3 pull in a dependency on step1. do we allow name3 to be referenced inside of step1?
 
 (procure (bind name1 "external id 1"))  ; probably won't work given that don't like define in experssion context, which seems like a reasonable idea... though allowing more terse definintions would let you bind the name and procure the being at the same time, which would probably be nice... maybe
