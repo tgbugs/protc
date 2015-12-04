@@ -60,3 +60,13 @@
 (make-being name1 (external "eid1") procure) ; validate the external id
 (make-being name2 (internal "name2") step1) ; don't try to look up and validate this, makes it simple to 'upgrade' when a real identifier is found...
 (make-being name2 "name2" step1) ; don't even need to call anything in this case, since in the end the external function is just a reality check and will return the string or maybe the full IRI at the end
+
+; internal representation format (python style)
+{ 
+"step name":"step-10",
+"executors":1,
+"input beings":[bound-being-1, bound-being-2], ; here we will need an imlicity 'everything not listed' variable to allow the measurment target to be ill specified or collective
+;"measurement data": [{"name":measurement-1,"unit":volt,"type":float}], ; this should be defined elsewhere, the names just need to be in scope
+"measurement input being targets": [{"name":measurement-1, "target":bound-being-1}],  ; measurements should be able to have collective targets, but also bypassing partof makes this more user friendly, so yes membrane potential is a measurement about a circuit made up of a whole bunch of parts of a cell but we really just want to be able to link a measurement to an instance record so we need to let people link directly to the entities that they will be issuing instance identifiers to (eg cell1 cell2 cell3) 'cells have membrane potentials', stuff like that
+"output beings":[bound-being-1, bound-being-2], ; this can be inferred in the absense of a destory or transformation function?
+}
