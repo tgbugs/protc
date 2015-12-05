@@ -70,3 +70,32 @@
 "measurement input being targets": [{"name":measurement-1, "target":bound-being-1}],  ; measurements should be able to have collective targets, but also bypassing partof makes this more user friendly, so yes membrane potential is a measurement about a circuit made up of a whole bunch of parts of a cell but we really just want to be able to link a measurement to an instance record so we need to let people link directly to the entities that they will be issuing instance identifiers to (eg cell1 cell2 cell3) 'cells have membrane potentials', stuff like that
 "output beings":[bound-being-1, bound-being-2], ; this can be inferred in the absense of a destory or transformation function?
 }
+
+; need the ability to use measurements as contingencies, even if the measurement requires a human brain to check 'is the mouse bleeding profuesly' which is a boolean, and isn't something we want to record... we we need a way to flag unrecorded measurements that are required to keep track of experiment state and specify contingencies...
+; how do congingencies affect building dags? I think they are just interrupts... and the stack needs to return to where it was...
+; also need a way to implement timers/restrictions on state... I think this works fine using measurements (eg maintain a continuous measure of time since start)
+; might want a simple way to show assertions of 'equivalent' measurements, eg that slices go 'bad' after X amount of time, so just use time instead of doing the full 'is it bad yet' function
+
+; high level syntax structures that we need to define
+number-executors ; not sure this is needed???
+	(number-executors integer)
+concept
+	(concept name "identifier")
+actualize
+	procure ; is a special kind of step? bypasses the need to retrieve steps that produce the inputs you need...
+		(procure concept-name) ; DISLIKE imlicit statefulness here, but what are you going to do? also type restirction?
+	output
+	produces
+		(produces step-name concept-name)
+	transform
+		(transform being-name-1 being-name-2)
+step
+	(step step-name
+		  (inputs being-name-1 being-name-2)
+		  (measurements (measure-1 being-name-1))) ; existing table of know measurements???
+measurement
+conditional
+sequential
+	(sequential step-name-1 step-name-2)
+nonsequential
+	(nonsequential step-name-1 step-name-2 step-name-3)
