@@ -10,7 +10,7 @@ void yyerror(const char *str){
 	fprintf(stderr, "error: %s\n", str);
 }
 
-in yywrap(){
+int yywrap(){
 	return 1;
 }
 main(){
@@ -18,25 +18,24 @@ main(){
 }
 %}
 
-/* %token IDENTIFIER NUMBER STRING DEFSTEP DEFMEA ASSIGN INPUT OUTPUT ACTUALIZE IMPORT
-%token OPENPAREN CLOSEPAREN SINGLEQUOTE DOUBLEQUOTE PERIOD SEMICOLON */
-
-%token DIGIT
-%token LETTER
-%token SINGLEQUOTE
-%token CHARPREFIX
-%token VECTORSTART
-%token SPECIAL_IN
-%token SPECIAL_SUB
+%token OPEN
+%token CLOSE
+%token DOT
+%token IDENTIFIER
+%token VARIABLE
+%token NUMBER
 %token TRUE
 %token FALSE
-%token STRELEM
-%token CHAR
+%token STRING
+%token CHARACTER
+%token SINGLEQUOTE
+%token VECTORSTART
+%token COMMAT
 %token QUOTE
 %token LAMBDA
 %token IF
 %token SETBANG
-%token BEGIN
+%token BEGIN_
 %token COND
 %token AND
 %token OR
@@ -56,245 +55,114 @@ main(){
 %token LETREC_SYNTAX
 %token SYNTAX_RULES
 %token DEFINE_SYNTAX
+%token ELLIPSIS
 
 %%
-
 /* programs and definitions */
 program:
 	   command_or_definition0
+	   {printf("Hello world\n");}
 	   ;
 command_or_definition0:
 					  /* empty */
+					  {printf("cmd or def 0 zero\n");}
 					  |
 					  command_or_definition0 command_or_definition
+					  {printf("cmd or def 0 more than zero\n");}
 					  ;
 command_or_definition1:
 					  command_or_definition
+					  {printf("cmd or def 1 one\n");}
 					  |
 					  command_or_definition1 command_or_definition
+					  {printf("cmd or def 1 more than one \n");}
 					  ;
 command_or_definition:
 					 command
+					 {printf("cmd or def command\n");}
 					 |
 					 definition
+					 {printf("cmd or def definition\n");}
 					 |
 					 syntax_definition
+					 {printf("cmd or def syntax\n");}
 					 |
-					 '(' BEGIN command_or_definition1 ')'
+					 OPEN BEGIN_ command_or_definition1 CLOSE
+					 {printf("cmd or def begin\n");}
 					 ;
 definition0:
 		   /* empty */
+		   {printf("definition0 empty\n");}
 		   |
 		   definition0 definition
+		   {printf("definition0 defintion\n");}
 		   ;
 definition:
-		  '(' DEFINE variable expression ')'
+		  OPEN DEFINE variable expression CLOSE
+		  {printf("definition\n");}
 		  |
-		  '(' DEFINE '(' variable def_formals ')' body ')'
+		  OPEN DEFINE OPEN variable def_formals CLOSE body CLOSE
 		  |
-		  '(' BEGIN definition0 ')'
+		  OPEN BEGIN_ definition0 CLOSE
 		  ;
 def_formals:
 		   variable0
 		   |
-		   variable0 '.' variable
+		   variable0 DOT variable
 		   ;
 syntax_definition:
-				 '(' DEFINE_SYNTAX keyword transformer_spec ')'
+				 OPEN DEFINE_SYNTAX keyword transformer_spec CLOSE
 				 ;
 
-/*lexical structure should probably be moved over to the lex file*/
-token:
-	 identifier
-	 |
-	 boolean
-	 |
-	 number
-	 |
-	 character
-	 |
-	 string
-	 | '(' | ')' | VECTORSTART | SINGLEQUOTE | '.'
-	 ;
-delimiter:
-		 whitespace
-		 | '(' | ')' | '"' | ';'
-		 ;
-whitespace:
-		  space
-		  |
-		  tab
-		  |
-		  newline
-		  ;
-space:
-	 ' '
-	 ;
-tab:
-   '\t'
-   ;
-newline:
-	   '\n'
-	   ;
-comment:
-	   ';' all newline
-	   ;
-all:
-   /* empty */
-   |
-   STRELEM
-   |
-   '\\'
-   |
-   '"'
-   ;
-atmosphere0:
-		   /* empty */
-		   |
-		   atmosphere0 atmosphere
-		   ;
-atmosphere:
-		  whitespace
-		  |
-		  comment
-		  ;
-intertoken_space:
-				atmosphere0
-				;
+/* lexical binding */
 identifier0:
 		   /* empty */
 		   |
 		   identifier0 identifier
 		   ;
 identifier:
-		  initial
-		  |
-		  initial subsequent0
+		  IDENTIFIER
 		  ;
-initial:
-	   letter
-	   |
-	   special_initial
-	   ;
-letter:
-	  LETTER
-	  ;
-special_initial:
-			   SPECIAL_IN
-			   ;
-subsequent0:
-		   /* empty */
-		   |
-		   subsequent0 subsequent
-		   ;
-subsequent:
-		  initial
-		  |
-		  digit
-		  |
-		  special_subsequent
-		  ;
-special_subsequent:
-				  SPECIAL_SUB
-				  ;
-syntactic_keyword:
-				 expression_keyword
-				 |
-				 ELSE
-				 |
-				 EQUALRIGHT
-				 |
-				 DEFINE
-				 |
-				 UNQUOTE
-				 |
-				 UNQUOTE_SPLICING
-				 ;
-expression_keyword:
-				   QUOTE
-				   |
-				   LAMBDA
-				   |
-				   IF
-				   |
-				   SETBANG
-				   |
-				   BEGIN
-				   |
-				   COND
-				   |
-				   AND
-				   |
-				   OR
-				   |
-				   CASE
-				   |
-				   LET
-				   |
-				   LETSTAR
-				   |
-				   LETREC
-				   |
-				   DO
-				   |
-				   DELAY
-				   |
-				   QUASIQUOTE
-				   ;
-variable:  /*this isnt quite right*/
-		identifier {printf("This is an identifier: %s.\n", $1);}  /* except not syntactic keywords HOW??!? */
+variable:
+		VARIABLE
+	  	{printf("variable\n");}
 		;
-digit:
-	 DIGIT
-	 ;
 number:
-	  digit
-	  |
-	  number digit
+	  NUMBER
+	  {printf("number %d\n", $1);}
 	  ;
 boolean:
-	   true | false
+	   TRUE
+	   {printf("boolean TRUE\n");}
+	   |
+	   FALSE
+	   {printf("boolean FALSE\n");}
 	   ;
-true:
-	TRUE
-	;
-false:
-	 FALSE
-	 ;
-character:
-		 CHARPREFIX CHAR
-		 |
-		 CHARPREFIX character_name
-		 ;
-character_name:
-			  'space'
-			  |
-			  'newline'
-			  ;
 string:
-	  '"' string_element0 '"'
+	  STRING
 	  ;
-string_element0:
-			   |
-			   string_element
-			   ;
-string_element:
-			  STRELEM | ESCDBLQUOTE | ESCESC
-			  ;
+character:
+		 CHARACTER
+		 ;
 
 /* external representations */
 datum0:
 	  /* empty */
+	  {printf("datum0 empty\n");}
 	  |
-	  datum0 datum
+	  datum0 datum /* for some reason d before d0 improves parse selection*/
+	  {printf("datum0 datum\n");}
 	  ;
 datum1:
 	  datum
+	  {printf("datum1 datum\n");}
 	  |
 	  datum1 datum
+	  {printf("datum1 datum1 datum\n");}
 	  ;
 datum:
 	 simple_datum
+	 {printf("datum simple_datum\n");}
 	 |
 	 compound_datum
 	 ;
@@ -302,6 +170,7 @@ simple_datum:
 			boolean
 			|
 			number
+			{printf("simiple_dataum number\n");}
 			|
 			character
 			|
@@ -318,9 +187,13 @@ compound_datum:
 			  vector
 			  ;
 list:
-	'(' datum0 ')'
+	OPEN datum0 CLOSE
+	{printf("list datum0\n");}
 	|
-	'(' datum1 '.' datum ')'
+	OPEN datum1 CLOSE  /* because sometimes the parser is dumb */
+	|
+	OPEN datum1 DOT datum CLOSE
+	{printf("why are you parsing to here ;_;\n");}
 	|
 	abbreviation
 	;
@@ -328,10 +201,10 @@ abbreviation:
 			abbrev_prefix datum
 			;
 abbrev_prefix:
-			 SINGLEQUOTE | '`' | ',' | ',@'
+			 SINGLEQUOTE | '`' | ',' | COMMAT
 			 ;
 vector:
-	  VECTORSTART datum0 ')'
+	  VECTORSTART datum0 CLOSE
 
 /* expressions */
 expression:
@@ -355,6 +228,7 @@ expression:
 		  ;
 literal:
 	   quotation
+	   {printf("literal quotation\n");}
 	   |
 	   self_evaluating
 	   ;
@@ -370,10 +244,10 @@ self_evaluating:
 quotation:
 		 SINGLEQUOTE datum
 		 |
-		 '(' QUOTE datum ')'
+		 OPEN QUOTE datum CLOSE
 		 ;
 procedure_call:
-			  '(' operator operand0 ')'
+			  OPEN operator operand0 CLOSE
 			  ;
 operator:
 		expression
@@ -386,14 +260,14 @@ operand:
 	   expression
 	   ;
 lambda_expression:
-				 '(' LAMBDA formals body ')'
+				 OPEN LAMBDA formals body CLOSE
 				 ;
 formals:
-	   '(' variable0 ')'
+	   OPEN variable0 CLOSE
 	   |
 	   variable
 	   |
-	   '(' variable1 '.' variable ')'
+	   OPEN variable1 DOT variable CLOSE
 	   ;
 variable0:
 		 /* empty */
@@ -408,11 +282,6 @@ variable1:
 body:
 	definition0 sequence
 	;
-definition0:
-		   /* empty */
-		   |
-		   definition0 definition
-		   ;
 sequence:
 		command0 expression
 		;
@@ -423,9 +292,10 @@ command0:
 		;
 command:
 	   expression
+	   {printf("command\n");}
 	   ;
 conditional:
-		   '(' IF test consequent alternalte ')'
+		   OPEN IF test consequent alternalte CLOSE
 		   ;
 test0:
 	 /* empty */
@@ -444,34 +314,34 @@ alternalte:
 		  expression
 		  ;
 assignment:
-		  '(' SETBANG variable expression ')'
+		  OPEN SETBANG variable expression CLOSE
 		  ;
 derived_expression:
-				  '(' COND cond_clause1 ')'
+				  OPEN COND cond_clause1 CLOSE
 				  |
-				  '(' COND cond_clause0 '(' ELSE sequence ')' ')'
+				  OPEN COND cond_clause0 OPEN ELSE sequence CLOSE CLOSE
 				  |
-				  '(' CASE expression case_clause1 ')'
+				  OPEN CASE expression case_clause1 CLOSE
 				  |
-				  '(' CASE expression case_clause0 '(' ELSE sequence ')' ')'
+				  OPEN CASE expression case_clause0 OPEN ELSE sequence CLOSE CLOSE
 				  |
-				  '(' AND test0 ')'
+				  OPEN AND test0 CLOSE
 				  |
-				  '(' OR test0 ')'
+				  OPEN OR test0 CLOSE
 				  |
-				  '(' LET '(' binding_spec0 ')' body ')'
+				  OPEN LET OPEN binding_spec0 CLOSE body CLOSE
 				  |
-				  '(' LET variable '(' binding_spec0 ')' body ')'
+				  OPEN LET variable OPEN binding_spec0 CLOSE body CLOSE
 				  |
-				  '(' LETSTAR '(' binding_spec0 ')' body ')'
+				  OPEN LETSTAR OPEN binding_spec0 CLOSE body CLOSE
 				  |
-				  '(' LETREC '(' binding_spec0 ')' body ')'
+				  OPEN LETREC OPEN binding_spec0 CLOSE body CLOSE
 				  |
-				  '(' BEGIN sequence ')'
+				  OPEN BEGIN_ sequence CLOSE
 				  |
-				  '(' DO '(' iteration_spec0 ')' '(' test do_result ')' command0 ')'
+				  OPEN DO OPEN iteration_spec0 CLOSE OPEN test do_result CLOSE command0 CLOSE
 				  |
-				  '(' DELAY expression ')'
+				  OPEN DELAY expression CLOSE
 				  |
 				  quasiquotation
 				  ;
@@ -486,11 +356,11 @@ cond_clause1:
 			cond_clause1 cond_clause
 			;
 cond_clause:
-		   '(' test sequence ')'
+		   OPEN test sequence CLOSE
 		   |
-		   '(' test ')'
+		   OPEN test CLOSE
 		   |
-		   '(' test '=>' recipient ')'
+		   OPEN test EQUALRIGHT recipient CLOSE
 		   ;
 recipient:
 		 expression
@@ -506,7 +376,7 @@ case_clause1:
 			case_clause1 case_clause
 			;
 case_clause:
-		   '((' datum0 ')' sequence ')'
+		   OPEN OPEN datum0 CLOSE sequence CLOSE
 		   ;
 binding_spec0:
 			 /* empty */
@@ -514,7 +384,7 @@ binding_spec0:
 			 binding_spec0 binding_spec
 			 ;
 binding_spec:
-			'(' variable expression ')'
+			OPEN variable expression CLOSE
 			;
 iteration_spec0:
 			   /* empty */
@@ -522,9 +392,9 @@ iteration_spec0:
 			   iteration_spec0 iteration_spec
 			   ;
 iteration_spec:
-			  '(' variable init step ')'
+			  OPEN variable init step CLOSE
 			  |
-			  '(' variable init ')'
+			  OPEN variable init CLOSE
 			  ;
 init:
 	expression
@@ -538,15 +408,15 @@ do_result:
 		 sequence
 		 ;
 macro_use:
-		 '(' keyword datum0 ')'
+		 OPEN keyword datum0 CLOSE
 		 ;
 keyword:
 	   identifier
 	   ;
 macro_block:
-		   '(' LET_SYNTAX '(' syntax_spec0 ')' body ')'
+		   OPEN LET_SYNTAX OPEN syntax_spec0 CLOSE body CLOSE
 		   |
-		   '(' LETREC_SYNTAX '(' syntax_spec0 ')' body ')'
+		   OPEN LETREC_SYNTAX OPEN syntax_spec0 CLOSE body CLOSE
 		   ;
 syntax_spec0:
 			/* empty */
@@ -554,20 +424,20 @@ syntax_spec0:
 			syntax_spec0 syntax_spec
 			;
 syntax_spec:
-		   '(' keyword transformer_spec ')'
+		   OPEN keyword transformer_spec CLOSE
 		   ;
 
 /* quasiquotations NOTE not context free! requires nesting depth variable */
 quasiquotation:
 			  quasiquotation_d  /* with d = 1 (need to implement) */
 			  ;
-qq_template_0:
+qq_template_0: /* HRM also needs implementation */
 			 expression
 			 ;
 quasiquotation_d:
 				'`' qq_template_d
 				|
-				'(' QUASIQUOTE qq_template_d ')'
+				OPEN QUASIQUOTE qq_template_d CLOSE
 				;
 qq_template_d:
 			 simple_datum
@@ -579,21 +449,21 @@ qq_template_d:
 			 unquotation_d
 			 ;
 list_qq_template_d:
-				  '(' qq_template_or_splice_d0 ')'
+				  OPEN qq_template_or_splice_d0 CLOSE
 				  |
-				  '(' qq_template_or_splice_d1 '.' qq_template_d ')'
+				  OPEN qq_template_or_splice_d1 DOT qq_template_d CLOSE
 				  |
 				  SINGLEQUOTE qq_template_d
 				  |
 				  quasiquotation_dp1 /*AAAAAAAAAAAAAAA*/
 				  ;
 vector_qq_template_d:
-					VECTORSTART qq_template_or_splice_d0 ')'
+					VECTORSTART qq_template_or_splice_d0 CLOSE
 					;
 unquotation_d:
 			 ',' qq_template_dm1
 			 |
-			 '(' UNQUOTE qq_template_dm1 ')'
+			 OPEN UNQUOTE qq_template_dm1 CLOSE
 			 ;
 qq_template_or_splice_d0:
 					  /* empty */
@@ -611,9 +481,9 @@ qq_template_or_splice_d:
 					 splicing_unquotation_d
 					 ;
 splicing_unquotation_d:
-					  ',@' qq_template_dm1
+					  COMMAT qq_template_dm1
 					  |
-					  '(' UNQUOTE_SPLICING qq_template_dm1 ')'
+					  OPEN UNQUOTE_SPLICING qq_template_dm1 CLOSE
 					  ;
 qq_template_dm1:
 			   /*qq_template_d  /*TODO this needs to decrement something*/
@@ -624,7 +494,7 @@ quasiquotation_dp1:
 
 /* transformers */
 transformer_spec:
-				'(' SYNTAX_RULES '(' identifier0 ')' syntax_rule0 ')'
+				OPEN SYNTAX_RULES OPEN identifier0 CLOSE syntax_rule0 CLOSE
 				;
 syntax_rule0:
 			/* empty */
@@ -632,7 +502,7 @@ syntax_rule0:
 			syntax_rule0 syntax_rule
 			;
 syntax_rule:
-		   '(' pattern template ')'
+		   OPEN pattern template CLOSE
 		   ;
 pattern0:
 		/* empty */
@@ -647,15 +517,15 @@ pattern1:
 pattern:
 	   pattern_identifier
 	   |
-	   '(' pattern0 ')'
+	   OPEN pattern0 CLOSE
 	   |
-	   '(' pattern1 '.' pattern ')'
+	   OPEN pattern1 DOT pattern CLOSE
 	   |
-	   '(' pattern0 pattern ellipsis ')'
+	   OPEN pattern0 pattern ellipsis CLOSE
 	   |
-	   VECTORSTART pattern0 ')'
+	   VECTORSTART pattern0 CLOSE
 	   |
-	   VECTORSTART pattern0 pattern ellipsis ')'
+	   VECTORSTART pattern0 pattern ellipsis CLOSE
 	   |
 	   pattern_datum
 	   ;
@@ -671,11 +541,11 @@ pattern_datum:
 template:
 		pattern_identifier
 		|
-		'(' template_element0 ')'
+		OPEN template_element0 CLOSE
 		|
-		'(' template_element1 '.' template ')'
+		OPEN template_element1 DOT template CLOSE
 		|
-		VECTORSTART template_element0 ')'
+		VECTORSTART template_element0 CLOSE
 		|
 		template_datum
 		;
@@ -701,6 +571,6 @@ pattern_identifier:
 				  identifier  /* need to exclude `...' */
 				  ;
 ellipsis:
-	   '...'  /* ... is not a valid idenitifer since it starts with '.' ... wut */
+	   ELLIPSIS  /* ... is not a valid idenitifer since it starts with '.' ... wut */
 	   ;
 %%
