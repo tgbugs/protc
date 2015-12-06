@@ -119,13 +119,14 @@ identifier0:
 		   /* empty */
 		   |
 		   identifier0 identifier
+	  	   {printf("identifier %s\n", $1);}
 		   ;
 identifier:
 		  IDENTIFIER
 		  ;
 variable:
 		VARIABLE
-	  	{printf("variable\n");}
+	  	{printf("variable %s\n", $1);}
 		;
 number:
 	  NUMBER
@@ -140,6 +141,7 @@ boolean:
 	   ;
 string:
 	  STRING
+	  {printf("string %s\n", $1);}
 	  ;
 character:
 		 CHARACTER
@@ -190,7 +192,7 @@ list:
 	OPEN datum0 CLOSE
 	{printf("list datum0\n");}
 	|
-	OPEN datum1 CLOSE  /* because sometimes the parser is dumb */
+	OPEN datum1 CLOSE  /* because sometimes the parser is dumb*/
 	|
 	OPEN datum1 DOT datum CLOSE
 	{printf("why are you parsing to here ;_;\n");}
