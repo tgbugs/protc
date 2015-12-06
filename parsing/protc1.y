@@ -21,8 +21,87 @@ main(){
 /* %token IDENTIFIER NUMBER STRING DEFSTEP DEFMEA ASSIGN INPUT OUTPUT ACTUALIZE IMPORT
 %token OPENPAREN CLOSEPAREN SINGLEQUOTE DOUBLEQUOTE PERIOD SEMICOLON */
 
-%token DIGIT LETTER SINGLEQUOTE CHARPREFIX NUMBER_DEC SPECIAL_IN SPECIAL_SUB TRUE FALSE ESCESC ESCDBLQUOTE STRELEM CHAR VECTORSTART ELSE EQUALRIGHT DEFINE UNQUOTE UNQUOTE_SPLICING QUOTE LAMBDA IF SETBANG BEGIN COND AND OR CASE LET LETSTAR LETREC DO DELAY QUASIQUOTE
+%token DIGIT
+%token LETTER
+%token SINGLEQUOTE
+%token CHARPREFIX
+%token VECTORSTART
+%token SPECIAL_IN
+%token SPECIAL_SUB
+%token TRUE
+%token FALSE
+%token STRELEM
+%token CHAR
+%token QUOTE
+%token LAMBDA
+%token IF
+%token SETBANG
+%token BEGIN
+%token COND
+%token AND
+%token OR
+%token CASE
+%token LET
+%token LETSTAR
+%token LETREC
+%token DO
+%token DELAY
+%token QUASIQUOTE
+%token ELSE
+%token EQUALRIGHT
+%token DEFINE
+%token UNQUOTE
+%token UNQUOTE_SPLICING
+%token LET_SYNTAX
+%token LETREC_SYNTAX
+%token SYNTAX_RULES
+%token DEFINE_SYNTAX
+
 %%
+
+/* programs and definitions */
+program:
+	   command_or_definition0
+	   ;
+command_or_definition0:
+					  /* empty */
+					  |
+					  command_or_definition0 command_or_definition
+					  ;
+command_or_definition1:
+					  command_or_definition
+					  |
+					  command_or_definition1 command_or_definition
+					  ;
+command_or_definition:
+					 command
+					 |
+					 definition
+					 |
+					 syntax_definition
+					 |
+					 '(' BEGIN command_or_definition1 ')'
+					 ;
+definition0:
+		   /* empty */
+		   |
+		   definition0 definition
+		   ;
+definition:
+		  '(' DEFINE variable expression ')'
+		  |
+		  '(' DEFINE '(' variable def_formals ')' body ')'
+		  |
+		  '(' BEGIN definition0 ')'
+		  ;
+def_formals:
+		   variable0
+		   |
+		   variable0 '.' variable
+		   ;
+syntax_definition:
+				 '(' DEFINE_SYNTAX keyword transformer_spec ')'
+				 ;
 
 /*lexical structure should probably be moved over to the lex file*/
 token:
@@ -291,7 +370,7 @@ self_evaluating:
 quotation:
 		 SINGLEQUOTE datum
 		 |
-		 '(quote' datum ')'
+		 '(' QUOTE datum ')'
 		 ;
 procedure_call:
 			  '(' operator operand0 ')'
@@ -307,7 +386,7 @@ operand:
 	   expression
 	   ;
 lambda_expression:
-				 '(lambda' formals body ')'
+				 '(' LAMBDA formals body ')'
 				 ;
 formals:
 	   '(' variable0 ')'
@@ -346,7 +425,7 @@ command:
 	   expression
 	   ;
 conditional:
-		   '(if' test consequent alternalte ')'
+		   '(' IF test consequent alternalte ')'
 		   ;
 test0:
 	 /* empty */
@@ -365,34 +444,34 @@ alternalte:
 		  expression
 		  ;
 assignment:
-		  '(set!' variable expression ')'
+		  '(' SETBANG variable expression ')'
 		  ;
 derived_expression:
-				  '(cond' cond_clause1 ')'
+				  '(' COND cond_clause1 ')'
 				  |
-				  '(cond' cond_clause0 '(else' sequence '))'
+				  '(' COND cond_clause0 '(' ELSE sequence ')' ')'
 				  |
-				  '(case' expression case_clause1 ')'
+				  '(' CASE expression case_clause1 ')'
 				  |
-				  '(case' expression case_clause0 '(else' sequence '))'
+				  '(' CASE expression case_clause0 '(' ELSE sequence ')' ')'
 				  |
-				  '(and' test0 ')'
+				  '(' AND test0 ')'
 				  |
-				  '(or' test0 ')'
+				  '(' OR test0 ')'
 				  |
-				  '(let' '(' binding_spec0 ')' body ')'
+				  '(' LET '(' binding_spec0 ')' body ')'
 				  |
-				  '(let' variable '(' binding_spec0 ')' body ')'
+				  '(' LET variable '(' binding_spec0 ')' body ')'
 				  |
-				  '(let*' '(' binding_spec0 ')' body ')'
+				  '(' LETSTAR '(' binding_spec0 ')' body ')'
 				  |
-				  '(letrec' '(' binding_spec0 ')' body ')'
+				  '(' LETREC '(' binding_spec0 ')' body ')'
 				  |
-				  '(begin' sequence ')'
+				  '(' BEGIN sequence ')'
 				  |
-				  '(do' '(' iteration_spec0 ')' '(' test do_result ')' command0 ')'
+				  '(' DO '(' iteration_spec0 ')' '(' test do_result ')' command0 ')'
 				  |
-				  '(delay' expression ')'
+				  '(' DELAY expression ')'
 				  |
 				  quasiquotation
 				  ;
@@ -465,9 +544,9 @@ keyword:
 	   identifier
 	   ;
 macro_block:
-		   '(let-syntax' '(' syntax_spec0 ')' body ')'
+		   '(' LET_SYNTAX '(' syntax_spec0 ')' body ')'
 		   |
-		   '(letrec-syntax' '(' syntax_spec0 ')' body ')'
+		   '(' LETREC_SYNTAX '(' syntax_spec0 ')' body ')'
 		   ;
 syntax_spec0:
 			/* empty */
@@ -488,7 +567,7 @@ qq_template_0:
 quasiquotation_d:
 				'`' qq_template_d
 				|
-				'(quasiquote' qq_template_d ')'
+				'(' QUASIQUOTE qq_template_d ')'
 				;
 qq_template_d:
 			 simple_datum
@@ -514,7 +593,7 @@ vector_qq_template_d:
 unquotation_d:
 			 ',' qq_template_dm1
 			 |
-			 '(unquote' qq_template_dm1 ')'
+			 '(' UNQUOTE qq_template_dm1 ')'
 			 ;
 qq_template_or_splice_d0:
 					  /* empty */
@@ -534,7 +613,7 @@ qq_template_or_splice_d:
 splicing_unquotation_d:
 					  ',@' qq_template_dm1
 					  |
-					  '(unquote-splicing' qq_template_dm1 ')'
+					  '(' UNQUOTE_SPLICING qq_template_dm1 ')'
 					  ;
 qq_template_dm1:
 			   /*qq_template_d  /*TODO this needs to decrement something*/
@@ -545,7 +624,7 @@ quasiquotation_dp1:
 
 /* transformers */
 transformer_spec:
-				'(syntax-rules' '(' identifier0 ')' syntax_rule0 ')'
+				'(' SYNTAX_RULES '(' identifier0 ')' syntax_rule0 ')'
 				;
 syntax_rule0:
 			/* empty */
@@ -624,48 +703,4 @@ pattern_identifier:
 ellipsis:
 	   '...'  /* ... is not a valid idenitifer since it starts with '.' ... wut */
 	   ;
-
-/* programs and definitions */
-program:
-	   command_or_definition0
-	   ;
-command_or_definition0:
-					  /* empty */
-					  |
-					  command_or_definition0 command_or_definition
-					  ;
-command_or_definition1:
-					  command_or_definition
-					  |
-					  command_or_definition1 command_or_definition
-					  ;
-command_or_definition:
-					 command
-					 |
-					 definition
-					 |
-					 syntax_definition
-					 |
-					 '(begin' command_or_definition1 ')'
-					 ;
-definition0:
-		   /* empty */
-		   |
-		   definition0 definition
-		   ;
-definition:
-		  '(define' variable expression ')'
-		  |
-		  '(define' '(' variable def_formals ')' body ')'
-		  |
-		  '(begin' definition0 ')'
-		  ;
-def_formals:
-		   variable0
-		   |
-		   variable0 '.' variable
-		   ;
-syntax_definition:
-				 '(define-syntax' keyword transformer_spec ')'
-				 ;
 %%
