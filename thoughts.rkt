@@ -99,3 +99,48 @@ sequential
 	(sequential step-name-1 step-name-2)
 nonsequential
 	(nonsequential step-name-1 step-name-2 step-name-3)
+
+
+; dealing w/ more terse define syntax
+(define (tool name)) ; this works but requires the use of a second (define t-var-1 (tool name))
+(define (tool name [identifier '()]))
+
+(require (for-syntax racket/match))
+(define-syntax (define-in-place stx) ; this works in inner scope but does not register the name in global scope
+  (match (syntax->list stx)
+	[(list name variable)
+	 ;(print stx)
+	 ;(print (list name variable))
+	 (datum->syntax stx `(define ,variable ,(format "~s" (syntax->datum variable))))]  ; THAT WAS EASY :D woo format
+	[(list name variable identifier)
+	 (datum->syntax stx `(define ,variable ,identifier))]))
+
+(define step-state '())
+(define (step inputs measure outputs)
+  ; validate
+  (define (validate-input input) ())
+  (define (validate-measure measure) ())
+  (define (validate-output output) ())
+  (list (map validate-input inputs)
+		(map validate-measure measures)
+		(map validate-output outputs))
+
+; a functional style for declaring protocols, as opposed to a procedural...
+; man this would be easier with types...
+(define m-variable-1 (measure "nametag" amp (using b-tool-variable-1))) ; probably useful to support nametag uniqueness
+; need to make sure we can resolve tools as step inputs when declared inside a (using var)... hrm
+; tools should also be able to be collections, eg a rig, that can start out as a single reference and go from there
+(define s-variable-1
+  (step (inputs b-variable-1
+			   (step (inputs b-variable-3) ; the seems to break the suggestion that substeps have restricted input scope?
+					 					; but not quite because those variables occur before the outer step finishes
+										; and an all be listed posthoc as inputs to step-name-1
+										; observe also that the inner step here lacks details, beyond 'transform'
+					 (transform (b-variable-3) b-variable-4) ; transform or create or procure required here?
+					 (outputs b-variable-4))
+			   b-variable-2)
+		(measures m-variable-1
+				 (measure "nametag" volt)
+				 m-variable-2)
+		(outputs variable+)))	; output must be -parsed-validated last i think and can be omitted in many cases
+
