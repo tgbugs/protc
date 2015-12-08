@@ -1,3 +1,98 @@
+;#lang racket ; THIS WILL BREAK IMPORTS IF UNCOMMENTED
+(require (for-syntax racket/match))
+(require (for-syntax syntax/parse)) ; super duper uper useful >_< AND COMPLETELY BROKEN w/ typed/racket
+(require (for-syntax macro-debugger/stepper-text))
+(begin-for-syntax ; _ and ... will cause things to screech if syntax/parse is not available...
+
+  (define-syntax-class sexp
+    (pattern (_ ...)))
+
+  (define-syntax-class expr-or-id
+	(pattern (_ ...))
+	(pattern _:id))
+
+)
+
+(define-syntax (dip stx)
+  (syntax-parse stx
+	[(_ name) #'(define name (symbol->string 'name))]  ; this feels so dirty wat
+	[(_ name ident) #'(define name ident)]))
+
+(dip zoop "bar") zoop
+(dip foo) foo
+(dip are-you-shitting-me) are-you-shitting-me
+
+(define-syntax (step stx)
+  ; TODO: this MUST return an object that we can call (run-step) or (display-step) or (flatten-step) on... something like that
+  ; this needs significant refinement to properly match input measure output etc
+  (syntax-parse stx
+    [(_ i:sexp m:sexp o:sexp) #'(list i m o)]
+    [(_ i:sexp m:sexp) #'(list i m)]
+    [(_ i:sexp o:sexp) #'(list i o)]
+    [(_ i:sexp) #'(list i)]
+    [(_ o:sexp) #'(list o)]))
+
+(define-syntax (transform stx)
+  (syntax-parse stx
+	[(_ (bound-ids:id ...) new-name)
+	 #'new-name])) ; need to insert the prov tracking here, OR use the nesting reference macro...
+	 ;#'((define new-name (symbol->string 'new-name)(new-name)))])) ; pretty sure new-name here will break if we use define, will need our own namespace :(
+
+(define-syntax (silly stx)
+  (match (syntax->datum stx)
+	[(list _ name) (datum->syntax stx
+								  `(define-syntax (,name stx)
+									 (syntax-parse stx
+									   [(_ ei:expr-or-id ...+)
+										#'(list ei ...)])))]))
+
+(define-syntax (inputs stx)
+  ;(expand/step-text stx)
+  (syntax-parse stx
+    [(_ ei:expr-or-id ...+) #'(list ei ...)]))  ; ideally would use something more restrictive than expr
+(define-syntax (measures stx)
+  (syntax-parse stx
+    [(_ ei:expr-or-id ...+) #'(list ei ...)]))
+(define-syntax (outputs stx)
+  (syntax-parse stx
+    [(_ ei:expr-or-id ...+) #'(list ei ...)]))
+
+;(struct measure ([name-tag : String] [prefix : String] [unit : Unit]) ; the docs show just how fun this could be...
+(struct measure (name-tag prefix unit) #:property prop:custom-write (lambda (v p w?) (fprintf p "<~a, ~a~a>" (measure-name-tag v) (measure-prefix v) (measure-unit v))))
+
+;(define-type Unit (U String))
+;(step 1 2 3)
+(dip woo)
+(dip ten 10)
+(dip your-mom)
+(dip sean-connery)
+(dip your-mom-ko)
+(dip number-of-deaths) ; this isn't really a unit... :/
+;(: volt Unit)  ; this stuff needs to autoimport
+(dip volt)
+;(: joule Unit)
+(dip joule)
+(dip mili)
+(dip mega)
+(dip m-id-bad) ; FIXME not a valid measure...
+(define m-id-good (measure "tag me this way baby" mili volt ))
+;(inputs (dip you-wot-m8)); observe the fail as desired
+
+(inputs woo) ; valid but shouldn't do anything outside this context?
+(outputs ten)
+(define step-1 (step (inputs your-mom)
+	  (measures (measure "ohoho" mili volt) m-id-bad m-id-good)
+	  (outputs (transform (your-mom) your-mom-ko)))
+)
+(step
+  ; this describes what is done in this step in words
+  ; if needs be, so we understand the madness?
+  (inputs (step (measures (measure "bongos" mega joule)) ; observe the anonymous step here... it will need to be assigned a name somehow
+				(inputs woo)))
+  (measures (measure "are you sure about this?" "" number-of-deaths))
+  (outputs sean-connery))
+
+
 #|
 (defmeasure (measure1 experiment-state)
 			; documentation of the measure
@@ -174,96 +269,5 @@ nonsequential
 				 (measure "nametag" volt)
 				 m-variable-2)
 		(outputs variable+)))	; output must be -parsed-validated last i think and can be omitted in many cases
-|#
-
-#lang typed/racket ; consider using contracts instead? so far the only issue is with structs
-
-; much better!
-(require (for-syntax syntax/parse)) ; super duper uper useful >_<
-(require (for-syntax racket/match))
-
-(define-syntax (dip stx)
-  (syntax-parse stx
-	[(_ name) #'(define name (symbol->string 'name))]  ; this feels so dirty wat
-	[(_ name ident) #'(define name ident)]))
-
-(dip zoop "bar") zoop
-(dip foo) foo
-(dip are-you-shitting-me) are-you-shitting-me
-
-(begin-for-syntax
-
-  (define-syntax-class sexp
-    (pattern (_ ...)))
-
-  (define-syntax-class expr-or-id
-	(pattern (_ ...))
-	(pattern _:id))
-
-  )
-
-(define-syntax (step stx)
-  ; TODO: this MUST return an object that we can call (run-step) or (display-step) or (flatten-step) on... something like that
-  ; this needs significant refinement to properly match input measure output etc
-  (syntax-parse stx
-    [(_ i:sexp m:sexp o:sexp) #'(list i m o)]
-    [(_ i:sexp m:sexp) #'(list i m)]
-    [(_ i:sexp o:sexp) #'(list i o)]
-    [(_ i:sexp) #'(list i)]
-    [(_ o:sexp) #'(list o)]))
-
-(define-syntax (transform stx)
-  (syntax-parse stx
-	[(_ (bound-ids:id ...) new-name)
-	 #'new-name])) ; need to insert the prov tracking here, OR use the nesting reference macro...
-	 ;#'((define new-name (symbol->string 'new-name)(new-name)))])) ; pretty sure new-name here will break if we use define, will need our own namespace :(
-
-(define-syntax (inputs stx)
-  (syntax-parse stx
-    [(_ ei:expr-or-id ...+) #'(list ei ...)]))  ; ideally would use something more restrictive than expr
-(define-syntax (measures stx)
-  (syntax-parse stx
-    [(_ ei:expr-or-id ...+) #'(list ei ...)]))
-(define-syntax (outputs stx)
-  (syntax-parse stx
-    [(_ ei:expr-or-id ...+) #'(list ei ...)]))
-
-(struct measure ([name-tag : String] [prefix : String] [unit : Unit]) ; the docs show just how fun this could be...
-		#:property prop:custom-write (lambda
-									   (v p w?)
-									   (fprintf p "<~a, ~a~a>"
-												(measure-name-tag v)
-												(measure-prefix v)
-												(measure-unit v))))
-
-(define-type Unit (U String))
-;(step 1 2 3)
-(dip woo)
-(dip ten 10)
-(dip your-mom)
-(dip sean-connery)
-(dip your-mom-ko)
-(dip number-of-deaths) ; this isn't really a unit... :/
-(: volt Unit)  ; this stuff needs to autoimport
-(dip volt)
-(: joule Unit)
-(dip joule)
-(dip mili)
-(dip mega)
-(dip m-id-bad) ; FIXME not a valid measure...
-(define m-id-good (measure "tag me this way baby" mili volt ))
-;(inputs (dip you-wot-m8)); observe the fail as desired
-
-(inputs woo) ; valid but shouldn't do anything outside this context?
-(outputs ten)
-(define step-1 (step (inputs your-mom)
-	  (measures (measure "ohoho" mili volt) m-id-bad m-id-good)
-	  (outputs (transform (your-mom) your-mom-ko)))
-)
-(step
-  ; this describes what is done in this step in words
-  ; if needs be, so we understand the madness?
-  (inputs (step (measures (measure "bongos" mega joule)) (inputs woo)))
-  (measures (measure "are you sure about this?" "" number-of-deaths))
-  (outputs sean-connery))
+|# ; END COMMENT BLOCK
 
