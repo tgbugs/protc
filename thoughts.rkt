@@ -1,4 +1,5 @@
 ;#lang racket ; THIS WILL BREAK IMPORTS IF UNCOMMENTED
+(require plot)
 (require (for-syntax racket/match))
 (require (for-syntax syntax/parse)) ; super duper uper useful >_< AND COMPLETELY BROKEN w/ typed/racket
 (require (for-syntax macro-debugger/stepper-text))
@@ -13,14 +14,64 @@
 
 )
 
+(define-syntax (def stx)
+  (syntax-parse stx
+	[(_ x ...) #'(define x ...)])) ; wheeee
+
 (define-syntax (dip stx)
   (syntax-parse stx
 	[(_ name) #'(define name (symbol->string 'name))]  ; this feels so dirty wat
 	[(_ name ident) #'(define name ident)]))
 
+;(define-syntax (type stx)
+  ;(syntax-parse stx
+	;[(_ name) #'(lambda (value) (cons name value))]))
+
+(define-syntax (type-stx stx)
+  (syntax-parse stx
+	[(_ int:integer) #''integer]
+	[(_ num:number) #''number]
+	[(_ id:id) #'(cdr id)]))
+
+(define (type thing)
+  (cond ((integer? thing) 'integer)
+		((flonum? thing) 'flonum)
+		((number? thing) 'number)
+		((string? thing) 'string)
+		((pair? thing) (cdr thing))))
+
+(define (type-bad thing)
+  (case (eval thing)  ; this doesnt work :/
+	[(integer? (eval thing)) 'integer]
+	[(string? (eval thing)) 'string?]
+	[(flonum? (eval thing)) 'flonum]
+	[(number? (eval thing)) 'number]
+	))
+
+(define-syntax (type-name-def stx)
+  (syntax-parse stx
+	;[(type-name name) #'(define name ((type 'type-name) (symbol->string 'name)))]))
+	[(_ type-name name identifier)
+	 #'(define name (cons identifier 'type-name))]
+	[(_ type-name name) ; how do I macro this for multiple syntax level objects? (eg measure)
+	 #'(define name (cons (symbol->string 'name) 'type-name))]))
+
+(define-syntax (being stx)
+  (syntax-parse stx
+	[(name x ...) #'(type-name-def name x ...)]))
+(define-syntax (measure-alt stx) ; alternate form for measures not using struct
+  (syntax-parse stx
+	[(name x ...) #'(type-name-def name x ...)]))
+
 (dip zoop "bar") zoop
 (dip foo) foo
 (dip are-you-shitting-me) are-you-shitting-me
+
+(define-syntax (step-sequence stx)
+  (syntax-parse stx
+	[(_ steps:sexp ...+) #'(list steps ...)]
+	[(_ steps:id ...+) #'(list steps ...)])) ; we will need facilities to do the full expansion here
+											 ; will also need to validate inputs/outputs at each step
 
 (define-syntax (step stx)
   ; TODO: this MUST return an object that we can call (run-step) or (display-step) or (flatten-step) on... something like that
@@ -58,7 +109,7 @@
     [(_ ei:expr-or-id ...+) #'(list ei ...)]))
 
 ;(struct measure ([name-tag : String] [prefix : String] [unit : Unit]) ; the docs show just how fun this could be...
-(struct measure (name-tag prefix unit) #:property prop:custom-write (lambda (v p w?) (fprintf p "<~a, ~a~a>" (measure-name-tag v) (measure-prefix v) (measure-unit v))))
+(struct measure (name-tag prefix unit) #:property prop:custom-write (lambda (v p w?) (fprintf p "<~a, ~a~a>" (measure-name-tag v) (measure-prefix v) (measure-unit v)))) ; this is bad: we want sub structure to be fexible here
 
 ;(define-type Unit (U String))
 ;(step 1 2 3)
@@ -74,6 +125,7 @@
 (dip joule)
 (dip mili)
 (dip mega)
+(being foo)
 (dip m-id-bad) ; FIXME not a valid measure...
 (define m-id-good (measure "tag me this way baby" mili volt ))
 ;(inputs (dip you-wot-m8)); observe the fail as desired
@@ -91,6 +143,9 @@
 				(inputs woo)))
   (measures (measure "are you sure about this?" "" number-of-deaths))
   (outputs sean-connery))
+
+(step-sequence
+  (step (inputs foo)))
 
 
 #|
