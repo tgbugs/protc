@@ -1,7 +1,8 @@
+#|
 (defmeasure (measure1 experiment-state)
 			; documentation of the measure
 			(cons (lambda (value) (cons "name" (cons value volts)))
-				  (unspecified-modification-of experiment-state))
+				  (unspecified-modification-of experiment-state)))
 
 ; with syntactic sugar
 (defme (measure1 experiment-state)
@@ -62,14 +63,14 @@
 (make-being name2 "name2" step1) ; don't even need to call anything in this case, since in the end the external function is just a reality check and will return the string or maybe the full IRI at the end
 
 ; internal representation format (python style)
-{ 
-"step name":"step-10",
-"executors":1,
-"input beings":[bound-being-1, bound-being-2], ; here we will need an imlicity 'everything not listed' variable to allow the measurment target to be ill specified or collective
-;"measurement data": [{"name":measurement-1,"unit":volt,"type":float}], ; this should be defined elsewhere, the names just need to be in scope
-"measurement input being targets": [{"name":measurement-1, "target":bound-being-1}],  ; measurements should be able to have collective targets, but also bypassing partof makes this more user friendly, so yes membrane potential is a measurement about a circuit made up of a whole bunch of parts of a cell but we really just want to be able to link a measurement to an instance record so we need to let people link directly to the entities that they will be issuing instance identifiers to (eg cell1 cell2 cell3) 'cells have membrane potentials', stuff like that
-"output beings":[bound-being-1, bound-being-2], ; this can be inferred in the absense of a destory or transformation function?
-}
+;	{ 
+;	"step name":"step-10",
+;	"executors":1,
+;	"input beings":[bound-being-1, bound-being-2], ; here we will need an imlicity 'everything not listed' variable to allow the measurment target to be ill specified or collective
+;	;"measurement data": [{"name":measurement-1,"unit":volt,"type":float}], ; this should be defined elsewhere, the names just need to be in scope
+;	"measurement input being targets": [{"name":measurement-1, "target":bound-being-1}],  ; measurements should be able to have collective targets, but also bypassing partof makes this more user friendly, so yes membrane potential is a measurement about a circuit made up of a whole bunch of parts of a cell but we really just want to be able to link a measurement to an instance record so we need to let people link directly to the entities that they will be issuing instance identifiers to (eg cell1 cell2 cell3) 'cells have membrane potentials', stuff like that
+;	"output beings":[bound-being-1, bound-being-2], ; this can be inferred in the absense of a destory or transformation function?
+;	}
 
 ; need the ability to use measurements as contingencies, even if the measurement requires a human brain to check 'is the mouse bleeding profuesly' which is a boolean, and isn't something we want to record... we we need a way to flag unrecorded measurements that are required to keep track of experiment state and specify contingencies...
 ; how do congingencies affect building dags? I think they are just interrupts... and the stack needs to return to where it was...
@@ -105,25 +106,55 @@ nonsequential
 (define (tool name)) ; this works but requires the use of a second (define t-var-1 (tool name))
 (define (tool name [identifier '()]))
 
-(require (for-syntax racket/match))
+
+
+
+
+; i should be using define-syntax-rule here instead...? or not...
 (define-syntax (define-in-place stx) ; this works in inner scope but does not register the name in global scope
   (match (syntax->list stx)
 	[(list name variable)
 	 ;(print stx)
 	 ;(print (list name variable))
-	 (datum->syntax stx `(define ,variable ,(format "~s" (syntax->datum variable))))]  ; THAT WAS EASY :D woo format
+	 ;(datum->syntax stx `(define ,variable ,(format "~s" (syntax->datum variable))))]  ; THAT WAS EASY :D woo format
+	 (datum->syntax stx `(define ,variable ,(symbol->string (syntax->datum variable))))] ; alternate format
 	[(list name variable identifier)
 	 (datum->syntax stx `(define ,variable ,identifier))]))
 
+(define-syntax (new-in-place stx)
+  (match (syntax->list stx)
+	[(list name new-stx)
+	 (datum->syntax stx)]
+	[]))
+
+(syntax-parse #'(define a 10)
+  #:literals (define)
+  [(define var:id body:expr) 'ok])
+
+(define global-things (make-hash))
+(define (add-thing! name val)
+  (hash-set! global-things name val))
+
+(define-syntax define-in-place
+  (syntax-rules
+	() ; things to be treated as literals in the following
+	[(define-in-place variable) ; this version doesn't work because i need access to variable??
+	 (define variable (format "~s" variable))] ; doesnt work because the id IS bound in the template :/
+	[(define-in-place variable identifier)
+	 (define variable identifier)]))
+
+; WHEEEE tom is an idiot from time to time: closer to what we want: struct! maybe? no?
+(struct step (inputs measures outputs))  ; but.... wait... this confuses things... immensely
+
 (define step-state '())
-(define (step inputs measure outputs)
+(define (step inputs measures outputs)
   ; validate
   (define (validate-input input) ())
   (define (validate-measure measure) ())
   (define (validate-output output) ())
   (list (map validate-input inputs)
 		(map validate-measure measures)
-		(map validate-output outputs))
+		(map validate-output outputs)))
 
 ; a functional style for declaring protocols, as opposed to a procedural...
 ; man this would be easier with types...
@@ -143,4 +174,96 @@ nonsequential
 				 (measure "nametag" volt)
 				 m-variable-2)
 		(outputs variable+)))	; output must be -parsed-validated last i think and can be omitted in many cases
+|#
+
+#lang typed/racket ; consider using contracts instead? so far the only issue is with structs
+
+; much better!
+(require (for-syntax syntax/parse)) ; super duper uper useful >_<
+(require (for-syntax racket/match))
+
+(define-syntax (dip stx)
+  (syntax-parse stx
+	[(_ name) #'(define name (symbol->string 'name))]  ; this feels so dirty wat
+	[(_ name ident) #'(define name ident)]))
+
+(dip zoop "bar") zoop
+(dip foo) foo
+(dip are-you-shitting-me) are-you-shitting-me
+
+(begin-for-syntax
+
+  (define-syntax-class sexp
+    (pattern (_ ...)))
+
+  (define-syntax-class expr-or-id
+	(pattern (_ ...))
+	(pattern _:id))
+
+  )
+
+(define-syntax (step stx)
+  ; TODO: this MUST return an object that we can call (run-step) or (display-step) or (flatten-step) on... something like that
+  ; this needs significant refinement to properly match input measure output etc
+  (syntax-parse stx
+    [(_ i:sexp m:sexp o:sexp) #'(list i m o)]
+    [(_ i:sexp m:sexp) #'(list i m)]
+    [(_ i:sexp o:sexp) #'(list i o)]
+    [(_ i:sexp) #'(list i)]
+    [(_ o:sexp) #'(list o)]))
+
+(define-syntax (transform stx)
+  (syntax-parse stx
+	[(_ (bound-ids:id ...) new-name)
+	 #'new-name])) ; need to insert the prov tracking here, OR use the nesting reference macro...
+	 ;#'((define new-name (symbol->string 'new-name)(new-name)))])) ; pretty sure new-name here will break if we use define, will need our own namespace :(
+
+(define-syntax (inputs stx)
+  (syntax-parse stx
+    [(_ ei:expr-or-id ...+) #'(list ei ...)]))  ; ideally would use something more restrictive than expr
+(define-syntax (measures stx)
+  (syntax-parse stx
+    [(_ ei:expr-or-id ...+) #'(list ei ...)]))
+(define-syntax (outputs stx)
+  (syntax-parse stx
+    [(_ ei:expr-or-id ...+) #'(list ei ...)]))
+
+(struct measure ([name-tag : String] [prefix : String] [unit : Unit]) ; the docs show just how fun this could be...
+		#:property prop:custom-write (lambda
+									   (v p w?)
+									   (fprintf p "<~a, ~a~a>"
+												(measure-name-tag v)
+												(measure-prefix v)
+												(measure-unit v))))
+
+(define-type Unit (U String))
+;(step 1 2 3)
+(dip woo)
+(dip ten 10)
+(dip your-mom)
+(dip sean-connery)
+(dip your-mom-ko)
+(dip number-of-deaths) ; this isn't really a unit... :/
+(: volt Unit)  ; this stuff needs to autoimport
+(dip volt)
+(: joule Unit)
+(dip joule)
+(dip mili)
+(dip mega)
+(dip m-id-bad) ; FIXME not a valid measure...
+(define m-id-good (measure "tag me this way baby" mili volt ))
+;(inputs (dip you-wot-m8)); observe the fail as desired
+
+(inputs woo) ; valid but shouldn't do anything outside this context?
+(outputs ten)
+(define step-1 (step (inputs your-mom)
+	  (measures (measure "ohoho" mili volt) m-id-bad m-id-good)
+	  (outputs (transform (your-mom) your-mom-ko)))
+)
+(step
+  ; this describes what is done in this step in words
+  ; if needs be, so we understand the madness?
+  (inputs (step (measures (measure "bongos" mega joule)) (inputs woo)))
+  (measures (measure "are you sure about this?" "" number-of-deaths))
+  (outputs sean-connery))
 
