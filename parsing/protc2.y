@@ -14,7 +14,7 @@ main(){
 }
 %}
 
-%token OPEN CLOSE DEFINE VARIABLE
+%token OPEN CLOSE DEFINE VARIABLE FUTURE_VARIABLE
 %token TRUE FALSE NUMBER CHARACTER STRING
 %token STEP PROCURE MEASURE ANALYSIS /* measure is ambigious here, it really means define-measure */
 %token CONCEPT BEING /* these are more type declarations and might impl as such */
@@ -145,7 +145,7 @@ measure0: /* empty */
 		;
 measure: OPEN MEASURE measure_members CLOSE
 	   ;
-measure_members: instance_name
+measure_members: OPEN FUTURE_VARIABLE instance_name CLOSE  /* TODO */
 			   | measure_type /* */
 			   | unit /* how to deal with discrete counts of things here... */
 			   /* code or pointer to code that actually does the measuring... */
@@ -164,7 +164,7 @@ measure_members: instance_name
 			   anaysis is really analysis: number->parameter
 			   */
 			   ;
-instance_name: variable /* THIS IS REALLY A DEFERRED NAME */
+instance_name: VARIABLE /* THIS IS REALLY A DEFERRED NAME */ /*needs to be terminal*/
 			 /* this is essentially an annotation
 			 for what to name something in the output
 			 this needs more serious though about how it
@@ -175,7 +175,7 @@ instance_name: variable /* THIS IS REALLY A DEFERRED NAME */
 			 specification sublanguage is going to be needed here (probabaly will)
 			 */
 			 ;
-measure_type: variable
+measure_type: variable /*? terminal ?*/
 			/* having an 'alternate' variable namespace that only
 			applies inside a measure definition might work out...
 			basically works the opposite of python, when you step
@@ -187,19 +187,20 @@ measure_type: variable
 unit: unit_base
 	| unit_prefix unit_base /* eh, just lots of translation tables here */
 	;
-unit_base: variable /* fix this... might prefer literals in this context or something...
+unit_base: VARIABLE /* to allow sublang this needs to be terminal */
+		 /* fix this... might prefer literals in this context or something...
 		 need to do w/o ns polution
 		 also, need to make sure that the tokenizer doesn't gobble everything here so
 		 we *could* define a contextual sub language
 		 using VARIABLE directly enables this
 		 */
 		 ;
-unit_prefix: variable /* as with unit_base */
+unit_prefix: VARIABLE /* as with unit_base */
 		   ;
 step_outputs: OPEN OUTPUTS maybe_ordered_beings0 CLOSE
 			;
 step_parameters: OPEN PARAMETERS variable0 CLOSE /* looked up or defined params would match this... */
-			   | OPEN PARAMETERS deferred_name0 CLOSE  /* pretty sure these ALL refer to deferred... */
+			   | OPEN PARAMETERS OPEN FUTURE_VARIABLE deferred_name0 CLOSE CLOSE  /* pretty sure these ALL refer to deferred... */
 			   /* again, the right way to do this needs thought
 			   do we allow literals? do we creat a local name binding?
 			   only allowing global variables polutes namespaces that may not
@@ -345,9 +346,9 @@ aparams: deferred_name
 	   | measure
 	   ;
 deferred_name0:
-			 | deferred_name0 deferred_name
-			 ;
-deferred_name: variable 
+			  | deferred_name0 deferred_name
+			  ;
+deferred_name: VARIABLE /* this needs to be a terminal token*/
 			 /* this works in partnership with instance_name
 			 to enable safe referencing and tracking of measure
 			 names
