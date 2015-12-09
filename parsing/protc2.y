@@ -164,7 +164,7 @@ measure_members: instance_name
 			   anaysis is really analysis: number->parameter
 			   */
 			   ;
-instance_name: string
+instance_name: variable /* THIS IS REALLY A DEFERRED NAME */
 			 /* this is essentially an annotation
 			 for what to name something in the output
 			 this needs more serious though about how it
@@ -187,18 +187,19 @@ measure_type: variable
 unit: unit_base
 	| unit_prefix unit_base /* eh, just lots of translation tables here */
 	;
-unit_base: VARIABLE /* fix this... might prefer literals in this context or something...
+unit_base: variable /* fix this... might prefer literals in this context or something...
 		 need to do w/o ns polution
 		 also, need to make sure that the tokenizer doesn't gobble everything here so
 		 we *could* define a contextual sub language
 		 using VARIABLE directly enables this
 		 */
 		 ;
-unit_prefix: VARIABLE /* as with unit_base */
+unit_prefix: variable /* as with unit_base */
 		   ;
 step_outputs: OPEN OUTPUTS maybe_ordered_beings0 CLOSE
 			;
-step_parameters: OPEN PARAMETERS variable0 CLOSE
+step_parameters: OPEN PARAMETERS variable0 CLOSE /* looked up or defined params would match this... */
+			   | OPEN PARAMETERS deferred_name0 CLOSE  /* pretty sure these ALL refer to deferred... */
 			   /* again, the right way to do this needs thought
 			   do we allow literals? do we creat a local name binding?
 			   only allowing global variables polutes namespaces that may not
@@ -283,7 +284,7 @@ measure_nodes0: /* empty */
 			  | measure_nodes0 measure_nodes
 			  ;
 measure_nodes: measure
-			 | variable
+			 | variable /* if this references analysis it will fix deferred_name issues */
 			  /* FIXME this needs to go away or be modified, it is not the right way to implement types */
 			 ;
 
@@ -340,9 +341,19 @@ analysis: OPEN ANALYSIS aparams1 aoutputs OPEN body CLOSE CLOSE  /* not sure thi
 aparams1: aparams 
 		| aparams1 aparams 
 		;
-aparams: variable
+aparams: deferred_name
 	   | measure
 	   ;
+deferred_name0:
+			 | deferred_name0 deferred_name
+			 ;
+deferred_name: variable 
+			 /* this works in partnership with instance_name
+			 to enable safe referencing and tracking of measure
+			 names
+			 */
+			 ;
+
 aoutputs: OPEN variable0 CLOSE
 		/* these are the same things that measures output
 		(basically quoted names that only become real at run time)
