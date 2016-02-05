@@ -515,6 +515,18 @@ maintain their own type hierarchy either in code or in some other system so that
 they don't get destroyed by changes.
 
 
+## Use cases
+Landon mentions how annoying it is when dealing with various drugs and not
+knowing what solvent to use, or people just not reporting it. This is a
+great use case since it is a set of simple things where the verb 'mix' is
+very consistent the inpubs ought to be in chebi, and it would make people's
+lives much easier. Could potentially add a restriction or comment that the
+output was intended for injection into mice, interesting question of how to
+handle that kind of information since it is not strictly relevant to the
+protocol itself but is a piece of the larger context that might be useful
+when choosing between two protocols.
+
+
 ## License
 Obviously the language specification cannot be copyrighted and will be released
 under some completely open license just to make sure.
