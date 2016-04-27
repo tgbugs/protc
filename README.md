@@ -526,6 +526,9 @@ handle that kind of information since it is not strictly relevant to the
 protocol itself but is a piece of the larger context that might be useful
 when choosing between two protocols.
 
+Russ Poldrack doi:10.1016/j.neuroimage.2007.11.048 for a list of things that
+the fMRI folks might want to be able to model.
+
 
 ## License
 Obviously the language specification cannot be copyrighted and will be released
