@@ -22,8 +22,12 @@ be known.
 
 
 ## Dependencies
-A DSL for specifying _how_ to execute a series of steps. This is fundamentally what
-we are about here. The problem with laboratory science is that the practicalities of
+A DSL for specifying _how_ to execute a series of steps. [SO. Turns out that what we
+probably want here is actually a DSL for specifying _WHAT_ to do that makes it easier
+to later express the _how_ by giving good constraints on inputs and outputs that the
+_how_ implementation can follow. In fact, the _how_ obscures the logical process which
+the following sentences say is what we really want to capture] This is fundamentally
+what we are about here. The problem with laboratory science is that the practicalities of
 the execution of an expreiment, protocol, or process, are often entangled with the
 logical, temporal, and scientific, dependencies that will exist regardless of the
 execution environment. For example, if there are two experimental groups of mice that
@@ -334,6 +338,16 @@ initially filled in.
 Automatic decoupling could be performed by looking to see whether an input variable
 is ever used in conjunction with another input variable. If it is not then it will
 be possible to split the inputs into multiple functions that are independent.
+
+Sometimes you just want to be able to specify that you need/want a thing
+that meets some specific criteria. For example, I don't care what antibody
+you use, but it needs to 1) bind the thing 2) not bind other stuff 3) not
+have been raised in the target organism, and here is the method to validate
+those requirements. THEN as a proxy, a reference to a thing that has perviously
+been validated according to those criteria can be used but we might want some
+way to point to the evidence either as a paper or as the output of the prior
+protocol. (This seems to fit with the 'how do you know you already have the
+reagents you need' problem)
 
 
 ## Practical considerations for readability and execution
