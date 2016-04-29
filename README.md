@@ -26,7 +26,9 @@ A DSL for specifying _how_ to execute a series of steps. [SO. Turns out that wha
 probably want here is actually a DSL for specifying _WHAT_ to do that makes it easier
 to later express the _how_ by giving good constraints on inputs and outputs that the
 _how_ implementation can follow. In fact, the _how_ obscures the logical process which
-the following sentences say is what we really want to capture] This is fundamentally
+the following sentences say is what we really want to capture. Further thoughts here.
+The key should be to make expressing BOTH what an how possible and make it easy to
+explicity state when the _how_ is thought to matter for the outcome.] This is fundamentally
 what we are about here. The problem with laboratory science is that the practicalities of
 the execution of an expreiment, protocol, or process, are often entangled with the
 logical, temporal, and scientific, dependencies that will exist regardless of the
