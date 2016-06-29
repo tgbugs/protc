@@ -546,6 +546,20 @@ Russ Poldrack doi:10.1016/j.neuroimage.2007.11.048 for a list of things that
 the fMRI folks might want to be able to model.
 
 
+## Play
+One of the very powerful things about modern programming environments is that
+they allow users to play around and test whether something works as expected.
+It also enables them to do it in a very tight loop and iterate quickly.
+One of the features of the implementation is that it needs to support some
+level of simulation beyond syntax checking an input/output consistency checking.
+Adding the ability to natively specify a function/parameters for the range of the
+expected results (or infer it directly based on the unit of the measure) could
+help here. The ability to add implementation to steps transparently without
+actually bumping the version... also seems like it helps here, since a (mix a b)
+step can be pretty darned generic. I wonder how this interacts with being able
+to use first class functions.
+
+
 ## License
 Obviously the language specification cannot be copyrighted and will be released
 under some completely open license just to make sure.
