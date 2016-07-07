@@ -560,6 +560,17 @@ step can be pretty darned generic. I wonder how this interacts with being able
 to use first class functions.
 
 
+# Mutually exclusive measurements
+When making measurements on the universe there are certain measurements which
+are suspected to be mutually exclusive (eg position/momentum of electrons).
+Others are practically mutually exclusive. More precisely, there are some
+measurement implementations that are mutually exclusive, there might be a way
+to measure more than one thing at a time using a different (perhaps unknown)
+implementation. I don't think this goes in protc, but it fits within the larger
+information system that needs to enumerate known/possible measurements on defined
+subsets of the universe's state.
+
+
 ## License
 Obviously the language specification cannot be copyrighted and will be released
 under some completely open license just to make sure.
