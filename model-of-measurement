@@ -1,17 +1,66 @@
-being:reality:universe
+being:reality:universe = the full 4d(?) universe
+being-subset = 
 s-relevant:s-measured??
 s-measured:subset-measured:being-measured:being-subset-measured:s-image
 s-prior: -dependent: -protocol: -dependency: -causal
 measure:
-omega-measure:total-measure
+Ω-measure:omega-measure:total-measure
 agent-measure
 relevant-measure
 symbol:symbolic-rep:symbolic representation
-implementation:representation
+state:
 agent:executor
 movement:energy dissapation:"causal" state transition:energy-matter-interconversion
 existence:the eternal
-record:instantiate
+implementation:representation  ; is this a conflation of two things? ... how to bring something into being exactly vs symbolically maybe?, one deals with existence <-> symbol (representation) the other being <-> symbol ARGH SO HARD TO THINK ABOUT CLEARLY
+implement:execute:actualize = take a symbolic-representation of some being-subset and bring it into being
+record:instantiate:represent = take a symbolic-representation of some non-being existence and bring it into being
+alpha-record:α-record = the record function that when given the exact symbolic representation of a subset of being returns that subset, when given an incomplete (uncertain) symbolic representation of that being it returns bottom, inverse of omega-measure
 tau:get-time-interval
 invariant:
+⊥:bottom:\bot:
+->:evaluates-to
+protocol = a specification for a being-subset that produces a semi-known being-subset (allows the inference of a subset of the state without actually having to call measure on it) ; find a better way to say this
 
+; predicates
+measureable?
+implementable?
+representable?
+state?
+
+
+(measure being) -> bottom
+(record (omega-measure being)) -> being ; some fun comments about the computational complexity of being here...
+(measure being-subset) -> symbol ; putting causal bounds on subsets...
+(record symbol) -> representation
+(= (alpha-record (omega-measure being-subset)) being-subset) -> #t ; subsets are implementations of the symbols of themselves
+(record (measure subset)) ; science, ignoring the implementation details
+(protocol s-prior) -> s-related inferred-state ; need something more for inferred-state...
+
+measure <-agent-> movement/energy dissipation implies that any subset of the universe that takes in
+energy/particle/matter and emits photos at a lower energy could be considered to be an agent (hrm... where
+do black holes fit in here... something to do with the timescale of reemission... or maybe the implementation
+of a measurement...)
+
+
+; assumptions
+	In the best case we want a theory of measurement to make zero assumptions about the nature of the underlying being [reality] we are trying to measure.
+	Unfortunately there are some assumptions that are unavoidable when we impose measurement on being.
+	All assumptions we make about the underlying nature of being in this theory are equivalent to the assumption that it is possible to take an omega-measure on being.
+	Phrased another way: symbols that represent all of being are contained in the class of existences.
+	(contains (omega-measure being) existence) -> #t
+; implications of assumptions
+	Electrons have positions and momentums at the same time, even if we cannot measure them at the same time.
+	Note here that the relationship between knowability within the universe and the true nature of being are quite distinct. ; more considerations about proabalistic 'state' here... (ie that Heisenberg's is a statement about knowability/measureability not about being, see evidence that Cochlea allow humans to perform better than expected on the uncertainty principle imposted by the fourier transform)
+	That it is possible to recover the string of random numbers that actually came out of the universe's RNG.
+
+; ramblings
+	We can never know whether we have obtained an omega-measure.
+	The best we can hope to achieve is a relevant-measure, and
+	relevant-measure is always defined by a set of axioms, not by being.
+	Essentially, there is no oracle that we can use to check our answers,
+	there is no revealed truth that can tell us the nature of being.
+
+; todo
+	Is it actually possible to constrain the bounds of s-relevant? Yes, but only as a function of a set of axioms (and perhaps data at some point).
+	Measuring the voltage between ground and probe sticking things in between the two produces a symbol which represents an extremely complex 'state' variable, and might even be said to only refer to the state of the digitizer or the state of the transistors in the cpu, which is circular and severely unsatisfactory. In this case there is a mental model that can help constrain the problem: a circuit. However, in many cases, and certainly at the start of any new science, those models do not exist or must be imported (as axioms) from some already existing field of knowledge.
