@@ -42,6 +42,23 @@ energy/particle/matter and emits photos at a lower energy could be considered to
 do black holes fit in here... something to do with the timescale of reemission... or maybe the implementation
 of a measurement...)
 
+Theorem 1: s-relevant is always bounded IF you are willing to specify a non-zero uncertainty/finite
+precision. This holds for universes where the underlying reality has a finite starting point (ie not
+doubly infinite in time, or where there is a (space/)time singularity a few years back) and where
+there is a speed limit (c) aka where there is locality. In universes without locality this theorem
+might still hold if there were something like the 2nd law of thermodynamics that prevented non-locality
+from magically popping in and messing with results (a cost function with distance or something). It may
+just be a requirement that the causal topology of the underlying reality be connected, meaning that
+causes cannot 'jump' from one part of reality to the next without passing through the intervening bits.
+Is it even possible to make measurements in non-local universes, probably, which means that simply being
+able to transform s-measure into a symbol is not sufficient to satisfy T1. The intuition for this in
+local, starting universes is that there is a finite amout of time that can cause events (ignoring the
+future causal entanglement stuff for the moment) and the speed limit provides the classic light cone
+in space that places a finite limit on the distance from which other parts of the universe can effect
+each other. The evidence supporting a variety of R^2 phenomena also provide much stronger constraints
+on the bounds for s-relevant. (If information can leak from one universe to the next through the starting
+singularity I'm going to be super pissed here.)
+
 
 ; assumptions
 	In the best case we want a theory of measurement to make zero assumptions about the nature of the underlying being [reality] we are trying to measure.
