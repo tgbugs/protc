@@ -59,6 +59,22 @@ each other. The evidence supporting a variety of R^2 phenomena also provide much
 on the bounds for s-relevant. (If information can leak from one universe to the next through the starting
 singularity I'm going to be super pissed here.)
 
+What is a being measure? What is a computed measure?
+Computed measures produce numbers that have been modified acording to (intensional) symolic operations,
+even if they are implemented in hardware (eg the output of the gain step of a dsp). In contrast being
+measures are the first available symbolically representable state of underlying being. For example the
+analog voltage measured across a known resistor PRIOR to digitization so that digitization aliasing
+can be accounted for in the provenance. Not entirely sure how to make this kind of distinction practical
+in protc or anything else that implements this model of measurement. I don't think there is an issue
+with also allowing the digitized signal to be the 'first' symbolic representation since often in science
+we might no know that there is a prior phenomenon that underlies what we think we are measuring. [Fun times
+trying to document the 'historical' protocols that were used to develop standard measures. I wonder if the
+protocols look like fixed points or whether they simply piggy back on local (assued) invariants in the
+structure of being? The process needed to FIND the invariants will probably look different depending on
+the type of invariant and the types of noise it is subject to. The notion that an invariant exists in
+the first place should hopefully bear more similarity. Unfortunately this theory of measurement models
+hypotheses as if they spring from the Void itself (they might as well).]
+
 
 ; assumptions
 	In the best case we want a theory of measurement to make zero assumptions about the nature of the underlying being [reality] we are trying to measure.
