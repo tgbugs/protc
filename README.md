@@ -584,7 +584,12 @@ machine produces numbers with units of degrees celcius.' Black box annotations
 (like all measurement methods?) should probably require units so that inference
 can be made about the types of the underlying being measurements. Note: we really
 need to avoid the black box being 'there is a device driver that puts bits into
-this register that correspond to the number Z.'
+this register that correspond to the number Z.' Black box methods could function
+similarly to headers, where they specify the inputs and outputs of experiments
+with out specifying the exact implementation so that it is possible to cite at
+the black box level as well as the implementation level. This is a bit weird
+since black box methods are also like types, but also provide natural levels of
+encapuslation for steps and the like because they are guranteed functional.
 
 
 ## License
