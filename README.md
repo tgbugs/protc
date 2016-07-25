@@ -560,7 +560,7 @@ step can be pretty darned generic. I wonder how this interacts with being able
 to use first class functions.
 
 
-# Mutually exclusive measurements
+## Mutually exclusive measurements
 When making measurements on the universe there are certain measurements which
 are suspected to be mutually exclusive (eg position/momentum of electrons).
 Others are practically mutually exclusive. More precisely, there are some
@@ -569,6 +569,22 @@ to measure more than one thing at a time using a different (perhaps unknown)
 implementation. I don't think this goes in protc, but it fits within the larger
 information system that needs to enumerate known/possible measurements on defined
 subsets of the universe's state.
+
+
+## Black boxes
+Protc needs to support the ability to flag methods as 'black boxes' to facilitate
+communication about the fact that at this level of abstraction a measurement
+method which has a more detailed explaination is being treated as if it magically
+produces numbers of certain units. The syntax for this needs to make it trivial
+to unbox the black box when the implementation is added (ie without having to
+reindent or anything stupid like that). This example come from reading with wiki
+page on thermocouples which measure temperature based on the principle of the
+thermoelectric effect which requires quite a bit more explaination than 'this
+machine produces numbers with units of degrees celcius.' Black box annotations
+(like all measurement methods?) should probably require units so that inference
+can be made about the types of the underlying being measurements. Note: we really
+need to avoid the black box being 'there is a device driver that puts bits into
+this register that correspond to the number Z.'
 
 
 ## License
