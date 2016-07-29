@@ -67,6 +67,19 @@ RMS is actually a primitive measure. The transition from being -> existence (sym
 definitely instantaneous, so in that sense calling (measure being-subset) is instantaneous? Need to
 think about this and the implications one way or another.
 
+Is naming a type of high level/complex measurement function (perhaps ill-specified)? Traditional naming
+definitely relies on a number of black box measurements (eg visual processing, olfactory processing)
+and produces a symbol at the other end. This is not all that different from a number that is produced
+by a thermocouple when you have no idea that it is a thermocouple that measures the temperature nor
+an inkling about the principles underlying it nor the ability to build one. The only difference would
+seem to be the number of black box steps, or more simply the magnitude of our ignorance. This leads
+directly to a correlary which is 'what is the error of naming?' If naming is a measure then it MUST
+be possible to measure whether it was assigned correctly, either by comparison to a type specimine or
+by comparison to an average of all named specimines. I'm going to go with NO it is NOT a measurement
+because there is nothing in the underlying being that can be represented by the name that is given.
+The name is a function from symbols to symbols NOT from being -> symbols. There is no being measure
+that can produce a name.
+
 What is a being measure? What is a computed measure?
 Computed measures produce numbers that have been modified acording to (intensional) symolic operations,
 even if they are implemented in hardware (eg the output of the gain step of a dsp). In contrast being
