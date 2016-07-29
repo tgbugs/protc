@@ -59,6 +59,14 @@ each other. The evidence supporting a variety of R^2 phenomena also provide much
 on the bounds for s-relevant. (If information can leak from one universe to the next through the starting
 singularity I'm going to be super pissed here.)
 
+Independent of the underlying time constants of being processes (taus, temporal variability) are all
+primitive (being) measurements effectively instantaneous? That is, is there any process of measurement
+that can produce a number that is the product of multiple points in time. I want to say that there is
+root mean squared measurements of AC current seem like the natural candidate, the question is whether
+RMS is actually a primitive measure. The transition from being -> existence (symbolization) is most
+definitely instantaneous, so in that sense calling (measure being-subset) is instantaneous? Need to
+think about this and the implications one way or another.
+
 What is a being measure? What is a computed measure?
 Computed measures produce numbers that have been modified acording to (intensional) symolic operations,
 even if they are implemented in hardware (eg the output of the gain step of a dsp). In contrast being
