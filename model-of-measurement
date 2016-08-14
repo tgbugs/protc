@@ -131,7 +131,35 @@ Either of these representations for the protocol itself have the very nice prope
 that the phenomena in question remain stable (as a function of the protocol) and that the only
 thing that changes is our ability to name, identify, predict, and control the contents of the black box.
 
-
+Dealing with BBCs. We probably want nested BCCs maybe up to 1 level, splitting it into known and unknown
+sources of 'noise' in our measurements, so as to enable questions about whether the variation in the
+experimental protocol is sufficient to explain the variation in our results (and similar). To explore
+this let us consider how one might go about identifying 'noise.' Consider the electrophysiologist who
+suddenly identifies a signal in the output of his data acquisition amplifier which he is fairly certain
+he wants nothing to do with. Ignoring for the time being of how he knows he doesn't want this (experience)
+how does he go about removing it? In principle this should be fairly easy [hah] since all the pieces of
+equipment are know and he merely needs to twiddle each one of them independently to see if the noise changes.
+Let us pretend he accomplishes this because of the tight feedback loop that exists between the visualization
+of the numbers coming out of the amplifier and his exceeding ability to twiddle things. What has he done?
+In the model of the black box he has identified that the cause of the measurements he is making are not
+those that he wants and so immediately creates a new black box containing 'the-source-of-the-noise' and
+BBCk that contains all the equipment involved in the experiment and a BBCu (unknown) that contains everything
+else. At this point in time the black box itself is empty because the-source-of-the-noise references a
+null pointer, and the-source-of-the-noise is either in BBCu and BBCk. This is where we start. From here
+(non)systematic twiddling of members of BBCk will either reveal that the-source-of-the-noise (henceforth
+merely 'the-source') is contained within a being-subset corresponding to a member (or set of members) of BBCk,
+or that the-source is in BBCu at this point the electrophysiologist can either go on the war path and find
+the solid state physics graduate students upstairs that are playing with a tesla coil (exhaustive search)
+or he can try to shield his rig from the diversions of his underworked and overpaid neighbors. In the first
+case we can directly assign the-source to a known phenomenon and can place the offending individuals in
+the black box of shame. In the second case the outcome is thus that while we do not know the exact nature
+of the-source we have found a kind of complementary knowledge about how we can modify BBCk in such a way
+as to shield our original black box from outside interference. [PRACTICAL] This immediately suggests that
+we need a way to express that certain parts of a protocol exist to shield our black box from members of
+BBCu that we do not have time to fully name, identify, predict, and control. Movement from BBCu to BBCk
+and from BBCu to BB or BBCk to BB (retraction watch!) are events that seem to live somewhat outside
+the realm of the protocol, but we may want to manage this in some way since it is valuable for the
+record keeping of the usually opaque events that lead to the development of a known good protocol.
 
 What is a being measure? What is a computed measure?
 Computed measures produce numbers that have been modified acording to (intensional) symolic operations,
