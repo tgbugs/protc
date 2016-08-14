@@ -80,6 +80,59 @@ because there is nothing in the underlying being that can be represented by the 
 The name is a function from symbols to symbols NOT from being -> symbols. There is no being measure
 that can produce a name.
 
+What is the relationship between black boxes and Ω-measures? Re: The boundary problem when trying to
+define closed being-subsets. Imagine a naive being-subset, a 4 dimensional tract of space time bounded
+in space using some inertial reference (issues arise) and in time by defined t0 and t1. Now imagine
+that inside this black box we wish to study the decay of some radioactive element by scintillation.
+Unfortunately for us at some point between t0 and t1 a cosmic ray happens to strike our scitillation
+vial and produce a signal which appears to be that of our radioactive element. Even more unfortunately
+imagine that that very cosmic ray has as its origin a galaxy 13 billion light years away. That cosmic
+ray enters our being-subset some time between t0 and t1 and immediately extends the true t0 back 13
+billion years and an (apparently) considerable distance in space. Every single being-subset will face
+this or a similar boundary problem. How do we deal with this? [Practically Thresholding. Repeated measures.]
+First we need to note that this example shows why I say that our original being subset was naively
+defined. Actual being subsets need not be continuous in space time, indeed space time may be an illusion
+that hides the underlying causal topology of being (significant issues regarding locality arise here).
+Given the practical needs of the working scientist (hah) we need a solution to this problem that neatly
+encapsulates such cosmic well wishers so that we can evaluate the match between the reality of the
+true being-subset (about which we have already said we would like not to have to specify here) and
+the black box we are using to try to approximate that being-subset. This seems to provide a direct
+and very satisfactory answer to originally posed question (and could have been determined from the
+long standing use of black boxes as tools for thinking and modeling). Black boxes are representations
+of a being-subset that are missing the complement of the black box. Every black box must have its
+complement represented explicitly in order for the union of the two (BB and BBC) to fully capture
+the being-subset. This formalizes the process of science as the process of drawing the boundary
+between the black box and the BBC for the purposes of assigning causes to measurements. More fully
+in our original black box we had placed a scintillation vial, a photon detector of some sort, and a
+radioactive source (we'll do this in a vacuum at STP for simplicity). We asserted that any blip of
+energy that we detected on the photon detector must correspond to an emission from the source. In
+fact, one of the blips came from a phenomenon outside the black box. There are a couple of ways
+that science can deal with this. 1) Try to eliminate interaction between the black box (literal in
+this case) and the BBC. 2) Statistics: loose the BBC in the noise. Number one requires an awareness
+that the BBC exists and also a belief that it is possible to shield oneself from it (a tour of an
+electrophysiology lab will reveal that some practitioners have completely given up on certain kinds
+of shielding). Number two requires the ability to make repeated measurements and often requires some
+hefty assumptions (eg when collecting data on diverse populations of biological subjects). Note that
+the BBC does not include all of being outside the black box, only the part of the being subset not
+explicitly enumerated inside the black box. Note further that knowledge BBCs can be developed over
+time and shared so that known sources of error can be managed. More note: black boxes do not
+initially have to have any known or named phenomenon or mathematical equivalent in them (naming a
+thing is essentially black boxing). In the beginning the black box includes only the measurement
+equipment that produces the symbolic representation (note that the point of transition from
+measurement device to environment is not always entirely clear). Adjusting the boundary, or expanding
+the box from the measurement equipment to the phenomena involved is what variation in the protocol
+enables, or model building from other types of measurement or guesses enables. Interestingly in these
+cases the implementation of the protocol itself (ie the 4d spatiotemporal thing that something
+executes as a result of the representation of the protocol artifact) may (can and should?) also
+be considered part of the black box (it could also be a known part of the BBC, this version could
+be more useful for refinement, but it would necessitate a more thorough illucidation of how things
+pass from the truly unknown into the BBC, something that is probably very important to have...).
+Either of these representations for the protocol itself have the very nice property of assuring
+that the phenomena in question remain stable (as a function of the protocol) and that the only
+thing that changes is our ability to name, identify, predict, and control the contents of the black box.
+
+
+
 What is a being measure? What is a computed measure?
 Computed measures produce numbers that have been modified acording to (intensional) symolic operations,
 even if they are implemented in hardware (eg the output of the gain step of a dsp). In contrast being
