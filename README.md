@@ -592,6 +592,25 @@ since black box methods are also like types, but also provide natural levels of
 encapuslation for steps and the like because they are guranteed functional.
 
 
+## Semantics for when nouns can verb (RE: NEVER)
+One interesting possibility for supporting more... normal? language like
+representations is to allow people to use 'nouns' as verbs. However what
+this means is that you have a strange duality and require a modifier to be
+attached so that verb forms of a thing can be passed to a function as a verb
+instead of as the default noun (this will only be needed if you are trying to
+pass a verb as an argument to a function so that you can modify it. For example
+```
+(acquire knife) ; bind knife as a verb in the local namespace, def left blank
+(knife bob) ; this kills the bob
+(give knife bob) ; no error noun form
+((quickly knife) bob) ; ERROR because quickly modifies the verb form
+((quickly #V'knife) bob) ; pass the verb form using #V' sugar for (verbify noun)
+```
+This kind of sucks though. Consider shovel. Please use dig, or hit, or other
+explicit verbs, it increases clarity. This confuses people in English, it seems
+clever and therefore is axed because it hides very important semantic differences.
+
+
 ## License
 Obviously the language specification cannot be copyrighted and will be released
 under some completely open license just to make sure.
