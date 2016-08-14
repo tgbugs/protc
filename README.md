@@ -611,6 +611,16 @@ explicit verbs, it increases clarity. This confuses people in English, it seems
 clever and therefore is axed because it hides very important semantic differences.
 
 
+## Types that we need
+1) black-box: the phenomenon that we want to make a measurement on
+2) BBCk: black box complement known (rename)
+3) BBCu: black box complement unknown (rename)
+4) measurement: operates on a black box + BBCk + BBCu
+5) named-being: a named constituent of a black-box or if used alone a black-box
+6) name: your regular old variable
+7) step: transformations on named-begins that reside in BBCk (do we need this?)
+
+
 ## License
 Obviously the language specification cannot be copyrighted and will be released
 under some completely open license just to make sure.
