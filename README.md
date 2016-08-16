@@ -634,6 +634,45 @@ assertions of partonomy on defined terms or could define new subparts
 on the fly.
 
 
+## Bootstrapping metacircularity
+In the outline for one of my slides I made a note about the fact that it might
+be possible to define a reference to a being using Protc itself in order to
+specify a set of measurements to make accompanied by a set of ranges for values
+that would satisfy the classification of the black box as the thing in question.
+Think of it as a very formal game of 20 questions, though obviously the asker is
+as trapped in its substrate as we are in ours. The originated by thinking about a
+mouse and what measures and protocols and values an executor would need to have
+in hand in order to determine whether something was a mouse (DNA sequencing seems
+like a nice shortcut here, though perhaps not always practical to stab/swab something
+for its cells in order to determine if it is an X, plus things can cheat, but these
+are essentially the same problems any nervous system faces). When we arrive at the
+question: "How would you identify a human being?" Well, one way to identify a `'mouse`
+is to find a `'human` and show them the `'putative-mouse`, but then one must define
+the `'human`. So what if we define `'human` as something which mutually recognizes
+other humans as humans? This is a bit more sophisticated than defining a `'human` as
+anything when presented with a `'putative-human` correct (heh) identifies it as `'human`.
+To avoid the circularity and the need for correctness, a `'human` or perhaps an `'agent`
+is anything which satisfies the following. Given two tokes of type `'putative-agent`
+if both classify the other and themselves as `'agent` then they are each of type `'agent`. 
+I think this level of symmetry prevents self reference issues and avoids entirely the
+problem of 'correctly.' However I am on the lookout for counter examples of pairs of
+entities that pass this test but a human would say are not agents. One criteria seems
+to be that they can interpret Protc or at least participate in the running of one of its
+programs, though that is another issue. Nice examples where we expect this to fail and
+it does: `(meta 'human 'rock) (meta 'human 'cat) (meta 'human 'ape) (meta 'human 'computer)`.
+Interesting cases are where we meet half the criteria `(meta 'always-says-human 'rock)
+(meta 'racist 'black)`. This seems to quickly devolve into game theory which we hopefully
+don't have to address here (repeated games and tit for tat). In the second example, the
+`'racist` actually fails to be classified as human, which is kind of nice. It turns out
+that we actually can't use repeated games here, because two non-agents could conspire if
+they know what the other thinks they are. Other ways to address this issue would be for
+a Protc program to present a keyboard based prompt (tricky to actually enforce) that
+presented the prompt `If you are human please type this sentence backward word by word
+and then state your name.` or something silly like that, better to have two humans to
+verify each other, seems cleaner and safer. Perhaps we should call these mutually
+metacircular agents or some such.
+
+
 ## License
 Obviously the language specification cannot be copyrighted and will be released
 under some completely open license just to make sure.
