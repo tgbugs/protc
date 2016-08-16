@@ -621,6 +621,19 @@ clever and therefore is axed because it hides very important semantic difference
 7) step: transformations on named-begins that reside in BBCk (do we need this?)
 
 
+## Conservation of mass cont.
+Named black boxes should allow us to do inference to 'intelligently'
+track complements of their parts. For example if we `(extract mouse.brain)`
+then `(- mouse mouse.brain)` should naturally be present in the set of
+beings we track. Part of relation when not available or differing from
+ontology source (really don't want to force people to load a bunch of
+ontologies).  We could use something like dot notation that is
+traditionally used for classes but in this case it would be
+`mouse.brain.slice10` or something of that nature. The dots could be
+assertions of partonomy on defined terms or could define new subparts
+on the fly.
+
+
 ## License
 Obviously the language specification cannot be copyrighted and will be released
 under some completely open license just to make sure.
