@@ -670,7 +670,10 @@ a Protc program to present a keyboard based prompt (tricky to actually enforce) 
 presented the prompt `If you are human please type this sentence backward word by word
 and then state your name.` or something silly like that, better to have two humans to
 verify each other, seems cleaner and safer. Perhaps we should call these mutually
-metacircular agents or some such.
+metacircular agents or some such. As an addendum it will be important to specify that
+Protc should demand identification methods which do not... exessively modify the
+back box. While sometimes is is ok to identify `'parrot` as `'ex-parrot` for many
+specimines of interest it is rather import not to `(ex 'them)`.
 
 
 ## License
