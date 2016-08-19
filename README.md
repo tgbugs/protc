@@ -676,6 +676,14 @@ back box. While sometimes is is ok to identify `'parrot` as `'ex-parrot` for man
 specimines of interest it is rather import not to `(ex 'them)`.
 
 
+## Serialization
+Since one of the use cases for Protc is as an output format (internal?) for user facing
+programs we need to specify the rules that should be followed when producing Protc files
+programatically. Hopefully it will be possible to produce Protc deterministically, though
+that does put some serious constraints on the semantics, unless we can provide a good
+'internal' representation as well.
+
+
 ## License
 Obviously the language specification cannot be copyrighted and will be released
 under some completely open license just to make sure.
