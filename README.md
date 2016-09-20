@@ -621,6 +621,21 @@ clever and therefore is axed because it hides very important semantic difference
 7) step: transformations on named-begins that reside in BBCk (do we need this?)
 
 
+## Communicating about known biases
+One piece of rather abstract information that we might like to accompany
+a protocol, is the kind of known biases it has. For example, the technique
+used to produce the hippocampal volume used for many MCell simulations is
+known to miss many of the vesicles. I'm not sure whether this goes in protc
+or not. But it seems like something that would fit nicely in cases where other
+bounds on black boxes are known. It might be nice to be able to say 'if you
+section your samples using this technique this `known-phenona` will be detected
+less frequently than if you use some other technique. Essentially some way of
+pointing to other protocols that give a different measurement when dealing with
+an overlapping (is it really overlapping? no, not direclty unless you can use
+the same technique on the same sample... need to think more on what the
+realtionship is here) black box.
+
+
 ## Conservation of mass cont.
 Named black boxes should allow us to do inference to 'intelligently'
 track complements of their parts. For example if we `(extract mouse.brain)`
