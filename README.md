@@ -699,6 +699,21 @@ that does put some serious constraints on the semantics, unless we can provide a
 'internal' representation as well.
 
 
+## Request for further specification
+One of the objectives of protc is to facilitate elaboration of the semantics of
+human readable definitions when a consmuing party does not fully understand a
+more abbreviated form. This also enables the transition from a mnemonic representation
+to one that is more programitc. Thus we should include a directive which can be
+included as part of the language itself that acts as an error which will result
+in a 'request for more information' with room for an explanation.  This may seem
+like an odd thing to include in the core of a language, however it is a VERY common
+need that arrises when communicating protocols that fundamentally do not have
+easily provable semantics.  These requests for further specification can also
+serve as a provenance mark indicate when a change to a protocol results in a
+protocol that should still be considered equivalent, rather than a 'request for
+change' or something like that (which we probably would not include in the document).
+
+
 ## License
 Obviously the language specification cannot be copyrighted and will be released
 under some completely open license just to make sure.
