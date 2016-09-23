@@ -737,6 +737,22 @@ cell) then maybe we can get around this. Note that the equivalent data definitio
 what appears to be the electrical output of an active membrane (or some such).
 
 
+## Semantics of generalization
+Let's say that we want to abstract a process. We can no longer use exact identifiers and
+we need to wander up a type taxonomy. This suggests that we may need a way for people to
+specify what taxonomy they are using. I know that this may seem like an intractable issue
+however I simply do not see any alternative other than to provide a very simple way to
+crowdsource some of these through something like interlex. Completeness will always be
+and issue, but when we get into generalization, the definition of a superclass for the
+purposes of genralization is likely to be deeply linked to the exact function that is
+being applied. This is a problem because it means that you have polymorphic types, but in
+the reverse sense in which it is used in computer science, and more in the sense of a
+role as used in ontologies. Essentially you end up with a solvent being defined as
+anything that can disolve something (woooo fun circularity) while an agonist becomes
+defined as anything that can agonize. Thus you could have an agonist solvent for the
+purposes of functional abstraction.
+
+
 ## License
 Obviously the language specification cannot be copyrighted and will be released
 under some completely open license just to make sure.
