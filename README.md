@@ -714,6 +714,29 @@ protocol that should still be considered equivalent, rather than a 'request for
 change' or something like that (which we probably would not include in the document).
 
 
+## Semantics of nouns vs semantics of verbs
+When dealing with real world beings or actions protc needs some way to handle specifying
+semantics. Elsewhere I have discussed the need for three levels of semantics with regard
+to nouns, namely acquisition, production, and validation. The semantics for acquisition
+delegate the semantics to trust by using an identifier to communicate precisely the being
+needed. Production and validation require more complex semantics and delegation. Verbs
+are even more complex. The semantics of verbs almost has to be specified in terms of
+'move here and there at this speed dissipating only so much energy' or 'using some method
+communicate these symobls to some listener.' This level of specification is not useful for
+a human executor. At this point I think that the delegation of verb semantics either
+requires a video, or a drawing, but that is a stop-gap for in-person training. Thus verb
+semantics for human executors may ultimately be founded on the training or ability of
+an executor. This devolves then on executor specifiction and an expectation that someone
+at the other end of a protocol and understand the verb semantics used. Sadly specification
+for how to teach someone something or how to learn something is not direclty in scope at
+the moment. This brings us to the discussion from the model of measurment about metacircular
+definitions for human executors. If we can define a set of symbolic measurements that can
+validate that a being has the skills needed to perform a task (eg ask them to patch a
+cell) then maybe we can get around this. Note that the equivalent data definition for
+'patch a cell' is produce a file with timeseries data playing voltage steps that produce
+what appears to be the electrical output of an active membrane (or some such).
+
+
 ## License
 Obviously the language specification cannot be copyrighted and will be released
 under some completely open license just to make sure.
