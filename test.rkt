@@ -148,3 +148,44 @@
 (define fun4 (lambda (being) (/ being 2)))
 
 (apply-all (list fun1 fun2 fun3 fun4) 2)
+
+; yogurt example
+(define-syntax (repeat-until condition body) ; doesn't quite work
+  (define (recurse)
+    (if (eval condition)
+      #t
+      (progn
+        (eval body)  ; hidden state, want to get rid of this
+        (recurse))))
+  (recurse))
+
+(define (has-indentation thing)  ; needs reference points for rigior
+  "There is a point on the surface of thing that is
+  significantly lower than the surrounding surface"
+  (define threshold (units 4 'cm))
+  (if (>= (- (get-surface-max thing)
+             (get-surface-min thing))
+          threshold))
+
+(define (make-indentation-in-a-with-b a b)
+  (repeat-until (has-indentation b)
+                (press-a-with-b a b))
+  (return (bind 'indentation a)))
+
+(define (put-a-in-b a b)  ; need a way to specify executor semantics scope
+  "self explanatory given executor semantics"
+  ;add a to the contents of b
+  (return b))
+
+(define (validate key thing) "if the key exists in the definitions table check it")
+
+(define (make-delicious-yogurt yogurt honey granola blueberries bowl spoon)
+  (validate-definition 'yogurt yogurt)
+  (return (bind 'delicious-yogurt
+    (ordered-sequence-implicit-output-passing ; progn
+      (put-a-in-b yogurt bowl)
+      (make-indentation-in-a-with-b yogurt spoon)
+      (put-a-in-b honey indentation)
+      (mix-a-with-b (contents bowl) spoon)
+      (put-a-in-b blueberries bowl)
+      (mix-carefully-a-with-b (contents bowl) spoon)))))
