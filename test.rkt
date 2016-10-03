@@ -189,3 +189,66 @@
       (mix-a-with-b (contents bowl) spoon)
       (put-a-in-b blueberries bowl)
       (mix-carefully-a-with-b (contents bowl) spoon)))))
+
+; som protocol from mlab, variants
+
+(protocol #:name 'som-protocol
+  (inputs ; opening with inputs may not always be how people write these... sometimes they should/may start with a single step
+	'male-mouse-strain-gin
+	'female-mouse-white ; no memory of the actual name
+	'patch-pipette
+	'needle-beveler
+	'...  ; as we can see this method is BAD for composability
+	))
+
+(define headstage (real-world-assembly
+					'headstage-electronics-box
+					'electrode-holder-gasket
+					'electrode-holder-base
+					'electrode-holder-oring
+					'electrode-holder-screw-clamp
+					'electrode-wire))
+
+(define rig (real-world-assembly
+			  'computer
+			  'acquisition-amplifier
+			  'patch-amplifier
+			  'headstage-2 ; note that this is a perfect example for 'elaboration'
+			  (instance 'headstage-2 headstage) ; elaboration only requires wrapping
+			  'halogen-lamp
+			  'filter-set
+			  'objective
+			  'microscope-body
+			  'linear-actuator-1
+			  'linear-actuator-2
+			  'led-470nm ; embedded parameter limited by the channelrhodopsin...
+			  ))
+
+(define (parameter-coupling target-setting source-number)
+  ; observe that source-number can be the output of a measurement
+  ; single time vs repeated measurments... how frequently do I need to check this
+  )
+
+(steps
+  (step 'make-slice
+		(inputs 'mouse ; problem: quoting makes dupe checking hard
+				'vibratome
+				'disection-tools
+				'glue
+				'agarose 
+				'KX
+				'cutting-buffer
+				'perfusion-pump
+				'25-gauge-needle)
+		(outputs '500um-brain-slice)))
+
+(define to-measure-1
+  (black-box-complement-1 ; implied bbc2
+	rig ; it seems like we need to be able to pack many details behind a name?
+	(black-box #:name 'bb-patched-pair
+			 ; at specification time names should link entities? shouldn't have to pass in at 'runtime'?
+			 cell-1 ; this is the product of a massive set of transformations...
+			 cell-2
+			 brain-slice ; where do we draw the boundary here? shouldn't this be acounted for as part of the selection of cell-1 and cell-2????
+			 bath-solution ; writing down successive black boxes that express invariants at various levels of granularity might be helpful... but how to do it? even though black boxes are the inputs of measurements they are also the output of the series of transformations
+			 )
