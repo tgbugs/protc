@@ -251,4 +251,20 @@
 			 cell-2
 			 brain-slice ; where do we draw the boundary here? shouldn't this be acounted for as part of the selection of cell-1 and cell-2????
 			 bath-solution ; writing down successive black boxes that express invariants at various levels of granularity might be helpful... but how to do it? even though black boxes are the inputs of measurements they are also the output of the series of transformations
-			 )
+			 )))
+
+; start from list of reagents, start from a step, start from a tool description, start from a measure, start from a black box, start from a black box complement, start from a set of parameters
+; transition from ill-defined in-place atoms to externally defined constructs
+; WHILE allow for non-local reference to parts... is it reasonable to allow for
+; non-local references, so that everything gets dumped into the same namespace?
+; you're gonna get sick of rig->headstage-1->electrode
+; similarly you are going to get sick of specifying nested black boxes that are redundant
+(black-box-tree)
+
+; an approach that allows starting from lists of globally known inputs for the more list-centric among us...
+(global-inputs)
+(global-intermediates)
+(global-outputs)
+(global-measures)
+
+
