@@ -2,6 +2,12 @@
 #lang racket
 (require racket/enter)  ; drracket can't find module->exports w/o this
 (require (for-syntax racket/match))
+(require (for-syntax syntax/parse)) ; super duper uper useful >_< AND COMPLETELY BROKEN w/ typed/racket
+
+; UNITS... amazing how much easier it is when langs have this accessible
+; except for the fact that it doesn't quite fit our use case ;_;
+;(require measures-with-dimensions) ; raco pkg install measures-with-dimensions
+;(require measures-with-dimensions/chemistry)
 
 ;; useful racket code
 ; define env
@@ -150,22 +156,55 @@
 (apply-all (list fun1 fun2 fun3 fun4) 2)
 
 ; yogurt example
-(define-syntax (repeat-until condition body) ; doesn't quite work
+#| ; AND THIS FRIENDS IS WHY INCONSISTENT define vs let is EVIL
+(define-syntax-rule (repeat-until condition body) ; doesn't quite work
   (define (recurse)
     (if (eval condition)
       #t
-      (progn
+      ;(progn ; yay time for languages
+      (begin
         (eval body)  ; hidden state, want to get rid of this
         (recurse))))
   (recurse))
+|#
+
+(define-syntax-rule (repeat-until condition body)
+  (letrec ([recurse (lambda () (if (eval condition)
+                                 #t
+                                 (begin
+                                   (eval body)
+                                   (recurse))))])
+    (recurse)))
+
+(define (units value unit)
+  ; WELL THAT WAS EASY (require measures-with-dimensions)
+  ;     except not really because tooling is incomplete :/
+  (cons unit value)) ; switch it up just to confuse everyone since putting types first in cons is fun!
 
 (define (has-indentation thing)  ; needs reference points for rigior
   "There is a point on the surface of thing that is
   significantly lower than the surrounding surface"
   (define threshold (units 4 'cm))
-  (if (>= (- (get-surface-max thing)
-             (get-surface-min thing))
-          threshold))
+  (if (>= (- (delegate-local 'get-surface-max 0 thing)
+             (delegate-local 'get-surface-min 5 thing))
+          threshold)
+    #t
+    #f))
+
+(define (press-a-with-b a b) ; man it is hard to define this stuff
+  "Apply force on to a using b to mediate the force transfer. Ah glorious delegation :/"
+  (delegate 'press a b))
+
+(define (return value) ; TODO
+  ; return a value from a monad, which basically means put the name in the local scope
+  ; FIXME need to check on the vocab here because i think im brainfarting from haskell
+  value)
+
+(define (bind name value)
+  ; TODO go read haskell stuff again and sort this out...
+  ; naming in this context should put stuff in _some_ namespace
+  ; since we named it, even if not the global namespace
+  value)
 
 (define (make-indentation-in-a-with-b a b)
   (repeat-until (has-indentation b)
@@ -177,18 +216,83 @@
   ;add a to the contents of b
   (return b))
 
-(define (validate key thing) "if the key exists in the definitions table check it")
+(define definitions-alist '())
+(define digital-representations-alist '())
 
-(define (make-delicious-yogurt yogurt honey granola blueberries bowl spoon)
-  (validate-definition 'yogurt yogurt)
+(define (validate key thing)
+  "if the key exists in the definitions table check it with
+  the function at that key"
+  (define asdf (assoc key definitions-alist))
+  (if asdf
+    ((cddr asdf) thing)
+    #f))
+
+(define (add-definition name measurements-list validation-function-on-measurements)
+  "adds a set of symbolic constraints on the outputs of defined measurements"
+  ; we should also enable these definitions to occur in place if possible...
+  ; note: as implemented this is last-one-wins if you use assoc
+  (cons (list name measurements-list validation-function-on-measurements) definitions-alist))
+
+(define-syntax (ordered-sequence-implicit-output-passing stx)
+  (syntax-parse stx
+    [(_ x ...) #'(begin x ...)]))
+
+(define (remove-quantity-a-of-contents-from-b a b)
+  ; see also take-a-from-b TODO, dont need this now, but may come back to it...
+  (if (has-digital-representation? b)
+    (remove a b) ; h-d-r useful to implement digital accounting
+    (delegate 'remove a b)) ; we have to delegate tracking to the executor
+  )
+
+(define (*contents* thing)
+  "This is essentially an accessor function that
+  provides direct access stuff inside. It will have a
+  lisp function equivalent 'contents that can access the
+  black-box and/or bbc1 to obtain a actual lisp list of their
+  contents when other real-world functions *put* stuff in them"
+  ; TODO use contents to get back any symbolic representation of
+  ; the 'known' contents of thing
+  '())
+
+(define (*generic-unpack* container-thing) ; combat conflation of containers with their contents
+  "Did your thing come in a container?
+  If so, please remove what you actually wanted from the
+  container containing it that you conflated it with! :)"
+  ;(define quantity 'how-should-we-deal-with-free-variables-in-real-world-functions?)
+  ;(remove-quantity-a-of-contents-from-b quantity (*contents* container-thing))) ; WRONG
+  (*contents* container-thing)) ; this is really what this is...
+(define (mix-a-using-b a b)
+  ; mix-a-with-b was confusing because with is ambiguous and could imply combining a and b
+  (delegate-local 'mix a))
+
+(define (mix-carefully-a-using-b a b)
+  ; TODO another example of a useful higher order function...
+  ; higher order real world functions don't actually work though...
+  ; because the full process encapsulated in 'mix cannot be shoved in as
+  ; an input to 'carefully, aka, wth are adverbs?!
+  ; adverbs are either directives or posterior judgements (measurements) about
+  ; a process... they are not actually higher order functions because they
+  ; are purely symbolic and cannot take the partial black-box implied by a real-world
+  ; function as an input... or... maybe it can? more though required here...
+  ((carefully mix-a-using-b) a b))
+
+(define (*make-delicious-yogurt* yogurt honey granola blueberries bowl spoon)
+  ; observe the implicit conflation of yogurt with yogurt container... this is a VERY common pattern
+  ; the major issue here is that the conceptual item that we want is part of our _output_
+  ; is NOT the thing that the executor can act on in order to make the output (in this example the containers
+  ; of yogurt, honey, granola, and blueberries) this pattern is something we need an easy way to combat
+  ; since we aren't trying to do logic programming... /me imagines free-floating yogurt flying about
+  (validate 'yogurt yogurt)
   (return (bind 'delicious-yogurt
     (ordered-sequence-implicit-output-passing ; progn
-      (put-a-in-b yogurt bowl)
-      (make-indentation-in-a-with-b yogurt spoon)
-      (put-a-in-b honey indentation)
-      (mix-a-with-b (contents bowl) spoon)
+      (put-a-in-b yogurt bowl) ; put is vastly under defined (put-a-in-b-using-c), as is yogurt :/
+      (let ([indentation (make-indentation-in-a-with-b yogurt spoon)])
+        ; nested lets using a macro don't quite work because we dont know
+        ; where the close paren needs to go, but doing it manually isnt the worst... maybe a rename?
+      (put-a-in-b honey indentation))
+      (mix-a-using-b (*contents* bowl) spoon) ; fun thought here about beating eggs since air is never listed...
       (put-a-in-b blueberries bowl)
-      (mix-carefully-a-with-b (contents bowl) spoon)))))
+      (mix-carefully-a-using-b (*contents* bowl) spoon)))))
 
 ; som protocol from mlab, variants
 
@@ -224,12 +328,94 @@
 			  'led-470nm ; embedded parameter limited by the channelrhodopsin...
 			  ))
 
+(define (add-causal-link-a->b a b)
+  ; todo state ;_;
+  (cons a b))
+
 (define (parameter-coupling target-setting source-number)
   ; observe that source-number can be the output of a measurement
   ; single time vs repeated measurments... how frequently do I need to check this
-  )
+  ; there is a trade off here: we don't just want the output of what evaluates
+  ;     to source-number, we want the structure itself... might need to modify the reader?
+  ;     aka this probably needs to be a macro or something...
+  ;     the 'normal' evaluation strategy from lisp isn't quite right for our use case...
+  (add-causal-link-a->b source-number target-setting))
+
+(define (make-executor description . verb-lists)
+  ; just alist for now, because why not use dicts for everything
+  (list (cons 'description description)
+        (cons 'verbs (flatten verb-lists))))
+
+(define (known-functions executor)
+  ; aka known-verbs
+  (cdr (assoc 'verbs executor)))
+
+(define english-speaking-executor
+  (make-executor
+    "anybody who speaks english"
+    ; closed world vs open world here, the need to use a dictionary is problematic...
+    'remove
+    'put
+    'lift
+    'shake))
+
+(define biologist-executor
+  (make-executor
+    "This is someone who has had enough training
+    in biology to understand the words used here
+    and yes, this definition is circular."
+    (known-functions english-speaking-executor) ; may need to unpack this?
+    'pipette))
+
+(define (bind-delegate executor)
+  (lambda (function-name . rest)
+    (if (member function-name (known-functions executor))
+      #t ; because executor functions are delegated, they do not interact with the digital world directly, their digital implementation should be handled elsewhere... need to think about how to bind these...
+      (error "executor does not know that function..."))))
+
+(define (delegate-local function-name return-value-or-generator . rest-real-world)
+  ; sometimes we want to delegate on the fly... how can we support this...
+  ; this should probably add function-name to the currently scoped executor?
+  ;     delegate-local skips the validation step, and in some sense these should be added and flagged
+  ;     as forms that -may- almost certainly need further elaboration
+  return-value-or-generator) ; ON THE OTHER HAND... it is extremely useful for delegated functions to return values...
+
+(define delegate (bind-delegate biologist-executor))
+
+(define (has-digital-representation? thing)
+  ; TODO type vs namespace issue again
+  ; set membership seems so much... easier...
+  (define maybe (assoc thing digital-representations-alist))
+  (if maybe
+    (cdr maybe)
+    #f))
+
+(define (take-a-from-b a b) ; observe that as written this does not work...
+  (if (has-digital-representation? b)
+    (remove a b) ; h-d-r useful to implement digital accounting
+    (delegate 'remove a b)) ; we have to delegate tracking to the executor
+  a)
+
+(define (retrieve thing)
+  (cond ((contains-a-inside-b thing known-storage-location) (take-a-from-b thing known-storage-location))
+        ((has-creation-protocol thing) ((get-creation-protocol thing)))
+        ((has-acquisition-protocol thing) ((get-acquisition-protocol thing)))
+        (#t (cry))))
 
 (steps
+  (step 'make-acsf ; observe that reference to acsf should resolve to this if it is not in the fridge...
+        (inputs '2L-beaker
+                '2L-volumetric-flask
+                'DDI-water
+                'NaCl
+                'KCl
+                'd-glucose
+                '(dot MgSO4 7H2O)
+                'sucrose
+                '(dot CaCl2 2H2O)
+                'NaHCO3)
+        (outputs 'acsf))
+  (step 'slice-setup)
   (step 'make-slice
 		(inputs 'mouse ; problem: quoting makes dupe checking hard
 				'vibratome
@@ -267,4 +453,24 @@
 (global-outputs)
 (global-measures)
 
+; criteria for transformation vs simply collections is mediated by the reversibility of the process
+;     so basically as long as delta s doesn't increase (eg a mixture) we are ok?
+; use of ! for signaling modification... ala set!, the language for real-world objects could get confused
+;     also (press-a-with-b 'yogurt 'spoon) is ! while (press-a-with-b 'steel-plate 'spoon) is probably more 
+;     likely to result in a substantial modification of the 'spoon instead of the 'steel-plate...
+;     furthermore, modification is really an assertion here...
+;     perhaps like... ((destructive press-a-with-b) 'dangerous-clay-animal 'hydraulic-press)
+;     actually that is not a bad idea... modifying the activity of the function, but need a consistent way to
+;     deal with i/o and what argument is destroyed... ((destructive 'a press-a-with-b) 'a 'b)
 
+; mapping between real-world functions and lisp functions
+;     having played around with this a bit more it is clear that lisp functions and real-world functions
+;     need to be different, namely they need to have different types
+;     in addition real-world functions should have some lisp-function that represents it
+;     but that lisp function needs to be a derived function
+;     the question now is whether real-world functions need to always operate on real-world types as well
+;     or whether we can get away with using atoms... I think using atoms may ultimately be confusing...
+;     the full explanation for differentiating types is because lisp functions are F: symbol -> symbol
+;     whereas real-world functions are F: real-world -> real-world and measurements are F: real-world -> symbol
+;     providing some light syntax might help, *real-world-function*, lisp-function, *measurement-function,
+;     parameter-function* or something like that... if we need a full on type systems for these we can...
