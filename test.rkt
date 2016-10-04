@@ -216,8 +216,12 @@
   ;add a to the contents of b
   (return b))
 
+; alists and lists for sets and stuff... eventually this will collapse under its own weight...
 (define definitions-alist '())
 (define digital-representations-alist '())
+(define acquistion-protocol-alist '())
+(define creation-protocol-alist '())
+(define thing-list '()) ; keep track of all the things!
 
 (define (validate key thing)
   "if the key exists in the definitions table check it with
@@ -265,6 +269,10 @@
   ; mix-a-with-b was confusing because with is ambiguous and could imply combining a and b
   (delegate-local 'mix a))
 
+(define (carefully verb)
+  "ah adverbs! what ever shall we do with you" ; for now nothing!
+  verb)
+
 (define (mix-carefully-a-using-b a b)
   ; TODO another example of a useful higher order function...
   ; higher order real world functions don't actually work though...
@@ -296,6 +304,24 @@
 
 ; som protocol from mlab, variants
 
+(define (prot-name-func)
+  (define prot-name-start 100)
+  (lambda () (begin0
+               (format "protc-local:~a" prot-name-start)
+               (set! prot-name-start (add1 prot-name-start)))))
+
+(define get-default-protocol-name (prot-name-func))
+(define (protocol #:name (name (get-default-protocol-name)) inputs outputs)
+  "MAJOR TODO since protocols are sort of supposed to be whole files")
+(define (inputs . rest) (list rest))
+(define (outputs . rest) (list rest))
+(define (real-world-assembly . rest)
+  (flatten rest))
+(define (instance thing type)
+  ; TODO syntaxxxxxx
+  ; ya... need to actually do something about this...
+  thing)
+
 (protocol #:name 'som-protocol
   (inputs ; opening with inputs may not always be how people write these... sometimes they should/may start with a single step
 	'male-mouse-strain-gin
@@ -303,7 +329,11 @@
 	'patch-pipette
 	'needle-beveler
 	'...  ; as we can see this method is BAD for composability
-	))
+	)
+  (outputs
+   'dead-mouse-parts
+   'fixed-brain-slices ; separation of concerns passing...
+   'acsf))
 
 (define headstage (real-world-assembly
 					'headstage-electronics-box
@@ -396,11 +426,43 @@
     (delegate 'remove a b)) ; we have to delegate tracking to the executor
   a)
 
+(define (*contains-a-inside-b* a b) ; TODO
+  (if (has-digital-representation? b)
+    (member a b)
+    (member a (*contents* b)))) ; problem ;_;
+
+(define (has-creation-protocol? thing)
+  ; ok, this is weird, because we don't actually want (*has-creation-protocol? thing)
+  ;   in this case we are treating 'thing as the digital proxy for the real-world noun
+  ;   I think we are going to need a way to clarify this, using the lisp function version
+  ;   is actually a pretty nice way to capture the shared semantics of the symbol for a thing
+  ;   dereferencing is another option, though obviously being able to (dereference-symbol 'tiger)
+  ;   might have... undesirable consequences for your cpu and the universe at large
+  (define maybe (assoc thing creation-protocol-alist))
+  (if maybe ;(member thing thing-list)
+      (cdr maybe)
+      #f))
+
+(define (has-acquisition-protocol? thing)
+  (define maybe (assoc thing acquistion-protocol-alist))
+  (if maybe
+      (cdr maybe)
+      #f))
+
+(define (*cry*) "yep")
+
 (define (retrieve thing)
-  (cond ((contains-a-inside-b thing known-storage-location) (take-a-from-b thing known-storage-location))
-        ((has-creation-protocol thing) ((get-creation-protocol thing)))
-        ((has-acquisition-protocol thing) ((get-acquisition-protocol thing)))
-        (#t (cry))))
+  (implicit known-storage-location)
+  (cond ((*contains-a-inside-b* thing known-storage-location) (take-a-from-b thing known-storage-location))
+        ((has-creation-protocol? thing) ((has-creation-protocol? thing)))
+        ((has-acquisition-protocol? thing) ((has-acquisition-protocol? thing)))
+        (#t (*cry*))))
+
+(define-syntax (steps stx)  ; TODO ...
+  (syntax-parse stx
+    [(_ x ...) #'(list x ...)]))
+
+(define (step name inputs outputs) (list name inputs outputs))
 
 (steps
   (step 'make-acsf ; observe that reference to acsf should resolve to this if it is not in the fridge...
@@ -428,15 +490,22 @@
 				'25-gauge-needle)
 		(outputs '500um-brain-slice)))
 
+(define (black-box-complement-1 #:name name . rest) ; MASSIVE TODO
+  "container for names of things asserted to not be causal
+   in the dynamics of the measurement in question...")
+
+(define (black-box #:name name . rest)
+  "building block of all measurements, asserted to contain the cause of measurements")
+
 (define to-measure-1
   (black-box-complement-1 ; implied bbc2
 	rig ; it seems like we need to be able to pack many details behind a name?
 	(black-box #:name 'bb-patched-pair
 			 ; at specification time names should link entities? shouldn't have to pass in at 'runtime'?
-			 cell-1 ; this is the product of a massive set of transformations...
-			 cell-2
-			 brain-slice ; where do we draw the boundary here? shouldn't this be acounted for as part of the selection of cell-1 and cell-2????
-			 bath-solution ; writing down successive black boxes that express invariants at various levels of granularity might be helpful... but how to do it? even though black boxes are the inputs of measurements they are also the output of the series of transformations
+			 'cell-1 ; this is the product of a massive set of transformations...
+			 'cell-2
+			 'brain-slice ; where do we draw the boundary here? shouldn't this be acounted for as part of the selection of cell-1 and cell-2????
+			 'bath-solution ; writing down successive black boxes that express invariants at various levels of granularity might be helpful... but how to do it? even though black boxes are the inputs of measurements they are also the output of the series of transformations
 			 )))
 
 ; start from list of reagents, start from a step, start from a tool description, start from a measure, start from a black box, start from a black box complement, start from a set of parameters
@@ -445,13 +514,13 @@
 ; non-local references, so that everything gets dumped into the same namespace?
 ; you're gonna get sick of rig->headstage-1->electrode
 ; similarly you are going to get sick of specifying nested black boxes that are redundant
-(black-box-tree)
+'(black-box-tree)
 
 ; an approach that allows starting from lists of globally known inputs for the more list-centric among us...
-(global-inputs)
-(global-intermediates)
-(global-outputs)
-(global-measures)
+'(global-inputs)
+'(global-intermediates)
+'(global-outputs)
+'(global-measures)
 
 ; criteria for transformation vs simply collections is mediated by the reversibility of the process
 ;     so basically as long as delta s doesn't increase (eg a mixture) we are ok?
@@ -474,3 +543,92 @@
 ;     whereas real-world functions are F: real-world -> real-world and measurements are F: real-world -> symbol
 ;     providing some light syntax might help, *real-world-function*, lisp-function, *measurement-function,
 ;     parameter-function* or something like that... if we need a full on type systems for these we can...
+
+; useful common measures and supporting cast
+
+(define-syntax-rule (implicit parameter)
+  #|"implicit defines a hint when generating
+   code that defines measurement function
+   this is needed to actualize the measurement
+   otherwise the number recorded would always be 0"|#
+  ; note that this implies that there is some missing
+  ; anchor in the real world that is needed that cannot
+  ; be 'measured' but must be chosen (see *center-of-mass)
+  (define parameter (quote ,parameter)))
+
+; assumptions will be modelled as assertions about the outcomes of protocols that we are not going to execute
+;   they need to be specified with as much rigor as possible, but like any other protocol, should be able to
+;   function without full specification
+
+(define-syntax-rule (assumption lambda-list assumption-definition)
+  (eval assumption-definition)) ; FIXME
+
+(define-syntax-rule (assume assumption-definition body)
+  #|"local function for defining an assumption in place"|#
+  ; TODO syntaxxxxxx
+  (eval body)) ; FIXME
+
+(define-syntax-rule (under assumption-application body) ; (under assumption about)
+  #|"apply an existing global assumption type locally
+   the target of the assumption needs to be defined"|#
+  ; TODO syntaxxxxxx
+  ())
+
+(define (get-assumption-protocol assumption)
+  "I have no idea how to implement this right now")
+
+(define (*holds? assumption black-box-spec) ; hrm... how can you pass black-boxes to protocols instead of just measurement steps...
+  "*holds is a theoritical measure that is parametrized by an assumption
+   and returns true over a being-subset/black-box/environment if the measures
+   taken on that black-box are consistent with that environment. NOTE that we
+   can't actually ever KNOW that *holds? generalizes (thanks Hume) but we still
+   need it since assumptions holding on a subset of measures are often critical
+   validations that other measurements are not tainted"
+  ((get-assumption-protocol assumption) black-box-spec))
+
+
+(define (*density thing)
+  "NOTE THAT THIS IS A CALCULATED MEASURE!")
+
+(define (*all-possible-spatial-divisions* thing)
+  "a weird one")
+
+(define (uniform-density thing) ; FIXME define-assumption
+  (equal? (map *density (*all-possible-spatial-divisions* thing))))
+
+(define (norm ndpoint1 ndpoint2)
+  (cond ((and (number? ndpoint1) (number? ndpoint2))
+         (abs (- ndpoint1 ndpoint2)))))
+        ;((/= (length ndpoint1) (length ndpoint2))  ; wat
+         ;#f)
+        ;(#t (sqrt (apply + (map 'list 'square (mapcar - ndpoint1 ndpoint2)))))))
+
+(define (*center-of-mass thing)
+  "amusingly enough, aside from guessing and making assumptions
+   about uniform density, this is really hard to determine using
+   non-destructive techniques"
+  ; note that there is an implicit reference frame
+  ;   if we want to convert this to an actual symbolic representation
+  ;   the brain has it's own reference frame for actions because it
+  ;   also maintains a symbolic representation of the external state
+  ;   of the world
+  ; one way that we could make the "implicit" explicit in real-world functions
+  ;   would be to allow for dangling free variables... or... no
+  (implicit reference-point)
+  (norm reference-point
+        (under (uniform-density thing)
+               (cond ((and (*convex? thing) (*topo-sphere? thing))
+                      (minimize (surface-points thing)))
+                     (#t *guess-a-point thing))))
+  )
+
+(define (*shake-alt* thing)
+  (repeat-until (shaken? thing) ; FIXME repeat-at-frequency-until :/ is there a good way to do this? this isn't declarative... we need a decl version
+                (begin (*displace* (*center-of-mass thing)
+                                   (units 5 'cm))
+                       (*displace (*center-of-mass thing) (units -5 'cm)))))
+
+(define (*shake* thing)
+  (repeat-until (shaken? thing)
+                ((at-frequency (units 10 'Hz) *displace*) ; one way we could parameterize steps... I think this may be troublesome because it can be hard to elaborate...
+                 (*center-of-mass thing) (units 5 'cm))))
