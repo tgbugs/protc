@@ -632,3 +632,27 @@
   (repeat-until (shaken? thing)
                 ((at-frequency (units 10 'Hz) *displace*) ; one way we could parameterize steps... I think this may be troublesome because it can be hard to elaborate...
                  (*center-of-mass thing) (units 5 'cm))))
+
+; basic short verbs, in this version using *verb* for real world becomes quite annoying...
+
+(define-syntax (*make* thing from how) ; (*make* output inputs body)
+  ; production is the term used elsewhere in my writting
+  ; return value goes first because english
+  ; explanation goes second, we drop the implicit 'by'
+  ; the 'from' is the inputs
+  '())
+(define-syntax (*get* thing from how) ; here from is a location not ingredients... bloody english
+  ; acquisition in a _local_ scope, this is more a local restriction, fits with 'must be kept @ 4C'
+  '())
+(define-syntax (*buy* thing from how)
+  ; woo something that can actually hook into an API and buy directly...
+  '())
+
+(define-syntax (*check thing parameters how)
+  '())
+
+(*check 'melon ('(ripe . #t) '(overripe . #f))
+        "thump 'melon with your hand to see if it makes a nice hollow sound,
+         but frankly you need someone to show you ripe vs unripe,
+         and this doesnt always work.
+         Overripe will sound too deep? (honeslty I have no idea)")
