@@ -641,10 +641,12 @@
   ; explanation goes second, we drop the implicit 'by'
   ; the 'from' is the inputs
   '())
+
 (define-syntax (*get* thing from how) ; here from is a location not ingredients... bloody english
   ; acquisition in a _local_ scope, this is more a local restriction, fits with 'must be kept @ 4C'
   '())
-(define-syntax (*buy* thing from how)
+
+(define-syntax (*buy* thing from how) ; XXX do not use, this is a variant of *get*...
   ; woo something that can actually hook into an API and buy directly...
   '())
 
@@ -656,3 +658,26 @@
          but frankly you need someone to show you ripe vs unripe,
          and this doesnt always work.
          Overripe will sound too deep? (honeslty I have no idea)")
+
+; how to communicate that you don't need an exact match for some input
+
+(define (assertion-old type value target)
+  "Add a logical note that the exact tool/reagent
+should not affect the outcome of a step.")
+
+(define-syntax (assertion assertion-statements)
+  ; code to check whether assertion statements are valid
+  ; code to stick them in the constrains list
+  ; need to distinguish between (assert thing) type behavior "assumption"
+  ; TODO how provide the ability to refer to data that supports this
+  '())
+(define-syntax (assumption assumption-statements)
+  ; I want to assert this but I don't have any data to back it up
+  '())
+
+(assertion 'input 'exact-match-unimportant 'disection-tools)
+(assertion 'input 'output-should-not-be-affected-by 'dissection-tools)
+(assertion (can-vary* #t dissection-tools))
+(assumption (can-vary* #t dissection-tools))
+(assumption (can-vary* #f RRID:AB_123456))
+
