@@ -771,7 +771,11 @@ should not affect the outcome of a step.")
            (list
             osmolarity-device
             (*make* acsf)) ; observer here that there is an implicit dependency chain which we would want to make accessible explicity
+           ; fun observation about (*make* thing) is that we _could_ try to automatically expand *make* syntax that only had a single name to more extensive definitions elsewhere (ooooo)!
            (assumption (homogenous? #t acsf)))
    (list room-temperature elevation air-pressure dust-particles-per-m^3) ; this is fun because you can just stick in your classic list of potential confounds right here!
    (list things-we-know-nothing-about)))) ; HRM how do we talk about pushing buttons on devices? *do*???
 
+(define (*black-box-hierarchy* black-box black-box-complement-1 black-box-complement-2 . rest) ; should probably be syntax or something...
+  "an endless list of black box complements. the fun part is that if we do this right
+we should be able to trace everything back that we have explicit prov for :D")
