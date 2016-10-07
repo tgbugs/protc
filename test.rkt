@@ -650,7 +650,7 @@
   ; woo something that can actually hook into an API and buy directly...
   '())
 
-(define-syntax (*check thing parameters how)
+(define-syntax (*check thing parameters how) ; this is too simplistic... and it is not clear that check is simply a measure, it seems more like a measure + reaction
   '())
 
 (*check 'melon ('(ripe . #t) '(overripe . #f))
@@ -680,4 +680,98 @@ should not affect the outcome of a step.")
 (assertion (can-vary* #t dissection-tools))
 (assumption (can-vary* #t dissection-tools))
 (assumption (can-vary* #f RRID:AB_123456))
+
+; updated verions of make-delicious-yogurt
+; initial observations here seem to suggest that *make*, *get*, *check steps need to be inside a larger structure for steps
+; they are behaving like anonymous functions in a sense, we haven't provided a simple way to name them... eg #:name ??
+(*make* delicious-yogurt (list yogurt honey granola blueberries spoon bowl) ; the keyword makes this more readable? #:inputs
+        (map (lambda (input) (*check (*get* input))) inputs)
+        ; vs
+        (map *get* inputs) ; implicit state here :(
+        (map *check inputs) ; implicit state here as well... (which doesn't actually work)
+        ; vs
+        (set! inputs (map *check (map *get* inputs))) ; observe that *check and *get* are being treated like generics here...
+        ; consider a case where *check fails... what do we do? moreover, if check fails that may be fine, we could go to the store
+        ; but what if going to the store would put us outside the time restrictions on our experiment!
+        ; having a setup checkpoint might be a better way to proceed (HRM!)
+        
+        (ordered-sequence-implicit-output-passing ; progn
+         (put-a-in-b yogurt bowl) ; put is vastly under defined (put-a-in-b-using-c), as is yogurt :/
+         (let ([indentation (make-indentation-in-a-with-b yogurt spoon)])
+           ; nested lets using a macro don't quite work because we dont know
+           ; where the close paren needs to go, but doing it manually isnt the worst... maybe a rename?
+           (put-a-in-b honey indentation))
+         (mix-a-using-b (*contents* bowl) spoon) ; fun thought here about beating eggs since air is never listed...
+         (put-a-in-b blueberries bowl)
+         (mix-carefully-a-using-b (*contents* bowl) spoon)))
+
+; how to bind these? does an object system make sense here?! :( because that means too much specification
+; running a linting pass to warn that no check has been defined for '(noun . honey)...
+(*get* honey kitchen-counter
+       (*grab* honey))
+(*get* honey (lookup-location honey)
+       (if location
+           (*grab* honey)
+           (*purchase* honey (lookup-vendor honey)))
+
+(*check honey ('(expired . #f))
+        "Honey doesn't expire. There are reports of perfectly good
+         (if crystallized) honey found in ancient burrials!")
+
+(define-syntax (number-output-spec direct-or-computed type-of-number units-or-type-for-count) ; this actually may be the most important to get right...
+  ; this defines primative data types, NOT COMPUTED
+  ;   but like elsewhere we need to support the ability so specify timeseries with parameters (for example) while also warning that
+  ;   using a timeseries as a direct-measure obscures the fact that the record of the black box will remain fixed... (or something like that)
+  ;   this reveals that in addition to direct-measure, and computed-measure, we may also want composed-measure which is one in which no values have been
+  ;   changed, merely that they have been arranged and that their arrangement has some specific semantics... hrm... the semantics of arrangement... HRM
+  '())
+
+(define-syntax (*measure-v1 black-box number-out-spec operations-on-members-of-the-black-box) ; TODO all these syntax definitions don't actually work correctly, but are placeholders
+  ; the issue with a pattern like this is that we would like to be able to reference the
+  ;   members of the black box by name within this namespace, HOWEVER that means it is no longer
+  ;   a black-box... grrrr, in addition there is the associated bbc chain... also measurement can
+  ;   happen at any time... so we need to think more clearly about exactly how these should work...
+  ;   perhaps we can allow references to names in the black-box as assertions/assumptions and simply
+  ;   validate that those names have been put into the blackbox by the point where measure is actually called
+  ;   what this means is that measure does not take black-box as an argument at definition time, but at call time
+  '())
+
+(define-syntax (*measure #:name name output-spec acquistion-code body)
+  ; restrictions on black-boxs
+  ;   1) any reference to a name should be in the black-box at call time
+  ;   2) the actual digitization equipment (ADC or a pencil or pen) needs to be in bb or bbc (support for implicit probably useful)
+  ;   3) additional restrictions shall not be included in measurement steps, logically nothing can happen before symbolization
+  ;   4) measurement steps may document the perceived set of transformations on the being-subset of interest that mediate symbolization
+  ; should the implementation of the acquistion go here? or should a reference to it go here? I think we need to support both...
+  ;   this can allow the output spec and the acquistion-implementation to sit side by side if needs be...
+  ;   in most cases this will probably be async code to collect results from some data producer...
+  ; like with all functions, definition and calling need to be separate, if a name is defined we need to bind the output function to that name
+  ;   in the local scope OR if not, then the measure will be treated as a lambda that can be used in-place on a black box, this is nice because
+  ;   it allows for the 'promotion' of measures from local one-time to reused, even though the inversion of temporal order might confuse
+  ;   we can build a syntax transformer that can convert a linear step-sequence into a series of function applications going the other way
+  ; mediation for things like *count where a human brain is in the loop... we don't have a good implementation there, but that can go in the bbc...
+  ;   measures can also use other measures... internally so (*measure #:name *count-ducks ...)'s body looks like (*count (*identify-duck-like-shape (*scan-environment 'local-environment "produces vision data")))
+  ;   or something like that, though in reality it might make sense to treat these as asynchronous generators... since that would be a much cleaner
+  ;   way of communicating about it... though there is a risk the protocol would never stop... in imperative it goes while duck-not-found; if not pretty-sure-you've-looked-everywhere; look-for duck
+  ;   interestingly the implementation of count here looks like it might be incrementing when the interior function returns true... HRM how can we make measurements chain
+  ;   FALSE: measurements DO NOT chain. the correct version of this is (count (*identify-thing-to-count (*visually-scan-environment* space-you-are-in)))
+  ; if there is a name it should fit the *name syntax (for now)
+  (when in-mode-acquistion (acquistion-code)) ; this needs to go in the generated code...
+  (lambda (black-box) (body)))
+
+(define acsf-osmolarity
+ ((*measure ('direct 'decimal-4sigfigs 'osmolarity)
+            (read) ; we may need another macro to make this work... otherwise the body may try to eat it
+            (*read-number-off-device (*push-button* omolarity-device)))
+  ; TODO there is a big gap here, I have NO idea what the osmolarity device is actually measuring to produce its number, nor its principles of opperation :/
+  ;   the very nice issues that this raises is how to grow the protocol for cases like this, and where it needs to go
+  ;   because it whoooooole bunch of stuff is hidden behind *read-number-off-device and *push-button*, so we need a way to expand these definitions locally here...
+  (*black-box-hierarchy*
+   (*make* acsf-sample-in-osmolarity-device ; should this be *make*? or should this be *black-box*?
+           (list
+            osmolarity-device
+            (*make* acsf)) ; observer here that there is an implicit dependency chain which we would want to make accessible explicity
+           (assumption (homogenous? #t acsf)))
+   (list room-temperature elevation air-pressure dust-particles-per-m^3) ; this is fun because you can just stick in your classic list of potential confounds right here!
+   (list things-we-know-nothing-about)))) ; HRM how do we talk about pushing buttons on devices? *do*???
 
