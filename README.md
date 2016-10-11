@@ -753,6 +753,30 @@ defined as anything that can agonize. Thus you could have an agonist solvent for
 purposes of functional abstraction.
 
 
+## Comparisons
+One thing we want protc to be able to do is represent common functions that operate
+one or more black-boxes but that are not as simple as `*measure`. We also want these
+composite functions to be relatively easy to write. Examples of nontrivial functions
+are `*check` (one of the proposed primitive operations) and `*compare`, which takes
+two black-boxes and makes some measurements and then compare them. A fun example of
+this is `(*compare 'mouse (anethetize 'mouse) (list 'measure1 'measure2))` or something
+similar. This is the result of wanting to be able to provide a simple way to express
+the answer to very important questions such as "How can I tell if my mouse is properly
+anesthetized?" This particular question has a fairly simple test, but when learning it
+you still need to see the reaction of an unanesthetized mouse.
+
+
+## Multimedia
+One thing that can vastly improve communication is the ability to embed (and annotate)
+pictures and videos. This support is far, far away, but even just being able to have
+a picture of a tool embedded, or retrievable, or the picture of a label with explication
+can make a huge difference in simple and effective communication since it provides a
+second modality of communication and humans are really good at visual matching. This is
+all known, the easiest expedient might just be to use something in scribble to provide
+links. Export to html/tex via pandoc or scribble or something like that is definitely
+a possibility.
+
+
 ## License
 Obviously the language specification cannot be copyrighted and will be released
 under some completely open license just to make sure.
