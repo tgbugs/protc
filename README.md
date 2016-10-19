@@ -777,6 +777,10 @@ links. Export to html/tex via pandoc or scribble or something like that is defin
 a possibility.
 
 
+## Dependencies
+`raco pkg install scribble-math`
+
+
 ## License
 Obviously the language specification cannot be copyrighted and will be released
 under some completely open license just to make sure.
