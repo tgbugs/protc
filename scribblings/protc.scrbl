@@ -24,9 +24,7 @@ make (get, arrange)
 
 measure
 
-parameter (on inputs)
-
-parameter (on outputs) invariant/specification (descriptive goals also fit here @racket[(objective* "looks like this")])
+parameter (on inputs and on outputs, outputs also invariant/specification) (descriptive goals also fit here @racket[(objective* "looks like this")])
 
 how
 
@@ -38,7 +36,7 @@ The word "use" occurs frequently in protocols for human consumption but it is a 
 actually knows how to superglue. This is a problem since it hides the complexity that lurks
 behind such statements which can sometimes unpack from @italic{"use superglue"} to @italic{"hold a razor in your dominant hand and use that razor held at an acute angle in the direction of motion to spread a drop of superglue (as produced by the viscosity of the superglue and the geometry of the container when you have cleared any blockage with a large bore hypodermic needle) in a very thin layer across the raised square in the middle of the mounting block, then place the chunk of brain stuck to the agarose (according to some other lengthy description, but really a picture would be better) on the block, and then make sure to wash the brain and the superglue gently with the cutting solution in order to get the superglue to set so that it doesn't float away and stick to the brain (WHICH CAN DAMAGE IT AND CAUSE YOU TO LOOSE A VALUABLE SAMPLE)"}.
 
-That being said, 'use' provides us with a keyword that can implicitly verb an input and indicate that the default executor (for this section) is expected to know how to carry out the described action (if no "how" is defined). In addition it can be used to automatically link or find other protocols that define a "how" on "use thing". This is one way to build a library of all the way one can "use" a tool.
+That being said, 'use' provides us with a keyword that can implicitly verbify an input and indicate that the default executor (for this section) is expected to know how to carry out the described action (if no "how" is defined). In addition it can be used to automatically link or find other protocols that define a "how" on "use thing". This is one way to build a library of all the way one can "use" a tool.
 
 @; @racket[(*make* output inputs how)]
 @; @racket[(*arrange* output inputs how)]
@@ -54,7 +52,7 @@ That being said, 'use' provides us with a keyword that can implicitly verb an in
 [make-statement (*make* output inputs how)]
 [arrange-statement (*arrange* output inputs how)]
 [measure-statement (*measure output-spec black-box-spec how)]
-[how paramater-statement movement-statement step-statement]
+[how paramater-statement movement-statement step-statement] @; FIXME these are mostly WHAT statements not HOW statements which require the executor semantics
 [parameter-statement (parameter* thing aspect value)] @; FIXME this construction seems a bit off...
 [order-statement logical-order practical-order]
 [logical-order (lorder statements)] @; TODO what should be the default assumption if no order is listed for how?
