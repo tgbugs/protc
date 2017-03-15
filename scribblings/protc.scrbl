@@ -110,7 +110,7 @@ tools vs the subject being dissected. There is also the interesting case of reso
 up to the point that you can run out.
 }
 @defform[(*measure output-spec black-box-spec how)]{
-@racket[*measure*] denotes an operation on a subset of reality (a black box) that produces one or more numbers. The specification of the black box can be as simple as an identifier referencing a being (e.g. @racket[mouse])
+@racket[*measure] denotes an operation on a subset of reality (a black box) that produces one or more numbers. The specification of the black box can be as simple as an identifier referencing a being (i.e. a subset of reality that can be closed spatially when only considering its mass (as opposed to energy) interactions) (e.g. @racket[mouse])
 }
 @defform[(parameter* thing aspect value)]{
 @racket[parameter*] denotes an operation that applies a symbolic value to something in the world. Validation of parameters either requires an accompanying @racket[*measure] or an accompanying process with proxy measures that can be shown to satisfy the parameter. Note that there are two different kinds of parameters depending on whether the quantity they place a restriction on is directly measurable. For example molarity is not directly measurable, however mass and volume can both be measured directly and converted to molarity.
