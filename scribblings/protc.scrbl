@@ -45,15 +45,24 @@ That being said, 'use' provides us with a keyword that can implicitly verbify an
 
 @margin-note{@racket/form[top-level-form] covers all @racketmodfont{#lang} @racketmodname[racket] forms, see @link["https://docs.racket-lang.org/reference/syntax-model.html#(part._fully-expanded)"]{the Racket grammar docs}.}
 @racketgrammar*[
-#:literals (*make* *arrange* *get* *measure parameter* lorder porder)
-[statement s-expr get-statement make-statement arrange-statement measure-statement parameter-statement order-statement]
-[s-expr top-level-form] @; may change to general-top-level-form or expr
-[get-statement (*get* output how)] @; implicit time input...
-[make-statement (*make* output inputs how)]
-[arrange-statement (*arrange* output inputs how)]
+#:literals (*make* *arrange* *get* *measure *check objective* parameter* actualizes lorder porder)
+[statement symbol-symbol-statement being-being-statement being-symbol-statement symbol-being-statement how actualizes-statement order-statement executor-spec]
+[symbol-symbol-statement top-level-form] @; may change to general-top-level-form or expr
+[being-being-statement get-statement make-statement arrange-statement]
+[being-symbol-statement measure-statement check-statement]
+[symbol-being-statement parameter-statement objective-statement] @; FIXME are parameters strictly symbol->being? yes in this case parameter* is
+[get-statement (*get* output params how)] @; implicit time input... FIXME correctness requires ...+
+[make-statement (*make* output inputs params how)]
+[arrange-statement (*arrange* output inputs params how)]
 [measure-statement (*measure output-spec black-box-spec how)]
-[how paramater-statement movement-statement step-statement] @; FIXME these are mostly WHAT statements not HOW statements which require the executor semantics
-[parameter-statement (parameter* thing aspect value)] @; FIXME this construction seems a bit off...
+[check-statement (*check output-spec black-box-spec how)]
+[parameter-statement (parameter* being aspect value)] @; FIXME this construction seems a bit off...
+[objective-statement (objective* being datum-describing-or-depicting-a-black-box-state)]
+[how order-statement being-being-statement delegated-statement movement-statement step-statement] @; FIXME these are mostly WHAT statements not HOW statements which require the executor semantics, FIXME does actualizes-statement goes here?
+[being input output]
+[inputs input inputs] @; FIXME not quite right, go back and look at how to do one or more
+[params symbol-being-statement params]
+[actualizes-statement (actualizes symbol-being-statement how)] @; FIXME this should point at an identifier to a how statement? also really we just want the contract/type to be symbol-being-statement not the thing itself
 [order-statement logical-order practical-order]
 [logical-order (lorder statements)] @; TODO what should be the default assumption if no order is listed for how?
 [practical-order (porder statements)]
@@ -81,12 +90,12 @@ use the asterisk conventions described above to denote the domain and range of f
 
 @section{Documentation}
 @; i wonder if you can check these against the real code...
-@defform[(*get* output how)]{
+@defform[(*get* output params how)]{
 @racket[*get*] reveals that we may want a way to parametrize some of these real world functions
 at other times. For example we may want a generic @racket[*get-by-rrid*] which would take a symbolic representation
 and ultimately produce an aliquot of @racket[thing-with-specified-rrid].
 }
-@defform[(*make* output inputs how)]{
+@defform[(*make* output inputs params how)]{
 @racket[*make*] denotes a transformative operation on the inputs, usually this
 implies a transformation in which entropy increases.
 
@@ -103,17 +112,25 @@ Breaking this down there is a 1:1 mapping as follows:
 @(list @racket[how] "by executing this series of steps."))
 ]
 }
-@defform[(*arrange* output inputs how)]{
+@defform[(*arrange* output inputs params how)]{
 @racket[*arrange*] denotes an operation that preserves the constituent parts, akin to assembling a rig.
 There are some cases where some inputs are transformed and some are not, for example dissection
 tools vs the subject being dissected. There is also the interesting case of resources being used
 up to the point that you can run out.
 }
 @defform[(*measure output-spec black-box-spec how)]{
-@racket[*measure] denotes an operation on a subset of reality (a black box) that produces one or more numbers. The specification of the black box can be as simple as an identifier referencing a being (i.e. a subset of reality that can be closed spatially when only considering its mass (as opposed to energy) interactions) (e.g. @racket[mouse])
+@racket[*measure] denotes an operation on a subset of reality (a black box) that produces one or more numbers. The specification of the black box can be as simple as an identifier referencing a being (i.e. a subset of reality that can be closed spatially when only considering its mass (as opposed to energy) interactions) (e.g. a @racket[mouse]).
 }
 @defform[(parameter* thing aspect value)]{
 @racket[parameter*] denotes an operation that applies a symbolic value to something in the world. Validation of parameters either requires an accompanying @racket[*measure] or an accompanying process with proxy measures that can be shown to satisfy the parameter. Note that there are two different kinds of parameters depending on whether the quantity they place a restriction on is directly measurable. For example molarity is not directly measurable, however mass and volume can both be measured directly and converted to molarity.
+}
+@defform[(objective* datum-describing-or-depicting-a-black-box-state)]{ @; FIXME do we want delegating forms to require an executor to be listed as part of the arguments?
+@racket[objective*] denotes an operation that applies a symbolic value to something in the world. @racket[objective*] is an executor dependent way of communicating a goal. While it is more flexible it requires semantic delegation to the executor. @racket[objective*] is the first part of an @racket[objective* *check] pair that closes a real world executor loop (observe the way the asterisks work out here).
+}
+@defform[(actualizes how params...)
+         #:contracts ([how how?]
+	              [params symbol-being?])]{
+@racket[actualizes] denotes an explicit link between a how section and the parameter or parameters that it satisfies. @; TODO in theory this should also provide a way to include/point to equations for equivalences (eg final molarity <-> the weights given the volume being made...) however this is a signifcantly more complex problem... making this section extensible is critical since no one will be able to write all their sanity check code at the same time...
 }
 @defform[(lorder statements)]{
 @racket[lorder] denotes the logical order of a sequences of steps. Logical order is the constraints on ordering of events imposed by the science or by reality. Said another way changing logical order will change the outcome of a series of steps. Statements may be any valid Protc statement.
