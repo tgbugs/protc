@@ -95,7 +95,7 @@ use the asterisk conventions described above to denote the domain and range of f
 at other times. For example we may want a generic @racket[*get-by-rrid*] which would take a symbolic representation
 and ultimately produce an aliquot of @racket[thing-with-specified-rrid].
 }
-@defform[(*make* output inputs params how)]{
+@defform[(*make* output inputs params how)]{ @; FIXME a major problem to consider here: do make 1 thing 100 times vs make 100 things one time -- make is NOT commutative with respect to the number of things (economies of scale etc..)
 @racket[*make*] denotes a transformative operation on the inputs, usually this
 implies a transformation in which entropy increases.
 
