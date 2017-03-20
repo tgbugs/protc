@@ -45,8 +45,8 @@ That being said, 'use' provides us with a keyword that can implicitly verbify an
 
 @margin-note{@racket/form[top-level-form] covers all @racketmodfont{#lang} @racketmodname[racket] forms, see @link["https://docs.racket-lang.org/reference/syntax-model.html#(part._fully-expanded)"]{the Racket grammar docs}.}
 @racketgrammar*[
-#:literals (*make* *arrange* *get* *measure *check objective* parameter* actualizes lorder porder)
-[statement symbol-symbol-statement being-being-statement being-symbol-statement symbol-being-statement how actualizes-statement order-statement executor-spec]
+#:literals (*make* *arrange* *get* *measure *check objective* parameter* actualize lorder porder)
+[statement symbol-symbol-statement being-being-statement being-symbol-statement symbol-being-statement how actualize-statement order-statement executor-spec]
 [symbol-symbol-statement top-level-form] @; may change to general-top-level-form or expr
 [being-being-statement get-statement make-statement arrange-statement]
 [being-symbol-statement measure-statement check-statement]
@@ -58,11 +58,11 @@ That being said, 'use' provides us with a keyword that can implicitly verbify an
 [check-statement (*check output-spec black-box-spec how)]
 [parameter-statement (parameter* being aspect value)] @; FIXME this construction seems a bit off...
 [objective-statement (objective* being datum-describing-or-depicting-a-black-box-state)]
-[how order-statement being-being-statement delegated-statement movement-statement step-statement] @; FIXME these are mostly WHAT statements not HOW statements which require the executor semantics, FIXME does actualizes-statement goes here?
+[how order-statement being-being-statement delegated-statement movement-statement step-statement] @; FIXME these are mostly WHAT statements not HOW statements which require the executor semantics, FIXME does actualize-statement goes here?
 [being input output]
 [inputs input inputs] @; FIXME not quite right, go back and look at how to do one or more
 [params symbol-being-statement params]
-[actualizes-statement (actualizes symbol-being-statement how)] @; FIXME this should point at an identifier to a how statement? also really we just want the contract/type to be symbol-being-statement not the thing itself
+[actualize-statement (actualize symbol-being-statement how)] @; FIXME this should point at an identifier to a how statement? also really we just want the contract/type to be symbol-being-statement not the thing itself
 [order-statement logical-order practical-order]
 [logical-order (lorder statements)] @; TODO what should be the default assumption if no order is listed for how?
 [practical-order (porder statements)]
@@ -127,10 +127,13 @@ up to the point that you can run out.
 @defform[(objective* datum-describing-or-depicting-a-black-box-state)]{ @; FIXME do we want delegating forms to require an executor to be listed as part of the arguments?
 @racket[objective*] denotes an operation that applies a symbolic value to something in the world. @racket[objective*] is an executor dependent way of communicating a goal. While it is more flexible it requires semantic delegation to the executor. @racket[objective*] is the first part of an @racket[objective* *check] pair that closes a real world executor loop (observe the way the asterisks work out here).
 }
-@defform[(actualizes how params...)
+@defform[(actualize param how)
          #:contracts ([how how?]
-	              [params symbol-being?])]{
-@racket[actualizes] denotes an explicit link between a how section and the parameter or parameters that it satisfies. @; TODO in theory this should also provide a way to include/point to equations for equivalences (eg final molarity <-> the weights given the volume being made...) however this is a signifcantly more complex problem... making this section extensible is critical since no one will be able to write all their sanity check code at the same time...
+	              [param symbol-being?])]{
+@racket[actualize] denotes an explicit link between a how section and the parameter or parameters that it satisfies. @; TODO in theory this should also provide a way to include/point to equations for equivalences (eg final molarity <-> the weights given the volume being made...) however this is a signifcantly more complex problem... making this section extensible is critical since no one will be able to write all their sanity check code at the same time...
+}
+@defform[(aspect thing name)]{
+@racket[aspect] denotes a function that retrieves the value stored at the name for the thing. An aspect is a measurable quality of a black-box, however at any given point in a protc program the value at that name may be null. This is very similar to an object oriented system, for example python, where classes have properties. The difference here is that aspects need not have values and need not necessarily be defined beforehand. The aspect itself is just the name and thus other functions can set properties on that name, such as an invariant on some aspect of a thing (eg the mass of a mouse considered 'fat' in this study is an invariant function of age and their measured mass).
 }
 @defform[(lorder statements)]{
 @racket[lorder] denotes the logical order of a sequences of steps. Logical order is the constraints on ordering of events imposed by the science or by reality. Said another way changing logical order will change the outcome of a series of steps. Statements may be any valid Protc statement.
