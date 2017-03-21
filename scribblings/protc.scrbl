@@ -99,6 +99,7 @@ Examples and explanation for use.
 @(list @bold{*f}   @racket[*measure] "Used for measure, or check functions.")
 @(list @bold{f*}   @racket[parameter*] "Use for parameters or objectives, for numbers that lead directly to action in the world (e.g. there is another symbol in a dial on the machine that you need to use).")
 @(list @bold{*-f*} @racket[*-make*] "Use for steps that create or acquire beings that also take symbolic parameters.")
+@(list @bold{f} @racket[list] "Use for everything else. There is no type system. Everything is permitted. Nothing is forbidden.")
 )
 ]
 
