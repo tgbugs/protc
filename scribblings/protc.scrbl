@@ -8,7 +8,10 @@
 
 @author{Tom Gillespie}
 
-Protc is... (from readme)
+Protc (prot see, pro tik, etc.) is a formal language for specifying protocols,
+scientific or otherwise. Protc is intended to provide a formal way to
+record the steps, inputs, outputs, environment, and executors (human, computer, or otherwise) of a
+protocol.
 
 @section[#:tag "users"]{Users}
 
