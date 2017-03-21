@@ -38,22 +38,22 @@ behind such statements which can sometimes unpack from @italic{"use superglue"} 
 
 That being said, 'use' provides us with a keyword that can implicitly verbify an input and indicate that the default executor (for this section) is expected to know how to carry out the described action (if no "how" is defined). In addition it can be used to automatically link or find other protocols that define a "how" on "use thing". This is one way to build a library of all the way one can "use" a tool.
 
-@; @racket[(*make* output inputs how)]
-@; @racket[(*arrange* output inputs how)]
+@; @racket[(*-make* output inputs how)]
+@; @racket[(*-arrange* output inputs how)]
 
 @section[#:tag "grammar"]{Grammar}
 
 @margin-note{@racket/form[top-level-form] covers all @racketmodfont{#lang} @racketmodname[racket] forms, see @link["https://docs.racket-lang.org/reference/syntax-model.html#(part._fully-expanded)"]{the Racket grammar docs}.}
 @racketgrammar*[
-#:literals (*make* *arrange* *get* *measure *check objective* parameter* actualize lorder porder)
+#:literals (*-make* *-arrange* *-get* *measure *check objective* parameter* actualize lorder porder)
 [statement symbol-symbol-statement being-being-statement being-symbol-statement symbol-being-statement how actualize-statement order-statement executor-spec]
 [symbol-symbol-statement top-level-form] @; may change to general-top-level-form or expr
 [being-being-statement get-statement make-statement arrange-statement]
 [being-symbol-statement measure-statement check-statement]
 [symbol-being-statement parameter-statement objective-statement] @; FIXME are parameters strictly symbol->being? yes in this case parameter* is
-[get-statement (*get* output params how)] @; implicit time input... FIXME correctness requires ...+
-[make-statement (*make* output inputs params how)]
-[arrange-statement (*arrange* output inputs params how)]
+[get-statement (*-get* output params how)] @; implicit time input... FIXME correctness requires ...+
+[make-statement (*-make* output inputs params how)]
+[arrange-statement (*-arrange* output inputs params how)]
 [measure-statement (*measure output-spec black-box-spec how)]
 [check-statement (*check output-spec black-box-spec how)]
 [parameter-statement (parameter* being aspect value)] @; FIXME this construction seems a bit off...
@@ -69,7 +69,7 @@ That being said, 'use' provides us with a keyword that can implicitly verbify an
 ]
 
 @section{Asterisk convention}
-When naming functions in Protc we need to distinguish between 4 types of functions.
+When naming functions in Protc we need to distinguish between 5 types of functions.
 @margin-note{Note that functions from symbol->being can't actually exist, some hefty semantics are implied here.
 (In fact the semantics of making a symbolic representation reality are one of protc's long term goals.)}
 @itemlist[
@@ -77,26 +77,42 @@ When naming functions in Protc we need to distinguish between 4 types of functio
 @item{Functions from being->symbol. Asterisks only on the left @racket[(*function ...)].}
 @item{Functions from symbol->being. Asterisks only on the right @racket[(function* ...)].}
 @item{Functions from symbol->symbol. No asterisks @racket[(function ...)].}
+@item{Functions from (union being symbol)->being. An asterisk on the left follow by a dash and an asterisk right @racket[(*-function* ...)].}
 ]
 @margin-note{Functions from symbol->symbol are lisp functions.
 There are also higher-order functions from functions->functions
 that will be treated as symbol->symbol for now.}
+@margin-note{The @racket[*-f*] notation is provided as a convenience.
+It is possible to avoid having to use @racket[*-f*] functions if you curry
+the functions and use higher order functions to pass other functions around
+(since we treat higher order functions as symbol->symbol despite the fact
+that they have their own types).}
 
 In theory (and perhaps in some future reality) these types could be implemented as real
 function types using a type system. For the time being the underlying implementation will
 use the asterisk conventions described above to denote the domain and range of functions/operations.
 
+Examples and explanation for use.
+@tabular[#:sep @hspace[2] #:style 'boxed #:row-properties '(bottom-border)
+@(list
+@(list @bold{*f*}  @racket[*contents*] "Use for functions that construct access black-boxes or for steps in a make chain that take no parameters (unusual but useful for expressing things quickly).")
+@(list @bold{*f}   @racket[*measure] "Used for measure, or check functions.")
+@(list @bold{f*}   @racket[parameter*] "Use for parameters or objectives, for numbers that lead directly to action in the world (e.g. there is another symbol in a dial on the machine that you need to use).")
+@(list @bold{*-f*} @racket[*-make*] "Use for steps that create or acquire beings that also take symbolic parameters.")
+)
+]
+
 @($$ "\\sum_{i=0}^n x_i^3") @; testing for formula rendering online... some weirdness
 
 @section{Documentation}
 @; i wonder if you can check these against the real code...
-@defform[(*get* output params how)]{
-@racket[*get*] reveals that we may want a way to parametrize some of these real world functions
-at other times. For example we may want a generic @racket[*get-by-rrid*] which would take a symbolic representation
+@defform[(*-get* output params how)]{
+@racket[*-get*] reveals that we may want a way to parametrize some of these real world functions
+at other times. For example we may want a generic @racket[*-get-by-rrid*] which would take a symbolic representation
 and ultimately produce an aliquot of @racket[thing-with-specified-rrid].
 }
-@defform[(*make* output inputs params how)]{ @; FIXME a major problem to consider here: do make 1 thing 100 times vs make 100 things one time -- make is NOT commutative with respect to the number of things (economies of scale etc..)
-@racket[*make*] denotes a transformative operation on the inputs, usually this
+@defform[(*-make* output inputs params how)]{ @; FIXME a major problem to consider here: do make 1 thing 100 times vs make 100 things one time -- make is NOT commutative with respect to the number of things (economies of scale etc..)
+@racket[*-make*] denotes a transformative operation on the inputs, usually this
 implies a transformation in which entropy increases.
 
 The basic idea that drives the syntax for the current version of these forms
@@ -106,14 +122,14 @@ Breaking this down there is a 1:1 mapping as follows:
 @tabular[#:sep @hspace[2]
 @(list
 @(list @bold{Protc} @bold{English})
-@(list @racket[*make*] "Make")
+@(list @racket[*-make*] "Make")
 @(list @racket[output] "the named output")
 @(list @racket[inputs] "from these inputs")
 @(list @racket[how] "by executing this series of steps."))
 ]
 }
-@defform[(*arrange* output inputs params how)]{
-@racket[*arrange*] denotes an operation that preserves the constituent parts, akin to assembling a rig.
+@defform[(*-arrange* output inputs params how)]{
+@racket[*-arrange*] denotes an operation that preserves the constituent parts, akin to assembling a rig.
 There are some cases where some inputs are transformed and some are not, for example dissection
 tools vs the subject being dissected. There is also the interesting case of resources being used
 up to the point that you can run out.
@@ -122,7 +138,7 @@ up to the point that you can run out.
 @racket[*measure] denotes an operation on a subset of reality (a black box) that produces one or more numbers. The specification of the black box can be as simple as an identifier referencing a being (i.e. a subset of reality that can be closed spatially when only considering its mass (as opposed to energy) interactions) (e.g. a @racket[mouse]).
 }
 @defform[(parameter* thing aspect value)]{
-@racket[parameter*] denotes an operation that applies a symbolic value to something in the world. Validation of parameters either requires an accompanying @racket[*measure] or an accompanying process with proxy measures that can be shown to satisfy the parameter. Note that there are two different kinds of parameters depending on whether the quantity they place a restriction on is directly measurable. For example molarity is not directly measurable, however mass and volume can both be measured directly and converted to molarity.
+@racket[parameter*] denotes an operation that applies a symbolic value to something in the world. Validation of parameters either requires an accompanying @racket[*measure] or an accompanying process with proxy measures that can be shown to satisfy the parameter. Note that there are two different kinds of parameters depending on whether the quantity they place a restriction on is directly measurable. For example molarity is not directly measurable, however mass and volume can both be measured directly and converted to molarity. Parameters that are not actualized with @racket[*measure] are delegated. For example if a parameter is actualized by making the pointer on a knob point to the symbol matching the parameter value then that falls into a broad category of actualizations where another symbolic representation closes the loop. @; rewrite so that this makes more sense
 }
 @defform[(objective* datum-describing-or-depicting-a-black-box-state)]{ @; FIXME do we want delegating forms to require an executor to be listed as part of the arguments?
 @racket[objective*] denotes an operation that applies a symbolic value to something in the world. @racket[objective*] is an executor dependent way of communicating a goal. While it is more flexible it requires semantic delegation to the executor. @racket[objective*] is the first part of an @racket[objective* *check] pair that closes a real world executor loop (observe the way the asterisks work out here).
