@@ -31,6 +31,14 @@ parameter (on inputs and on outputs, outputs also invariant/specification) (desc
 
 how
 
+@section[#:tag "rules"]{Basic rules that protocols must satisfy}
+1. Every Parameter has a Measure. Parameters must be actualized.
+2. If there are two inputs there needs to be a verb linking them, or a protocol that deals with pairwise relations.
+3. Every measure has a how.
+4. Every make should have inputs. Get is the variant which only requires symbols (and sometimes $$$).
+5. Parameters must be directly actionable -- no math. Invariants should be used in cases where symbolic manipulation is required. @; issue here with cases where there is a machine that does the math for you... but that machine *should* be specified... OR need a way to mark explicit delegation in cases like this...
+6. In any case where one of the above is missing there must be an explicit delegation.
+
 @section{Executor Semantics and Semantic Delegation}
 @section{The evils and opportunities of "use"}
 The word "use" occurs frequently in protocols for human consumption but it is a dead-word.
@@ -161,6 +169,31 @@ up to the point that you can run out.
 @defform[(porder statements)]{
 @racket[porder] denotes the practical order of a sequences of steps. Practical order is the order of events that allow the executor to most efficiently complete a sequence of steps. Said another way, changing practical order is not expected to change the outcome of a series of steps (unless doing so would mean that some invariant, usually temporal, is violated). Statements may be any valid Protc statement.
 }
+
+@section{Compact notation for relations between a and b}
+This is a test to see whether I can remember any of these.
+@tabular[
+@(list
+@(list "Nondestructive")
+@(list @racket[*a-i->b*])
+@(list @racket[*a-o->b*])
+@(list @racket[*a=b*])  @; || is so much better... maybe we disable that kind of quoting for protc
+@;(list @racket[*a||b*])
+@;(list @racket[*a|_b*])
+@(list @racket[*aTb*]) @; sadly cannot use || or |_ because || is use dto handle escapes :x
+@(list @racket[*a/b*])
+@(list @racket[*a>b*])
+@(list @racket[*a~b*])
+@(list @racket[*aba*])
+@;(list @racket{*a|(b*}) @; using this as tagent-to doesn't work because of || escape issues :/
+@(list @racket[*ab*])
+@(list @racket[*a<-->b*])
+@(list @racket[*<-a->b*])
+@(list @racket[*abc*]) @; this has problems when dealing with symmetry, we would have to construct between from (*bac* (*ab* a b) (*ab* a c))
+@(list "Transformative/destructive")
+@(list @racket[*a+b*])
+@(list @racket[*a-b*])
+)]
 
 
 @; @table-of-contents[]
