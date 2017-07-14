@@ -6,6 +6,7 @@ import os
 from os import environ
 from datetime import date
 from hypothesis import HypothesisUtils, HypothesisAnnotation
+#from pyontutils.hierarchies import ???
 from IPython import embed
 
 from flask import Flask, url_for, redirect, request, render_template, render_template_string, make_response, abort 
@@ -39,26 +40,26 @@ def fix_trailing_slash(annotated_urls):
             if new_key in annotated_urls:
                 annotated_urls[key].extend(annotated_urls.pop(new_key))
 
-def export_json_impl():
-    h = HypothesisUtils(username=username, token=api_token, group=group, max_results=100000)
-    params = {'group' : h.group }
-    rows = h.search_all(params)
-    annos = [HypothesisAnnotation(row) for row in rows]
-    output_json = [anno.__dict__ for anno in annos]
-    DATE = date.today().strftime('%Y-%m-%d')
-    return output_json, DATE
-
 def get_hypothesis_local(uri):
     if 'hypothesis-local' in uri:
         return os.path.splitext(os.path.basename(uri))[0]
 
-def identifiers():
+def hypothesis_local(hln):
+    return 'http://hypothesis-local.olympiangods.org/' + hln + '.pdf'
+
+def get_annos():
     h = HypothesisUtils(username=username, token=api_token, group=group, max_results=100000)
     params = {'group' : h.group }
     rows = h.search_all(params)
     annos = [HypothesisAnnotation(row) for row in rows]
+    return annos
 
-    # clean up bugs from old curation workflow
+def export_json_impl(annos):
+    output_json = [anno.__dict__ for anno in annos]
+    DATE = date.today().strftime('%Y-%m-%d')
+    return output_json, DATE
+
+def identifiers(annos):
     idents = {}
     def add_tag_text(hl, anno, tag):
             if tag in anno.tags:
@@ -106,19 +107,40 @@ def render_idents(idents):
     #print(out)
     return out
 
-@app.route('/identifiers', methods=['GET'])
-def woooo():
-    return render_idents(identifiers())
+def citation_tree(annos):
+    p = 'protc:references-for-use' 
+    trips = []
+    for anno in annos:
+        hl = get_hypothesis_local(anno.uri)
+        if hl:
+            s = hl
+            if p in anno.tags:
+                t = anno.text.strip()
+                o = get_hypothesis_local(t)
+                o = o if o else t
+                trips.append((p, s, o))
 
-def test():
-    i = identifiers()
-    print(i)
-    print(render_idents(i))
-    embed()
+    return trips
+
+# routes
+
+@app.route('/curation/identifiers', methods=['GET'])
+def woooo():
+    annos = get_annos()
+    return render_idents(identifiers(annos))
 
 def main():
     app.debug = False
     app.run(host='localhost', port=7000, threaded=True)  # nginxwoo
+
+def test():
+    annos = get_annos()
+    #i = identifiers(annos)
+    #print(i)
+    #print(render_idents(i))
+    t = citation_tree(annos)
+    tu = [(p, hypothesis_local(s), hypothesis_local(o)) for p, s, o in t]
+    embed()
 
 if __name__ == '__main__':
     main()
