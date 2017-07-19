@@ -3,9 +3,13 @@ from __future__ import print_function
 import re
 import csv
 import os
+import asyncio
 from os import environ
 from datetime import date
+from threading import Thread
 from hypothesis import HypothesisUtils, HypothesisAnnotation
+from hypush.subscribe import preFilter, setup_websocket
+from hypush.handlers import filterHandler
 #from pyontutils.hierarchies import ???
 from IPython import embed
 
@@ -20,6 +24,7 @@ group = environ.get('HYP_GROUP', '__world__')
 
 print(api_token, username, group)  # sanity check
 
+# utility
 def get_proper_citation(xml):
     root = etree.fromstring(xml)
     if root.findall('error'):
@@ -53,6 +58,8 @@ def url_doi(doi):
 def url_pmid(pmid):
     return 'https://www.ncbi.nlm.nih.gov/pubmed/' + pmid
 
+# hypothesis API
+
 def get_annos():
     h = HypothesisUtils(username=username, token=api_token, group=group, max_results=100000)
     params = {'group' : h.group }
@@ -64,6 +71,44 @@ def export_json_impl(annos):
     output_json = [anno.__dict__ for anno in annos]
     DATE = date.today().strftime('%Y-%m-%d')
     return output_json, DATE
+
+# hypothesis websocket
+
+class protcurHandler(filterHandler):
+    def __init__(self, annos):
+        self.annos = annos
+    def handler(self, message):
+        try:
+            if message['options']['action'] == 'delete':
+                mid = message['payload'][0]['id']
+                gone = [_ for _ in self.annos if _.id == mid][0]
+                self.annos.remove(gone)
+            else:
+                anno = HypothesisAnnotation(message['payload'][0])
+                self.annos.append(anno)
+            print(len(self.annos), 'annotations.')
+        except KeyError as e:
+            embed()
+
+def streaming(annos):
+    filters = preFilter(groups=[group]).export()
+    filter_handlers = [protcurHandler(annos)]
+    ws_loop = setup_websocket(api_token, filters, filter_handlers)
+    return ws_loop
+
+def loop_target(loop, ws_loop):
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(ws_loop())
+
+def start_loop():
+    annos = get_annos()
+    loop = asyncio.get_event_loop()
+    ws_loop = streaming(annos)
+    stream_loop = Thread(target=loop_target, args=(loop, ws_loop))
+    return annos, stream_loop
+
+
+# rendering
 
 def identifiers(annos):
     idents = {}
@@ -141,16 +186,21 @@ def citation_tree(annos):
 
     return trips
 
+# setup 
+
+annos, stream_loop = start_loop()
+stream_loop.start()
+
 # routes
 
 @app.route('/curation/identifiers', methods=['GET'])
 def woooo():
-    annos = get_annos()
     return render_idents(identifiers(annos))
 
 def main():
     app.debug = False
     app.run(host='localhost', port=7000, threaded=True)  # nginxwoo
+    stream_loop.stop()
 
 def test():
     annos = get_annos()
