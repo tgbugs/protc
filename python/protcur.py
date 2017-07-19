@@ -47,6 +47,12 @@ def get_hypothesis_local(uri):
 def hypothesis_local(hln):
     return 'http://hypothesis-local.olympiangods.org/' + hln + '.pdf'
 
+def url_doi(doi):
+    return 'https://doi.org/' + doi
+
+def url_pmid(pmid):
+    return 'https://www.ncbi.nlm.nih.gov/pubmed/' + pmid
+
 def get_annos():
     h = HypothesisUtils(username=username, token=api_token, group=group, max_results=100000)
     params = {'group' : h.group }
@@ -97,13 +103,20 @@ def render_idents(idents):
                 lv = len(v) + 2
                 if lv > cols[f]: cols[f] = lv
     output = []
-    output.append(f'{HLN:<{cols[HLN]}}{DOI:<{cols[DOI]}}{PMID:<{cols[PMID]}}{PDOI:<{cols[PDOI]}}')
+    #output.append(f'{HLN:<{cols[HLN]}}{DOI:<{cols[DOI]}}{PMID:<{cols[PMID]}}{PDOI:<{cols[PDOI]}}')
+    output.append('<style> th { text-align: left; } th { padding-right: 20px; } </style>')
+    output.append(f'<tr><th>{HLN}</th><th>{DOI}</th><th>{PMID}</th><th>{PDOI}</tr>')
     for hl_name, others in sorted(idents.items()):
         doi = others[DOI] if DOI in others else ''
         pmid = others[PMID] if PMID in others else ''
         pdoi = others[PDOI] if PDOI in others else ''
-        output.append(f'{hl_name:<{cols[HLN]}}{doi:<{cols[DOI]}}{pmid:<{cols[PMID]}}{pdoi:<{cols[PDOI]}}')
-    out = '<pre>' + '\n'.join(output) + '</pre>'
+        #output.append(f'{hl_name:<{cols[HLN]}}{doi:<{cols[DOI]}}{pmid:<{cols[PMID]}}{pdoi:<{cols[PDOI]}}')
+        output.append(f'<tr><th><a href={hypothesis_local(hl_name)}>{hl_name}</a></th>'
+                      f'<th><a href={url_doi(doi)}>{doi}</th>'
+                      f'<th><a href={url_pmid(pmid)}>{pmid}</th>'
+                      f'<th><a href={url_doi(pdoi)}>{pdoi}</tr>')
+    #out = '<pre>' + '\n'.join(output) + '</pre>'
+    out = '<table>' + '\n'.join(output) + '</table>'
     #print(out)
     return out
 
@@ -135,13 +148,15 @@ def main():
 
 def test():
     annos = get_annos()
-    #i = identifiers(annos)
-    #print(i)
-    #print(render_idents(i))
+    i = identifiers(annos)
+    print(i)
+    print(render_idents(i))
+    return
     t = citation_tree(annos)
     tu = [(p, hypothesis_local(s), hypothesis_local(o)) for p, s, o in t]
     embed()
 
 if __name__ == '__main__':
     main()
+    #test()
 
