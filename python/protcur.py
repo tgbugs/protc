@@ -7,6 +7,7 @@ import asyncio
 from os import environ
 from datetime import date
 from threading import Thread
+from collections import Counter
 from hypothesis import HypothesisUtils, HypothesisAnnotation
 from hypush.subscribe import preFilter, setup_websocket
 from hypush.handlers import filterHandler
@@ -79,11 +80,12 @@ class protcurHandler(filterHandler):
         self.annos = annos
     def handler(self, message):
         try:
-            if message['options']['action'] == 'delete':
+            act = message['options']['action'] 
+            if act != 'create': # update delete
                 mid = message['payload'][0]['id']
                 gone = [_ for _ in self.annos if _.id == mid][0]
                 self.annos.remove(gone)
-            else:
+            if act != 'delete':  # create update
                 anno = HypothesisAnnotation(message['payload'][0])
                 self.annos.append(anno)
             print(len(self.annos), 'annotations.')
@@ -109,6 +111,29 @@ def start_loop():
 
 
 # rendering
+
+table_style = ('<style>'
+               'th { text-align: left; padding-right: 20px; }'
+               'table { font-family: Dejavu Sans Mono; }'
+               'a:link { color: black; }'
+               'a:visited { color: grey; }'
+               '</style>')
+
+def tagdefs(annos):
+    tags = Counter()
+    for anno in annos:
+        for tag in anno.tags:
+            tags[tag] += 1
+    return dict(tags)
+
+def statistics(annos):
+    stats = {}
+    for anno in annos:
+        hl = str(get_hypothesis_local(anno.uri))
+        if hl not in stats:
+            stats[hl] = 0
+        stats[hl] += 1
+    return stats
 
 def identifiers(annos):
     idents = {}
@@ -149,14 +174,8 @@ def render_idents(idents):
                 if lv > cols[f]: cols[f] = lv
     output = []
     #output.append(f'{HLN:<{cols[HLN]}}{DOI:<{cols[DOI]}}{PMID:<{cols[PMID]}}{PDOI:<{cols[PDOI]}}')
-    output.append('<style>'
-                  'th { text-align: left; padding-right: 20px; }'
-                  'table { font-family: Dejavu Sans Mono; }'
-                  'a:link { color: black; }'
-                  'a:visited { color: grey; }'
-                  '</style>'
-                 )
-    output.append(f'<tr><th>{HLN}</th><th>{DOI}</th><th>{PMID}</th><th>{PDOI}</tr>')
+    output.append(table_style)
+    output.append(f'<tr><th>{HLN}</th><th>{DOI}</th><th>{PMID}</th><th>{PDOI}</th></tr>')
     for hl_name, others in sorted(idents.items()):
         doi = others[DOI] if DOI in others else ''
         pmid = others[PMID] if PMID in others else ''
@@ -165,10 +184,20 @@ def render_idents(idents):
         output.append(f'<tr><th><a href={hypothesis_local(hl_name)}>{hl_name}</a></th>'
                       f'<th><a href={url_doi(doi)}>{doi}</th>'
                       f'<th><a href={url_pmid(pmid)}>{pmid}</th>'
-                      f'<th><a href={url_doi(pdoi)}>{pdoi}</tr>')
+                      f'<th><a href={url_doi(pdoi)}>{pdoi}</th></tr>')
     #out = '<pre>' + '\n'.join(output) + '</pre>'
     out = '<table>' + '\n'.join(output) + '</table>'
     #print(out)
+    return out
+
+def render_2col_table(dict_, uriconv=lambda a:a):
+    output = []
+    output.append(table_style)
+    output.append(f'<tr><th>HLN</th><th>Thing</th></tr>')
+    for hl_name, thing in sorted(dict_.items()):
+        output.append(f'<tr><th><a href={uriconv(hl_name)}>{hl_name}</a></th>'
+                      f'<th>{thing}</th></tr>')
+    out = '<table>' + '\n'.join(output) + '</table>'
     return out
 
 def citation_tree(annos):
@@ -194,13 +223,31 @@ stream_loop.start()
 # routes
 
 @app.route('/curation/identifiers', methods=['GET'])
-def woooo():
+def route_identifiers():
     return render_idents(identifiers(annos))
+
+@app.route('/curation/annotations', methods=['GET'])
+def route_annotations():
+    stats = statistics(annos)
+    return render_2col_table(stats, hypothesis_local)
+
+@app.route('/curation/tags', methods=['GET'])
+def route_tags():
+    tags = tagdefs(annos)
+    return render_2col_table(tags)
+
+@app.route('/curation', methods=['GET'])
+@app.route('/curation/', methods=['GET'])
+def route_curation():
+    out = ''
+    for route in 'identifiers', 'annotations', 'tags':
+        url = 'http://protc.olympiangods.org/curation/' + route
+        out += f'<a href={url}>{route}</a> <br>'
+    return out
 
 def main():
     app.debug = False
     app.run(host='localhost', port=7000, threaded=True)  # nginxwoo
-    stream_loop.stop()
 
 def test():
     annos = get_annos()
