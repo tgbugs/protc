@@ -104,7 +104,13 @@ def render_idents(idents):
                 if lv > cols[f]: cols[f] = lv
     output = []
     #output.append(f'{HLN:<{cols[HLN]}}{DOI:<{cols[DOI]}}{PMID:<{cols[PMID]}}{PDOI:<{cols[PDOI]}}')
-    output.append('<style> th { text-align: left; } th { padding-right: 20px; } </style>')
+    output.append('<style>'
+                  'th { text-align: left; padding-right: 20px; }'
+                  'table { font-family: Dejavu Sans Mono; }'
+                  'a:link { color: black; }'
+                  'a:visited { color: grey; }'
+                  '</style>'
+                 )
     output.append(f'<tr><th>{HLN}</th><th>{DOI}</th><th>{PMID}</th><th>{PDOI}</tr>')
     for hl_name, others in sorted(idents.items()):
         doi = others[DOI] if DOI in others else ''
