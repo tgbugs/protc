@@ -3,7 +3,10 @@
 import os
 from collections import Counter
 from IPython import embed
-#from pyontutils.hierarchies import ???
+from pyontutils.hierarchies import creatTree
+from pyontutils.utils import makeGraph, makePrefixes
+
+RFU = 'protc:references-for-use'
 
 # utility
 
@@ -23,13 +26,15 @@ def url_pmid(pmid):
 # stats
 
 def citation_tree(annos):
-    p = 'protc:references-for-use' 
+    p = RFU
     trips = []
     for anno in annos:
         hl = get_hypothesis_local(anno.uri)
         if hl:
             s = hl
-            if p in anno.tags:
+            if p in anno.tags and 'TODO' not in anno.tags:
+                if 'no access' in anno.text:
+                    continue  # there are some cases where TODO is missing
                 t = anno.text.strip()
                 o = get_hypothesis_local(t)
                 o = o if o else t
@@ -77,14 +82,34 @@ def tagdefs(annos):
     return dict(tags)
 
 def main():
-    from protcur import annos
+    from protcur import start_loop
+    from time import sleep
+
+    annos, stream_loop = start_loop()
+    stream_loop.start()
 
     i = identifiers(annos)
     print(i)
-    print(render_idents(i))
+
     t = citation_tree(annos)
-    tu = [(p, hypothesis_local(s), hypothesis_local(o)) for p, s, o in t]
+    #tu = [(p, hypothesis_local(s), hypothesis_local(o)) for p, s, o in t]
+    PREFIXES = {'protc':'http://protc.olympiangods.org/curation/tags/',
+                'hl':'http://hypothesis-local.olympiangods.org/'}
+    PREFIXES.update(makePrefixes('rdfs'))
+    g = makeGraph('', prefixes=PREFIXES)
+    for p, s, o in t:
+        su = hypothesis_local(s)
+        ou = hypothesis_local(o)
+        g.add_node(su, p, ou)
+        g.add_node(su, 'rdfs:label', s)  # redundant
+        g.add_node(ou, 'rdfs:label', o)  # redundant
+    asdf = g.make_scigraph_json(RFU, direct=True)
+    tree, extra = creatTree('hl:ma2015.pdf', RFU, 'OUTGOING', 10, json=asdf)
+
     embed()
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    finally:
+        os.sys.exit()

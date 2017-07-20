@@ -71,7 +71,7 @@ class protcurHandler(filterHandler):
             if act != 'delete':  # create update
                 anno = HypothesisAnnotation(message['payload'][0])
                 self.annos.append(anno)
-            print(len(self.annos), 'annotations.')
+            #print(len(self.annos), 'annotations.')
         except KeyError as e:
             embed()
 
@@ -79,7 +79,7 @@ def streaming(annos):
     filters = preFilter(groups=[group]).export()
     filter_handlers = [protcurHandler(annos)]
     ws_loop = setup_websocket(api_token, filters, filter_handlers)
-    return ws_loop
+    return ws_loop 
 
 def loop_target(loop, ws_loop):
     asyncio.set_event_loop(loop)
@@ -90,8 +90,7 @@ def start_loop():
     loop = asyncio.get_event_loop()
     ws_loop = streaming(annos)
     stream_loop = Thread(target=loop_target, args=(loop, ws_loop))
-    return annos, stream_loop
-
+    return annos, stream_loop 
 
 # rendering
 
@@ -177,6 +176,7 @@ def main():
 
     app.debug = False
     app.run(host='localhost', port=7000, threaded=True)  # nginxwoo
+    os.sys.exit()
 
 if __name__ == '__main__':
     main()
