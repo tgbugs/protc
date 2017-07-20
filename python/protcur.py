@@ -1,17 +1,13 @@
 #!/usr/bin/env python3.6
-from __future__ import print_function
-import re
-import csv
 import os
 import asyncio
 from os import environ
 from datetime import date
 from threading import Thread
-from collections import Counter
 from hypothesis import HypothesisUtils, HypothesisAnnotation
+from analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid, identifiers, statistics, tagdefs
 from hypush.subscribe import preFilter, setup_websocket
 from hypush.handlers import filterHandler
-#from pyontutils.hierarchies import ???
 from IPython import embed
 
 from flask import Flask, url_for, redirect, request, render_template, render_template_string, make_response, abort 
@@ -26,6 +22,7 @@ group = environ.get('HYP_GROUP', '__world__')
 print(api_token, username, group)  # sanity check
 
 # utility
+
 def get_proper_citation(xml):
     root = etree.fromstring(xml)
     if root.findall('error'):
@@ -45,19 +42,6 @@ def fix_trailing_slash(annotated_urls):
             print(new_key)
             if new_key in annotated_urls:
                 annotated_urls[key].extend(annotated_urls.pop(new_key))
-
-def get_hypothesis_local(uri):
-    if 'hypothesis-local' in uri:
-        return os.path.splitext(os.path.basename(uri))[0]
-
-def hypothesis_local(hln):
-    return 'http://hypothesis-local.olympiangods.org/' + hln + '.pdf'
-
-def url_doi(doi):
-    return 'https://doi.org/' + doi
-
-def url_pmid(pmid):
-    return 'https://www.ncbi.nlm.nih.gov/pubmed/' + pmid
 
 # hypothesis API
 
@@ -119,44 +103,6 @@ table_style = ('<style>'
                'a:visited { color: grey; }'
                '</style>')
 
-def tagdefs(annos):
-    tags = Counter()
-    for anno in annos:
-        for tag in anno.tags:
-            tags[tag] += 1
-    return dict(tags)
-
-def statistics(annos):
-    stats = {}
-    for anno in annos:
-        hl = str(get_hypothesis_local(anno.uri))
-        if hl not in stats:
-            stats[hl] = 0
-        stats[hl] += 1
-    return stats
-
-def identifiers(annos):
-    idents = {}
-    def add_tag_text(hl, anno, tag):
-            if tag in anno.tags:
-                idents[hl][tag] = anno.text.strip()
-
-    for anno in annos:
-        hl = get_hypothesis_local(anno.uri)
-        if hl:
-            if hl not in idents:
-                idents[hl] = {}
-            #print(hl)
-            #print(anno.exact)
-            #print(anno.tags)
-            #print(anno.text)
-            #print(anno.user)
-            #print('---------------------')
-            add_tag_text(hl, anno, 'DOI:')
-            add_tag_text(hl, anno, 'protc:parent-doi')
-            add_tag_text(hl, anno, 'PMID:')
-
-    return idents
 
 def render_idents(idents):
     #print(idents)
@@ -200,23 +146,6 @@ def render_2col_table(dict_, uriconv=lambda a:a):
     out = '<table>' + '\n'.join(output) + '</table>'
     return out
 
-def citation_tree(annos):
-    p = 'protc:references-for-use' 
-    trips = []
-    for anno in annos:
-        hl = get_hypothesis_local(anno.uri)
-        if hl:
-            s = hl
-            if p in anno.tags:
-                t = anno.text.strip()
-                o = get_hypothesis_local(t)
-                o = o if o else t
-                trips.append((p, s, o))
-
-    return trips
-
-# setup 
-
 annos, stream_loop = start_loop()
 stream_loop.start()
 
@@ -249,17 +178,6 @@ def main():
     app.debug = False
     app.run(host='localhost', port=7000, threaded=True)  # nginxwoo
 
-def test():
-    annos = get_annos()
-    i = identifiers(annos)
-    print(i)
-    print(render_idents(i))
-    return
-    t = citation_tree(annos)
-    tu = [(p, hypothesis_local(s), hypothesis_local(o)) for p, s, o in t]
-    embed()
-
 if __name__ == '__main__':
     main()
-    #test()
 
