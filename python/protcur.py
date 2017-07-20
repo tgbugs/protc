@@ -13,7 +13,6 @@ from IPython import embed
 from flask import Flask, url_for, redirect, request, render_template, render_template_string, make_response, abort 
 
 
-app = Flask('protc curation id service')
 
 api_token = environ.get('HYP_API_TOKEN', 'TOKEN')  # Hypothesis API token
 username = environ.get('HYP_USERNAME', 'USERNAME') # Hypothesis username
@@ -146,35 +145,36 @@ def render_2col_table(dict_, uriconv=lambda a:a):
     out = '<table>' + '\n'.join(output) + '</table>'
     return out
 
-annos, stream_loop = start_loop()
-stream_loop.start()
-
-# routes
-
-@app.route('/curation/identifiers', methods=['GET'])
-def route_identifiers():
-    return render_idents(identifiers(annos))
-
-@app.route('/curation/annotations', methods=['GET'])
-def route_annotations():
-    stats = statistics(annos)
-    return render_2col_table(stats, hypothesis_local)
-
-@app.route('/curation/tags', methods=['GET'])
-def route_tags():
-    tags = tagdefs(annos)
-    return render_2col_table(tags)
-
-@app.route('/curation', methods=['GET'])
-@app.route('/curation/', methods=['GET'])
-def route_curation():
-    out = ''
-    for route in 'identifiers', 'annotations', 'tags':
-        url = 'http://protc.olympiangods.org/curation/' + route
-        out += f'<a href={url}>{route}</a> <br>'
-    return out
-
 def main():
+    app = Flask('protc curation id service')
+    annos, stream_loop = start_loop()
+    stream_loop.start()
+
+    # routes
+
+    @app.route('/curation/identifiers', methods=['GET'])
+    def route_identifiers():
+        return render_idents(identifiers(annos))
+
+    @app.route('/curation/annotations', methods=['GET'])
+    def route_annotations():
+        stats = statistics(annos)
+        return render_2col_table(stats, hypothesis_local)
+
+    @app.route('/curation/tags', methods=['GET'])
+    def route_tags():
+        tags = tagdefs(annos)
+        return render_2col_table(tags)
+
+    @app.route('/curation', methods=['GET'])
+    @app.route('/curation/', methods=['GET'])
+    def route_curation():
+        out = ''
+        for route in 'identifiers', 'annotations', 'tags':
+            url = 'http://protc.olympiangods.org/curation/' + route
+            out += f'<a href={url}>{route}</a> <br>'
+        return out
+
     app.debug = False
     app.run(host='localhost', port=7000, threaded=True)  # nginxwoo
 
