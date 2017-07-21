@@ -107,7 +107,7 @@ def getAnnoById(id_, annos):
     try:
         return [_ for _ in annos if _.id == id_][0]
     except IndexError:
-        print('could not find', id_)
+        print('could not find', id_, shareLinkFromId(id_))
         return None
 
 class AstNode:
@@ -122,9 +122,20 @@ class AstNode:
         if self.children:
             linestart = '\n' + ' ' * 2 * depth
             nsibs = len(self.children)
-            childs = link + linestart + linestart.join(c.__repr__(False, depth + 1, nparens + 1 if nsibs == i + 1 else nparens)
-                                                       for i, c in
-                                                       enumerate(self.children))
+            #childs = link + linestart + linestart.join(c.__repr__(False, depth + 1, nparens + 1 if nsibs == i + 1 else nparens)
+                                                       #for i, c in
+                                                       #enumerate(self.children))
+            
+            cs = []
+            for i, c in enumerate(self.children):
+                new_nparens = nparens + 1 if nsibs == i + 1 else nparens  # if we are at the end of multiple children the child node needs to add one more paren (so that its comment is located correctly)
+                try:
+                    s = c.__repr__(False, depth + 1, new_nparens)
+                except TypeError:
+                    raise TypeError('%s is not an AstNode' % c)
+                cs.append(s)
+            childs = link + linestart + linestart.join(cs)
+
         else:
             childs = ')' * nparens + link  
 
@@ -289,10 +300,6 @@ def buildAst(anno, annos):
     # for line in splitLines(anno.text):
     #   buildAst(getAnnoById(idFromShareLink(line))
     
-    # sanity
-    if anno is None:
-        return None, []
-
     #types
     type_ = anno.tags[0]  # XXX this will fail in nasty ways
 
@@ -305,14 +312,17 @@ def buildAst(anno, annos):
         value = anno.exact
 
     # next level
-    nodes = []
+    children = []
     for line in splitLines(anno.text):
         if line:
             id_ = idFromShareLink(line)
             if id_ is not None:
-                subtree = buildAst(getAnnoById(id_, annos), annos)  # somehwere we try to get [0] and it fails if anno is none... ctrl a n
-                nodes.append(subtree)
-    return AstNode(type_, value, anno.id, nodes)
+                child = getAnnoById(id_, annos)
+                if child is None: # sanity
+                    continue
+                subtree = buildAst(child, annos)  # somehwere we try to get [0] and it fails if anno is none... ctrl a n
+                children.append(subtree)
+    return AstNode(type_, value, anno.id, children)
 
 def main():
     from protcur import start_loop
