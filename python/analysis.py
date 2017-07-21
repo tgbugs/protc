@@ -1,6 +1,7 @@
 #!/usr/bin/env python3.6
 
 import os
+import ast
 from collections import Counter
 from IPython import embed
 from pyontutils.hierarchies import creatTree
@@ -115,22 +116,17 @@ class AstNode:
         self.value = value.strip()
         self.anno_id = anno_id
         self.children = children
-    def __repr__(self, top=True, depth=1, nsibs=0, pos=0, plast=True):
+    def __repr__(self, top=True, depth=1, nparens=1):
         link = f'  ; {shareLinkFromId(self.anno_id)}'
-        last = nsibs == pos + 1
 
         if self.children:
             linestart = '\n' + ' ' * 2 * depth
             nsibs = len(self.children)
-            childs = link + linestart + linestart.join(c.__repr__(False, depth + 1, nsibs, i, last)
+            childs = link + linestart + linestart.join(c.__repr__(False, depth + 1, nparens + 1 if nsibs == i + 1 else nparens)
                                                        for i, c in
                                                        enumerate(self.children))
         else:
-            if 
-                n = depth
-            else:
-                n = 1
-            childs = ')' * n + link  
+            childs = ')' * nparens + link  
 
         start = '\n(' if top else '('
         try:
@@ -138,6 +134,149 @@ class AstNode:
         except ValueError:
             value = '"' + self.value + '"'
         return f'{start}{self.type_} {value}{childs}'
+
+def protc_parameter(anno):
+    if anno.text:
+        value = anno.text
+        print('text found for annotaiton in addition to exact')
+        print('exact:', anno.exact)
+        print('text:', anno.text)
+    else:
+        value = anno.exact
+
+    parts = value.split(' ')
+    out = parse_mess(parts)
+
+    return out
+
+def parse_mess(value):
+    def OR(*funcs):
+        def or_(p):
+            for f in funcs:
+                success, v, rest = f(p)
+                if success:
+                    return success, v, rest
+            return success, v, rest
+        return or_
+
+    def TIMES(func, min_, max_=None):
+        def times(p):
+            matches = []
+            for i in range(min_):
+                success, v, rest = func(p)
+                if not success:
+                    return success, None, p
+                else:
+                    matches.append(v)
+                    p = rest
+            if max_ is not None:
+                for i in range(max_ - min_):
+                    success, v, rest = func(p)
+                    if not success:
+                        return True, matches, p
+                    else:
+                        matches.append(v)
+                        p = rest
+                success, v, rest = func(p)
+                if success:
+                    return False, None, p
+
+            return success, matches, rest
+        return times
+
+    infinity = 9999999  # you know it baby, if we go this deep we will get recursion errors
+    def MANY(func):
+        return TIMES(func, 0, infinity)
+
+    def MANY1(func):
+        return TIMES(func, 1, infinity)
+
+    def ANDTHEN(func1, func2):
+        def andthen(p):
+            success, v1, rest = func1(p)
+            if success:
+                p2 = rest
+                success, v2, rest = func2(p2)
+                if success:
+                    return success, [v1, v2], rest
+            return success, None, p
+        return andthen
+
+    def JOINT(*funcs, join=True):
+        def joint(p):
+            matches = []
+            rest = p
+            for func in funcs:
+                success, v, rest = func(rest)
+                if not success:
+                    return success, None, p
+                else:
+                    if join and hasattr(v, '__iter__'):
+                        matches.extend(v)
+                    else:
+                        matches.append(v)
+            return success, matches, rest 
+        return joint
+
+    def comp(p, val):
+        if p:
+            v = p[0]
+        else:
+            return False, None, p  # we are at the end
+        return v == val, v, p[1:]
+
+    def oper(p, func):
+        if p:
+            v = p[0]
+        else:
+            return False, None, p  # we are at the end
+        return func(v), v, p[1:]
+
+    def space(p): return comp(p, ' ')
+    def plus_or_minus_symbol(p): return comp(p,'±')  # NOTE range and +- are interconvertable...
+    def plus_or_minus_pair(p): return comp(p,'+-')
+    plus_or_minus = OR(plus_or_minus_symbol, plus_or_minus_pair)
+    def explicit_range_single(p): return comp(p,'-')
+    explicit_range_pair = TIMES(explicit_range_single, 2)
+    explicit_range = OR(explicit_range_pair, explicit_range_single)  # order matters since '-' is in '--'
+    def lt(p): return comp(p,'<')
+    def gt(p): return comp(p,'>')
+    comparison = OR(lt, gt)
+    def by(p): return comp(p,'x')
+    op = OR(plus_or_minus, explicit_range, lt, gt, by)
+    digits = [str(_) for _ in range(10)]
+    def digit(p): return oper(p, lambda d: d in digits)
+    def point(p): return comp(p,'.')
+    def char(p): return oper(p, lambda c: c.isalpha())
+
+    # patterns:
+    # num op num unit
+    # num unit op num unit
+    # unit num
+    # op num
+    # opnum
+    # numunit
+
+
+    int_ = MANY1(digit)
+    float_ = OR(JOINT(MANY1(digit), point, MANY(digit)),
+                JOINT(MANY(digit), point, MANY1(digit)))
+    num = OR(int_, float_)
+
+    pat1 = JOINT(num, MANY(space), op, MANY(space), num, join=False)
+    unit_ = MANY1(char)
+
+    percent = '%'
+    degree = '°'
+    degree_c = degree + 'C'
+
+
+    out = '('
+    out += ')'
+    embed()
+
+    return out
+
 
 def buildAst(anno, annos):
     # check anno.tags for one of our known good tags
@@ -154,13 +293,10 @@ def buildAst(anno, annos):
     type_ = anno.tags[0]  # XXX this will fail in nasty ways
 
     #values
-    value = anno.exact
     if type_ == 'protc:parameter*':
-        if anno.text:
-            value = anno.text
-            print('text found for annotaiton in addition to exact')
-            print('exact:', anno.exact)
-            print('text:', anno.text)
+        value = protc_parameter(anno)
+    else:
+        value = anno.exact
 
     # next level
     nodes = []
@@ -171,10 +307,6 @@ def buildAst(anno, annos):
                 subtree = buildAst(getAnnoById(id_, annos), annos)  # somehwere we try to get [0] and it fails if anno is none... ctrl a n
                 nodes.append(subtree)
     return AstNode(type_, value, anno.id, nodes)
-
-
-
-    pass
 
 def main():
     from protcur import start_loop
@@ -205,8 +337,7 @@ def main():
     print(trees)
 
     embed()
-    raise SystemExit
-    #os.sys.exit()
+    # HOW DO I KILL THE STREAM LOOP!??!
 
 if __name__ == '__main__':
     main()
