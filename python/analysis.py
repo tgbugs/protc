@@ -145,11 +145,15 @@ def protc_parameter(anno):
         value = anno.exact
 
     parts = value.split(' ')
-    out = parse_mess(parts)
+    #out = parse_mess(parts)
+    out = value
 
     return out
 
-def parse_mess(value):
+def protc_invariant(anno):
+    return protc_parameter(anno)
+
+def parse_mess():
     def OR(*funcs):
         def or_(p):
             for f in funcs:
@@ -295,6 +299,8 @@ def buildAst(anno, annos):
     #values
     if type_ == 'protc:parameter*':
         value = protc_parameter(anno)
+    elif type_ == 'protc:invariant':
+        value = protc_invariant(anno)
     else:
         value = anno.exact
 
@@ -335,6 +341,8 @@ def main():
     irs = sorted(inputRefs(annos))
     trees = [buildAst(_, annos) for _ in annos if 'protc:input' in _.tags]
     print(trees)
+
+    parse_mess()
 
     embed()
     # HOW DO I KILL THE STREAM LOOP!??!
