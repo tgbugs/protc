@@ -9,6 +9,8 @@ from pyontutils.utils import makeGraph, makePrefixes
 
 RFU = 'protc:references-for-use'
 
+error_output = []
+
 # utility
 
 def get_hypothesis_local(uri):
@@ -116,7 +118,7 @@ class AstNode:
         self.value = value.strip()
         self.anno_id = anno_id
         self.children = children
-    def __repr__(self, top=True, depth=1, nparens=1):
+    def __repr__(self, top=True, depth=1, nparens=1, plast=True):
         link = f'  ; {shareLinkFromId(self.anno_id)}'
 
         if self.children:
@@ -125,12 +127,16 @@ class AstNode:
             #childs = link + linestart + linestart.join(c.__repr__(False, depth + 1, nparens + 1 if nsibs == i + 1 else nparens)
                                                        #for i, c in
                                                        #enumerate(self.children))
-            
             cs = []
             for i, c in enumerate(self.children):
-                new_nparens = nparens + 1 if nsibs == i + 1 else nparens  # if we are at the end of multiple children the child node needs to add one more paren (so that its comment is located correctly)
+                new_plast = i + 1 == nsibs
+                # if we are at the end of multiple children the child node needs to add one more paren
+                if new_plast:
+                    new_nparens = nparens + 1
+                else:
+                    new_nparens = 1  # new children start their own tree, nparens only tracks the last node
                 try:
-                    s = c.__repr__(False, depth + 1, new_nparens)
+                    s = c.__repr__(False, depth + 1, new_nparens, new_plast)
                 except TypeError:
                     raise TypeError('%s is not an AstNode' % c)
                 cs.append(s)
@@ -149,9 +155,10 @@ class AstNode:
 def protc_parameter(anno):
     if anno.text:
         value = anno.text
-        print('text found for annotaiton in addition to exact')
-        print('exact:', anno.exact)
-        print('text:', anno.text)
+        error = ('text found for annotaiton in addition to exact\n'
+                 f'exact: {anno.exact}\n'
+                 f'text: {anno.text}')
+        error_output.append(error)
     else:
         value = anno.exact
 
@@ -301,13 +308,19 @@ def buildAst(anno, annos):
     #   buildAst(getAnnoById(idFromShareLink(line))
     
     #types
-    type_ = anno.tags[0]  # XXX this will fail in nasty ways
+    if anno.tags:
+        type_ = anno.tags[0]  # XXX this will fail in nasty ways
+    else:
+        print('Anno with no tag!', shareLinkFromId(anno.id))
+        type_ = None  # just see where it goes...
 
     #values
     if type_ == 'protc:parameter*':
         value = protc_parameter(anno)
     elif type_ == 'protc:invariant':
         value = protc_invariant(anno)
+    elif type_ == 'protc:input':
+        value = anno.text if anno.type == 'reply' else anno.exact  # TODO
     else:
         value = anno.exact
 
@@ -319,9 +332,11 @@ def buildAst(anno, annos):
             if id_ is not None:
                 child = getAnnoById(id_, annos)
                 if child is None: # sanity
+                    print('Problem in', shareLinkFromId(anno.id))
                     continue
                 subtree = buildAst(child, annos)  # somehwere we try to get [0] and it fails if anno is none... ctrl a n
                 children.append(subtree)
+
     return AstNode(type_, value, anno.id, children)
 
 def main():
@@ -332,7 +347,7 @@ def main():
     stream_loop.start()
 
     i = identifiers(annos)
-    print(i)
+    #print(i)
 
     t = citation_tree(annos)
     PREFIXES = {'protc':'http://protc.olympiangods.org/curation/tags/',
@@ -349,8 +364,15 @@ def main():
     tree, extra = creatTree('hl:ma2015.pdf', RFU, 'OUTGOING', 10, json=ref_graph)
 
     irs = sorted(inputRefs(annos))
-    trees = [buildAst(_, annos) for _ in annos if 'protc:input' in _.tags]
+    trees = []
+    for _ in annos:
+        if 'protc:input' in _.tags:
+            te = buildAst(_, annos)
+            trees.append(te)
+
     print(trees)
+    with open('/tmp/protcur.rkt', 'wt') as f:
+        f.write(repr(trees))
 
     parse_mess()
 
