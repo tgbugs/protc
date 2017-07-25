@@ -6,6 +6,7 @@ from collections import Counter
 from IPython import embed
 from pyontutils.hierarchies import creatTree
 from pyontutils.utils import makeGraph, makePrefixes
+import parsing
 
 RFU = 'protc:references-for-use'
 
@@ -152,6 +153,7 @@ class AstNode:
             value = '"' + self.value + '"'
         return f'{start}{self.type_} {value}{childs}'
 
+test_params = []
 def protc_parameter(anno):
     if anno.text:
         value = anno.text
@@ -162,10 +164,33 @@ def protc_parameter(anno):
     else:
         value = anno.exact
 
-    parts = value.split(' ')
-    #out = parse_mess(parts)
-    out = value
+    #cleaned = value.strip(' ').strip('(')
+    cleaned = value.replace('mL–1', '/mL').replace('kg–1','/kg')  # FIXME temporary (and bad) fix for superscript issues
+    cleaned = cleaned.strip()
+    cleaned_orig = cleaned
 
+    # ignore gargabe at the start
+    success = False
+    front = ''
+    while not success:
+        success, v, rest = parsing.parameter_expression(cleaned)
+        if not success:
+            if len(cleaned) > 1:
+                more_front, cleaned = cleaned[0], cleaned[1:]
+                front += more_front
+            else:
+                front += cleaned
+                success, v, rest = parsing.parameter_expression(cleaned_orig)  # reword but whatever
+                error_output.append((success, v, rest))
+                break
+
+    #out = parse_mess(parts)
+    #out = value
+    out = str((success, v, rest))
+    if front and front != rest:
+        out = "'" + front + "', " + out
+
+    test_params.append((value, (success, v, rest)))
     return out
 
 def protc_invariant(anno):
@@ -241,7 +266,7 @@ def main():
             te = buildAst(_, annos)
             trees.append(te)
 
-    print(trees)
+    #print(trees)
     with open('/tmp/protcur.rkt', 'wt') as f:
         f.write(repr(trees))
 
