@@ -123,6 +123,7 @@ def transform_value(parser_func, func_to_apply):
 #
 # units
 
+DEGREES_UNDERLINE = b'\xc2\xba'.decode()  # º sometimes pdfs misencode these
 def get_quoted_list(filename):
     with open(os.path.expanduser('~/ni/protocols/rkt/units/' + filename), 'rt') as f:
         lines = [_.split(';')[0].strip() for _ in f.readlines()]
@@ -220,13 +221,25 @@ _float_ = JOINT(TIMES(dash_thing, 0, 1),
                    JOINT(MANY(digit), point, MANY1(digit), join=True)),
                 join=True)
 float_ = transform_value(_float_, lambda f: float(''.join(f)))
-num = OR(float_, int_)  # float first so that int doesn't capture it
+num = OR(float_, int_, num_word)  # float first so that int doesn't capture it
 def percent(p): return comp(p, '%')
 percentage = JOINT(num, COMPOSE(spaces, percent), join=False)
 
 def plus_or_minus_thing(thing): return JOINT(plus_or_minus, COMPOSE(spaces, thing), join=False)
 
+def to(p): return comp(p, 'to')
+range_indicator = OR(thing_accepted_as_a_dash, to)
+def range_thing(func): return JOINT(func, COMPOSE(spaces, range_indicator), COMPOSE(spaces, func))
+def prefix_range_thing(func, alt): return JOINT(func,
+                                                COMPOSE(spaces, range_indicator),
+                                                COMPOSE(spaces, OR(func, alt)))
 ph_value = JOINT(ph, COMPOSE(spaces, num), join=False)
+ph_range = prefix_range_thing(ph_value, num)
+
+def P(p): return comp(p, 'P')
+post_natal_day = JOINT(P, num)
+#post_natal_range = JOINT(post_natal_day, COMPOSE(spaces, range_indicator), COMPOSE(spaces, OR(post_natal_day, num)))
+post_natal_range = prefix_range_thing(post_natal_day, num)
 
 def AT_MOST_ONE(func): return transform_value(TIMES(func, 0, 1), lambda v: v[0] if v else v)
 def EXACTLY_ONE(func): return transform_value(TIMES(func, 1, 1), lambda v: v[0] if v else v)
@@ -235,9 +248,8 @@ quantity_require_unit = OR(percentage, JOINT(num, COMPOSE(spaces, EXACTLY_ONE(un
 quantity_with_uncertainty = JOINT(quantity, COMPOSE(spaces, plus_or_minus_thing(quantity)), join=False)  # could be error or could be a range spec, also 2nd quantity needs to require unit?? is there some way to do 'if not a then b?' or 'a unit must be in here somwhere?'
 
 
-def to(p): return comp(p, 'to')
-range_indicator = OR(thing_accepted_as_a_dash, to)
-range_ = JOINT(quantity, COMPOSE(spaces, range_indicator), COMPOSE(spaces, quantity), join=False)
+#range_ = JOINT(quantity, COMPOSE(spaces, range_indicator), COMPOSE(spaces, quantity), join=False)
+range_ = range_thing(quantity)
 dilution_factor = JOINT(int_, colon, int_, join=False)
 sq = COMPOSE(spaces, quantity)
 sby = COMPOSE(spaces, by)
@@ -264,12 +276,14 @@ def parameter_expression(p): return OR(approximate_thing(parameter_expression),
                                        fold,
                                        dilution_factor,
                                        ph_value,
+                                       post_natal_range,
+                                       post_natal_day,
                                        temp_for_biology,
                                        quantity_with_uncertainty,
                                        quantity_require_unit,
                                        quantity,
                                        plus_or_minus_thing(quantity),
-                                       num_word,
+                                       #num_word,  moved directly into num... expecting slooowww
                                       )(p)
 
 
