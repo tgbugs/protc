@@ -6,8 +6,10 @@ from collections import Counter
 from IPython import embed
 from pyontutils.hierarchies import creatTree
 from pyontutils.utils import makeGraph, makePrefixes
+from pyontutils.scigraph_client import Vocabulary
 import parsing
 
+sgv = Vocabulary(cache=True)
 RFU = 'protc:references-for-use'
 
 error_output = []
@@ -196,6 +198,20 @@ def protc_parameter(anno):
 def protc_invariant(anno):
     return protc_parameter(anno)
 
+test_input = []
+def protc_input(anno):
+    value = anno.text if anno.type == 'reply' else anno.exact  # TODO
+    value = value.strip()
+    data = sgv.findByTerm(value)  # TODO could try the annotate endpoint?
+    if data:
+        data = data[0]  # TODO could check other rules I have used in the past
+        id_ = data['curie'] if 'curie' in data else data['iri']
+        value += f" ({id_}, {data['labels'][0]})"
+    else:
+        test_input.append(value)
+
+    return value
+
 def buildAst(anno, annos):
     # check anno.tags for one of our known good tags
     # give that tag, switch to something for that tag
@@ -216,7 +232,7 @@ def buildAst(anno, annos):
     elif type_ == 'protc:invariant':
         value = protc_invariant(anno)
     elif type_ == 'protc:input':
-        value = anno.text if anno.type == 'reply' else anno.exact  # TODO
+        value = protc_input(anno)
     else:
         value = anno.exact
 
@@ -238,8 +254,9 @@ def buildAst(anno, annos):
 def main():
     from protcur import start_loop
     from time import sleep
+    import requests
 
-    annos, stream_loop = start_loop()
+    annos, stream_loop = start_loop()  # TODO memoize annos... and maybe start with a big offset?
     stream_loop.start()
 
     i = identifiers(annos)
@@ -269,6 +286,21 @@ def main():
     #print(trees)
     with open('/tmp/protcur.rkt', 'wt') as f:
         f.write(repr(trees))
+
+    test_inputs = sorted(set(test_input))
+    with open(os.path.expanduser('~/files/bioportal_api_keys'), 'rt') as f:
+        bioportal_api_key = f.read().strip()
+    def getBiop(term):
+        #url = f'http://data.bioontology.org/search?q={term}&ontologies=CHEBI&apikey={bioportal_api_key}'
+        url = f'http://data.bioontology.org/search?q={term}&apikey={bioportal_api_key}'
+        print(url)
+        return requests.get(url)
+
+    res = [(_, getBiop(_)) for _ in test_inputs]
+    jsons = [r.json() for t, r in res if r.ok] 
+
+    def chebis(j): return set((_['@id'], _['prefLabel'] if 'prefLabel' in _ else tuple(_['synonym'])) for _ in j['collection'] if 'CHEBI' in _['@id'])
+    cs = [chebis(j) for j in jsons]
 
     embed()
     # HOW DO I KILL THE STREAM LOOP!??!
