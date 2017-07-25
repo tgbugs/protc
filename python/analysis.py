@@ -204,7 +204,11 @@ def protc_input(anno):
     value = value.strip()
     data = sgv.findByTerm(value)  # TODO could try the annotate endpoint?
     if data:
-        data = data[0]  # TODO could check other rules I have used in the past
+        subset = [d for d in data if value in d['labels']]
+        if subset:
+            data = subset[0]
+        else:
+            data = data[0]  # TODO could check other rules I have used in the past
         id_ = data['curie'] if 'curie' in data else data['iri']
         value += f" ({id_}, {data['labels'][0]})"
     else:
@@ -288,19 +292,23 @@ def main():
         f.write(repr(trees))
 
     test_inputs = sorted(set(test_input))
-    with open(os.path.expanduser('~/files/bioportal_api_keys'), 'rt') as f:
-        bioportal_api_key = f.read().strip()
-    def getBiop(term):
-        #url = f'http://data.bioontology.org/search?q={term}&ontologies=CHEBI&apikey={bioportal_api_key}'
-        url = f'http://data.bioontology.org/search?q={term}&apikey={bioportal_api_key}'
-        print(url)
-        return requests.get(url)
+    def check_inputs():
+        with open(os.path.expanduser('~/files/bioportal_api_keys'), 'rt') as f:
+            bioportal_api_key = f.read().strip()
+        def getBiop(term):
+            #url = f'http://data.bioontology.org/search?q={term}&ontologies=CHEBI&apikey={bioportal_api_key}'
+            url = f'http://data.bioontology.org/search?q={term}&apikey={bioportal_api_key}'
+            print(url)
+            return requests.get(url)
 
-    res = [(_, getBiop(_)) for _ in test_inputs]
-    jsons = [r.json() for t, r in res if r.ok] 
+        res = [(_, getBiop(_)) for _ in test_inputs]
+        jsons = [r.json() for t, r in res if r.ok] 
 
-    def chebis(j): return set((_['@id'], _['prefLabel'] if 'prefLabel' in _ else tuple(_['synonym'])) for _ in j['collection'] if 'CHEBI' in _['@id'])
-    cs = [chebis(j) for j in jsons]
+        def chebis(j): return set((_['@id'], _['prefLabel'] if 'prefLabel' in _ else tuple(_['synonym'])) for _ in j['collection'] if 'CHEBI' in _['@id'])
+        cs = [chebis(j) for j in jsons]
+        return res, jsons, chebis
+
+    #res, jsons, chebis = check_inputs()
 
     embed()
     # HOW DO I KILL THE STREAM LOOP!??!
