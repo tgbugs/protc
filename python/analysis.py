@@ -8,6 +8,7 @@ from pyontutils.hierarchies import creatTree
 from pyontutils.utils import makeGraph, makePrefixes
 from pyontutils.scigraph_client import Vocabulary
 import parsing
+from hypothesis import HypothesisAnnotation
 
 sgv = Vocabulary(cache=True)
 RFU = 'protc:references-for-use'
@@ -236,18 +237,26 @@ def protc_input(anno):
 
     return value
 
-def buildAst(anno, annos, aspect_lookup=None, trees=None, depth=0, done=None):
+def buildAst(anno, annos, aspect_lookup, correction_lookup, trees, done, depth=0):
     # check anno.tags for one of our known good tags
     # give that tag, switch to something for that tag
     # check anno.text for hyp.is
     # for line in splitLines(anno.text):
     #   buildAst(getAnnoById(idFromShareLink(line))
     
-    if aspect_lookup is None or trees is None or done is None:
-        raise NotImplemented
-
     if anno.id in done:
         return done[anno.id]
+
+    # corrections
+    if anno.id in correction_lookup:
+        corr = correction_lookup[anno.id]
+        ctags = [t for t in corr.tags if t != 'PROTCUR:correction']
+        if corr.text and not corr.text.startswith('SKIP'):
+            anno._orig_text = anno.text  # woo monkey patttcc
+            anno.text = corr.text
+        if ctags:
+            anno._orig_tags = anno.tags
+            anno.tags = ctags
 
     #types
     if anno.tags:
@@ -276,7 +285,7 @@ def buildAst(anno, annos, aspect_lookup=None, trees=None, depth=0, done=None):
                 if child is None: # sanity
                     print('Problem in', shareLinkFromId(anno.id))
                     continue
-                subtree = buildAst(child, annos, aspect_lookup, trees, depth + 1, done)  # somehwere we try to get [0] and it fails if anno is none... ctrl a n
+                subtree = buildAst(child, annos, aspect_lookup, correction_lookup, trees, done, depth + 1)  # somehwere we try to get [0] and it fails if anno is none... ctrl a n
                 # TODO use depth and trees and maybe something else to figure out if we have already done this sub tree
                 children.append(subtree)
 
@@ -318,11 +327,12 @@ def main():
 
 
     aspect_lookup = {a.references[0]:(a.id, a.text.split(':')[1].split('\n')[0].strip()) if ':' in a.text else (a.id, a.text) for a in annos if 'protc:implied-aspect' in a.tags}
+    correction_lookup = {a.references[0]:a for a in annos if 'PROTCUR:correction' in a.tags}
     trees = []
     done = {}
     for anno in annos:
         if 'protc:input' in anno.tags:
-            te = buildAst(anno, annos, aspect_lookup, trees, done=done)
+            te = buildAst(anno, annos, aspect_lookup, correction_lookup, trees, done)
             #trees.append(te)  # FIXME this duplicates inputs that are further down the list...
 
     #print(trees)
