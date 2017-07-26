@@ -122,7 +122,7 @@ def SKIP(func1, func2):
         success, v, rest = func1(p)
         if not success:
             return success, v, rest
-        success, v2, rest2 = func2(rest)
+        success2, v2, rest2 = func2(rest)
         if success2:
             return success2, v, rest2
         else:
@@ -350,6 +350,22 @@ def parameter_expression(p): return OR(approximate_thing(parameter_expression),
                                        quantity,
                                       )(p)
 
+# tag docs
+whitespace_atom = OR(COMP(' '), COMP('\t'), COMP('\n'))
+whitespace = MANY(whitespace_atom)
+whitespace1 = MANY1(whitespace_atom)  # FIXME this is broken to negation? (extremely slow)
+quote_symbol = COMP('"')
+_string = COMPOSE(quote_symbol, SKIP(MANY(NOT(quote_symbol)), quote_symbol))  # TODO escape
+string = transform_value(_string, lambda v: ''.join(v))
+symbol = OR(char, digit, COMP('-'), COMP('_'), colon, COMP('*'))  # TODO more
+_quote = COMPOSE(COMP("'"), END(MANY1(symbol), whitespace_atom))
+quote = transform_value(_quote, lambda v: ''.join(v))
+tag_doc = SKIP(JOINT(COMPOSE(COMP('('),
+                             COMPOSE(whitespace, COMP('tag-doc'))),
+                     COMPOSE(whitespace1, quote),
+                     COMPOSE(whitespace1, string)),
+               COMP(')'))
+tag_docs = MANY1(SKIP(tag_doc, whitespace))
 
 # patterns:
 # num op num unit
