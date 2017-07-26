@@ -186,8 +186,28 @@ def protc_parameter(anno):
                 error_output.append((success, v, rest))
                 break
 
-    #out = parse_mess(parts)
-    #out = value
+    def format_unit_atom(param_unit, name, prefix=None):
+        if prefix is not None:
+            return f"({param_unit} '{name} '{prefix})"
+        else:
+            return f"({param_unit} '{name})"
+
+    def format_value(list_):
+        out = []
+        if list_:
+            if 0:  # list_[0] == 'param:unit':  # TODO unit atom, unit by itself can be much more complex
+                return format_unit(*list_)
+            else:
+                for v in list_:
+                    if type(v) is list:
+                        v = format_value(v)
+                    if v is not None:
+                        out.append(f'{v}')
+        if out:
+            return '(' + ' '.join(out) + ')'
+
+    if v is not None:
+        v = format_value(v)
     out = str((success, v, rest))
     if front and front != rest:
         out = "'" + front + "', " + out
@@ -216,16 +236,22 @@ def protc_input(anno):
 
     return value
 
-def buildAst(anno, annos):
+def buildAst(anno, annos, aspect_lookup=None, trees=None, depth=0, done=None):
     # check anno.tags for one of our known good tags
     # give that tag, switch to something for that tag
     # check anno.text for hyp.is
     # for line in splitLines(anno.text):
     #   buildAst(getAnnoById(idFromShareLink(line))
     
+    if aspect_lookup is None or trees is None or done is None:
+        raise NotImplemented
+
+    if anno.id in done:
+        return done[anno.id]
+
     #types
     if anno.tags:
-        type_ = anno.tags[0]  # XXX this will fail in nasty ways
+        type_ = [_ for _ in anno.tags if 'protc:' in _][0]  # XXX this will fail in nasty ways
     else:
         print('Anno with no tag!', shareLinkFromId(anno.id))
         type_ = None  # just see where it goes...
@@ -250,10 +276,18 @@ def buildAst(anno, annos):
                 if child is None: # sanity
                     print('Problem in', shareLinkFromId(anno.id))
                     continue
-                subtree = buildAst(child, annos)  # somehwere we try to get [0] and it fails if anno is none... ctrl a n
+                subtree = buildAst(child, annos, aspect_lookup, trees, depth + 1, done)  # somehwere we try to get [0] and it fails if anno is none... ctrl a n
+                # TODO use depth and trees and maybe something else to figure out if we have already done this sub tree
                 children.append(subtree)
 
-    return AstNode(type_, value, anno.id, children)
+    out = AstNode(type_, value, anno.id, children)
+    if type_ == 'protc:parameter*' and anno.id in aspect_lookup:
+        aid, atext = aspect_lookup[anno.id]
+        out = AstNode('protc:implied-aspect', atext, aid, [out])
+    if depth == 0:
+        trees.append(out)
+    done[anno.id] = out
+    return out
 
 def main():
     from protcur import start_loop
@@ -281,11 +315,15 @@ def main():
     tree, extra = creatTree('hl:ma2015.pdf', RFU, 'OUTGOING', 10, json=ref_graph)
 
     irs = sorted(inputRefs(annos))
+
+
+    aspect_lookup = {a.references[0]:(a.id, a.text.split(':')[1].split('\n')[0].strip()) if ':' in a.text else (a.id, a.text) for a in annos if 'protc:implied-aspect' in a.tags}
     trees = []
-    for _ in annos:
-        if 'protc:input' in _.tags:
-            te = buildAst(_, annos)
-            trees.append(te)
+    done = {}
+    for anno in annos:
+        if 'protc:input' in anno.tags:
+            te = buildAst(anno, annos, aspect_lookup, trees, done=done)
+            #trees.append(te)  # FIXME this duplicates inputs that are further down the list...
 
     #print(trees)
     with open('/tmp/protcur.rkt', 'wt') as f:

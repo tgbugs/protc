@@ -82,6 +82,9 @@ def JOINT(*funcs, join=False):  # FIXME something is up with multichar tokens wh
         return success, matches, rest 
     return joint
 
+def JOINT_OR_FIRST(*funcs, join=False):  # TODO improve performance in cases where there is a base that should return true even when the rest fails
+    pass
+
 def COMPOSE(func1, func2):
     def compose(p):
         success, v, rest = func1(p)
@@ -158,6 +161,11 @@ def transform_value(parser_func, func_to_apply):
             return success, value, rest
     return transformed
 
+def PVAL(prefix_name):
+    def transformed_prefix(parser_func):
+        return transform_value(parser_func, lambda v: ['param:' + prefix_name] + v)
+    return transformed_prefix
+
 def AT_MOST_ONE(func): return transform_value(TIMES(func, 0, 1), lambda v: v[0] if v else v)
 
 def EXACTLY_ONE(func): return transform_value(TIMES(func, 1, 1), lambda v: v[0] if v else v)
@@ -166,6 +174,7 @@ def EXACTLY_ONE(func): return transform_value(TIMES(func, 1, 1), lambda v: v[0] 
 # units
 
 DEGREES_UNDERLINE = b'\xc2\xba'.decode()  # º sometimes pdfs misencode these
+DEGREES_FEAR = b'\xe2\x97\xa6' # this thing is scary and I have no id what it is or why it wont change color ◦
 def get_quoted_list(filename):
     with open(os.path.expanduser('~/ni/protocols/rkt/units/' + filename), 'rt') as f:
         lines = [_.split(';')[0].strip() for _ in f.readlines()]
@@ -274,7 +283,9 @@ maybe_exponent = transform_value(AT_MOST_ONE(exponent), lambda v: 'exponent')  #
 unit_dimension = JOINT(unit_atom, maybe_exponent, int_)
 unit_base = OR(unit_dimension, unit_atom)  # FIXME this is a hilariously inefficient way to get right associativity, there are better ways
 def unit(p):  # TODO cases like '5 mg mL–1' need to be carful with '5mg made to' since that would parse as mg m :/
-    return OR(JOINT(unit_base, COMPOSE(spaces, unit_op), COMPOSE(spaces, unit), join=False), unit_base)(p)  # beware false order of operations
+    func = OR(JOINT(unit_base, COMPOSE(spaces, unit_op), COMPOSE(spaces, unit), join=False), unit_base)
+    func = transform_value(func, lambda v: [v[1], v[0]] if len(v) == 2 else v)  # the unit must always be there so it should be first
+    return func(p)  # beware false order of operations
 
 def plus_or_minus_thing(thing): return JOINT(plus_or_minus, COMPOSE(spaces, thing), join=False)
 
@@ -289,19 +300,19 @@ post_natal_day = transform_value(P, lambda v: ['postnatal-day'])  # FIXME note t
 _fold_prefix = END(by, num)
 fold_prefix = transform_value(_fold_prefix, lambda v: ['fold'])
 
-prefix_unit = OR(ph, post_natal_day, fold_prefix)
+prefix_unit = PVAL('prefix-unit')(OR(ph, post_natal_day, fold_prefix))
 _prefix_quantity = JOINT(prefix_unit, COMPOSE(spaces, num))  # OR(JOINT(fold, num))
 prefix_quantity = transform_value(_prefix_quantity, lambda v: [v[1], v[0]])
 
 _percent = COMP('%')
 percent = transform_value(_percent, lambda v: ['percent'])
 fold_suffix = transform_value(END(by, NOT(num)), lambda v: ['fold'])  # NOT(num) required to prevent issue with dimensions
-suffix_unit = OR(percent, unit)
-suffix_quantity_no_space = JOINT(num, EXACTLY_ONE(fold_suffix))  # FIXME this is really bad :/ and breaks dimensions...
+suffix_unit = PVAL('unit')(OR(percent, unit))
+suffix_quantity_no_space = JOINT(num, PVAL('unit')(EXACTLY_ONE(fold_suffix)))  # FIXME this is really bad :/ and breaks dimensions...
 suffix_quantity = OR(suffix_quantity_no_space, JOINT(num, COMPOSE(spaces, AT_MOST_ONE(suffix_unit))))  # this catches the num by itself and leaves a blank unit
 #suffix_quantity1 = OR(suffix_quantity_no_space, JOINT(num, COMPOSE(spaces, EXACTLY_ONE(suffix_unit))))
 
-quantity = OR(prefix_quantity, suffix_quantity)
+quantity = PVAL('quantity')(OR(prefix_quantity, suffix_quantity))
 #quantity_require_unit = OR(prefix_quantity, suffix_quantity1)
 #quantity_with_uncertainty = JOINT(quantity, COMPOSE(spaces, plus_or_minus_thing(quantity)))  # could be error or could be a range spec, also 2nd quantity needs to require unit?? is there some way to do 'if not a then b?' or 'a unit must be in here somwhere?'
 
@@ -311,8 +322,8 @@ sq = COMPOSE(spaces, quantity)
 sby = COMPOSE(spaces, by)
 dimensions = OR(JOINT(quantity, sby, sq, sby, sq), JOINT(quantity, sby, sq))  # ick
 
-fold = OR(transform_value(JOINT(by, num, join=False), lambda v: [v[1], v[0]]),  # if we have 'force no space' in suffix/prefix can replace
-                          JOINT(num, by, join=False))
+#fold = OR(transform_value(JOINT(by, num, join=False), lambda v: [v[1], v[0]]),  # if we have 'force no space' in suffix/prefix can replace
+                          #JOINT(num, by, join=False))
 
 prefix_operator = OR(plus_or_minus, comparison)
 infix_operator = OR(plus_or_minus, range_indicator, multiplication, division, exponent)  # colon? doesn't really operate on quantities, note that * and / do not interfere with the unit parsing because that takes precedence
@@ -326,7 +337,7 @@ def approximate_thing(thing): return JOINT(EXACTLY_ONE(approx), COMPOSE(spaces, 
 
 def _C_for_temp(p): return comp(p, 'C')
 
-C_for_temp = transform_value(_C_for_temp, lambda v: [_silookup['~oC']])
+C_for_temp = PVAL('unit')(transform_value(_C_for_temp, lambda v: [_silookup['degrees-celcius']]))
 temp_for_biology = JOINT(num, C_for_temp, join=False)
 
 # TODO objective specifications...
@@ -361,7 +372,7 @@ def main():
              "–20°C", "<10 mV", "–70 ± 1 mV", "30 to 150 pA",
              "310 mosmol/l", "13–16 days old", "50 x 50 um",
              "~3.5 - 6 Mohms", "pH 7.3", "17–23 d old", "10 –100",
-             "250 +- 70 um", "20±11 mm", "+- 20 degrees"
+             "250 +- 70 um", "20±11 mm", "+- 20 degrees",
              '0.1 mg kg–1', '75  mg / kg', '40x', 'x100',
              '200μm×200μm×200μm', '20--29 days', '4 °C', '10×10×10',
              '10 kg * mm^2 / s^2', '10 * 1.1 ^ 30 / 12'
