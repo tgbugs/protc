@@ -188,12 +188,12 @@ siprefix = OR(*make_funcs(col0(_SIPREFS), _siplookup))
 #siunit = OR(*make_funcs(col0(_SIUNITS) + col0(_EXTRAS)))
 siunit = OR(*make_funcs(col0(_SIUNITS) + col0(_EXTRAS) +  # need both here to avoid collisions in unit_atom slower but worth it?
                              col1(_SIUNITS) + col1(_EXTRAS), _silookup))
+
 unit_atom = OR(JOINT(siprefix, siunit, join=False), JOINT(siunit, join=False))  # have to use OR cannot use TIMES  FIXME siunit by itself needs to not be followed by another char? so NOT(siunit)  (different than kgm/s example I used before...)
+exponent = COMP('^')
 def division(p): return comp(p, '/')
 def multiplication(p): return comp(p, '*')
 unit_op = OR(division, multiplication)
-def unit(p):  # TODO cases like '5 mg mL–1' need to be carful with '5mg made to' since that would parse as mg m :/
-    return OR(JOINT(unit_atom, COMPOSE(spaces, unit_op), COMPOSE(spaces, unit), join=False), unit_atom)(p)  # beware false order of operations
 
 #siprefix = OR(*[lambda p, t=tok: comp(p, t) for tok, n in SIPREFS])  # that thing about late binding and lambdas..
 #siunit = OR(*[lambda p, t=tok: comp(p, t) for tok, n in SIUNITS])  # no real closures, wew lad >_<
@@ -250,7 +250,6 @@ x = COMP('x')
 by = OR(cross, x)
 def _approx(p): return comp(p, '~')
 approx = transform_value(_approx, lambda v: 'approximately')
-#op = OR(plus_or_minus, explicit_range, lt, gt, by)
 digits = [str(_) for _ in range(10)]
 def digit(p): return oper(p, lambda d: d in digits)
 def point(p): return comp(p,'.')
@@ -264,23 +263,24 @@ _float_ = JOINT(TIMES(dash_thing, 0, 1),
 float_ = transform_value(_float_, lambda f: float(''.join(f)))
 E = COMP('E')
 times = COMP('*')
-exponental_notation = JOINT(OR(float_, int_),
+exponental_notation = JOINT(OR(float_, int_),  # FIXME not including as a num for now because it is sometimes used distributively across plust-or-minus infix
                             COMPOSE(spaces, OR(by, times)),
                             COMPOSE(spaces, COMP('10')),
-                            COMP('^'), int_)
+                            exponent, int_)
 scientific_notation = JOINT(OR(float_, int_), E, int_)
-num = OR(scientific_notation, exponental_notation, float_, int_, num_word)  # float first so that int doesn't capture it
+num = OR(scientific_notation, float_, int_, num_word)  # float first so that int doesn't capture it
+
+maybe_exponent = transform_value(AT_MOST_ONE(exponent), lambda v: 'exponent')  # ICK not the best way...
+unit_dimension = JOINT(unit_atom, maybe_exponent, int_)
+unit_base = OR(unit_dimension, unit_atom)  # FIXME this is a hilariously inefficient way to get right associativity, there are better ways
+def unit(p):  # TODO cases like '5 mg mL–1' need to be carful with '5mg made to' since that would parse as mg m :/
+    return OR(JOINT(unit_base, COMPOSE(spaces, unit_op), COMPOSE(spaces, unit), join=False), unit_base)(p)  # beware false order of operations
 
 def plus_or_minus_thing(thing): return JOINT(plus_or_minus, COMPOSE(spaces, thing), join=False)
 
 def to(p): return comp(p, 'to')
 range_indicator = transform_value(OR(thing_accepted_as_a_dash, to), lambda v: 'range')
 def range_thing(func): return JOINT(func, COMPOSE(spaces, range_indicator), COMPOSE(spaces, func))
-#def prefix_range_thing(func, alt): return JOINT(func,
-                                                #COMPOSE(spaces, range_indicator),
-                                                #COMPOSE(spaces, OR(func, alt)))
-#ph_value = JOINT(ph, COMPOSE(spaces, num), join=False)
-#ph_range = prefix_range_thing(ph_value, num)
 
 def _ph(p): return comp(p, 'pH')
 ph = transform_value(_ph, lambda v: [v])
@@ -293,7 +293,7 @@ prefix_unit = OR(ph, post_natal_day, fold_prefix)
 _prefix_quantity = JOINT(prefix_unit, COMPOSE(spaces, num))  # OR(JOINT(fold, num))
 prefix_quantity = transform_value(_prefix_quantity, lambda v: [v[1], v[0]])
 
-def _percent(p): return comp(p, '%')
+_percent = COMP('%')
 percent = transform_value(_percent, lambda v: ['percent'])
 fold_suffix = transform_value(END(by, NOT(num)), lambda v: ['fold'])  # NOT(num) required to prevent issue with dimensions
 suffix_unit = OR(percent, unit)
@@ -306,8 +306,6 @@ quantity = OR(prefix_quantity, suffix_quantity)
 #quantity_with_uncertainty = JOINT(quantity, COMPOSE(spaces, plus_or_minus_thing(quantity)))  # could be error or could be a range spec, also 2nd quantity needs to require unit?? is there some way to do 'if not a then b?' or 'a unit must be in here somwhere?'
 
 
-#range_ = JOINT(quantity, COMPOSE(spaces, range_indicator), COMPOSE(spaces, quantity), join=False)
-#range_ = range_thing(quantity)
 dilution_factor = JOINT(int_, colon, int_, join=False)
 sq = COMPOSE(spaces, quantity)
 sby = COMPOSE(spaces, by)
@@ -316,13 +314,12 @@ dimensions = OR(JOINT(quantity, sby, sq, sby, sq), JOINT(quantity, sby, sq))  # 
 fold = OR(transform_value(JOINT(by, num, join=False), lambda v: [v[1], v[0]]),  # if we have 'force no space' in suffix/prefix can replace
                           JOINT(num, by, join=False))
 
-#interval = JOINT(comparison, COMPOSE(spaces, quantity), join=False)
-
-
 prefix_operator = OR(plus_or_minus, comparison)
-infix_operator = OR(plus_or_minus, range_indicator)  # colon? doesn't really operate on quantities 
+infix_operator = OR(plus_or_minus, range_indicator, multiplication, division, exponent)  # colon? doesn't really operate on quantities, note that * and / do not interfere with the unit parsing because that takes precedence
 prefix_expression = JOINT(prefix_operator, COMPOSE(spaces, quantity))
-infix_expression = JOINT(quantity, COMPOSE(spaces, infix_operator), COMPOSE(spaces, quantity))
+def infix_expression(p): return JOINT(quantity,
+                                      COMPOSE(spaces, infix_operator),
+                                      COMPOSE(spaces, OR(infix_expression, quantity)))(p)  # sigh, not being able to start with yourself
 expression = OR(prefix_expression, infix_expression)  # FIXME this doesn't work if you have prefix -> infix are there cases that can happen?
 
 def approximate_thing(thing): return JOINT(EXACTLY_ONE(approx), COMPOSE(spaces, thing), join=False)
@@ -336,16 +333,10 @@ temp_for_biology = JOINT(num, C_for_temp, join=False)
 
 def parameter_expression(p): return OR(approximate_thing(parameter_expression),
                                        dimensions,
-                                       #interval,
-                                       #range_,
-                                       #fold,
                                        dilution_factor,
                                        temp_for_biology,
                                        expression,
-                                       #quantity_with_uncertainty,
-                                       #quantity_require_unit,
                                        quantity,
-                                       #plus_or_minus_thing(quantity),
                                       )(p)
 
 
@@ -372,12 +363,13 @@ def main():
              "~3.5 - 6 Mohms", "pH 7.3", "17–23 d old", "10 –100",
              "250 +- 70 um", "20±11 mm", "+- 20 degrees"
              '0.1 mg kg–1', '75  mg / kg', '40x', 'x100',
-             '200μm×200μm×200μm', '20--29 days', '4 °C', '10×10×10'
+             '200μm×200μm×200μm', '20--29 days', '4 °C', '10×10×10',
+             '10 kg * mm^2 / s^2', '10 * 1.1 ^ 30 / 12'
             )
     weirds = ("One to 5", "100-Hz", "25 ng/ul)", "34–36°C.",
               '3*10^6 infectious particles/mL',
-              '4.7 +- 0.6 x 10^7 / mm^3', '1,850',
-              '4C', 'three', 'Four', 'P28.5±2 days'
+              '4.7 +- 0.6 x 10^7 / mm^3',  # FIXME this is ambigious? YES VERY also unit dimensionality...
+              '1,850', '4C', 'three', 'Four', 'P28.5±2 days'
              )
     should_fail = ('~~~~1',
                    "(pH 7.3",
