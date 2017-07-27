@@ -6,7 +6,7 @@ import ast
 from collections import Counter
 from IPython import embed
 from pyontutils.hierarchies import creatTree
-from pyontutils.utils import makeGraph, makePrefixes
+from pyontutils.utils import makeGraph, makePrefixes, async_getter
 from pyontutils.scigraph_client import Vocabulary
 import parsing
 from hypothesis import HypothesisAnnotation
@@ -388,10 +388,13 @@ def main():
 
     global annos  # this is too useful not to do
     annos, stream_loop = start_loop()  # TODO memoize annos... and maybe start with a big offset?
+
+    input_text_args = [(basic_start(a).strip(),) for a in annos if 'protc:input' in a.tags or 'protc:output' in a.tags]
+    async_getter(sgv.findByTerm, input_text_args)  # prime the cache FIXME issues with conflicting loops...
+
     stream_loop.start()
 
     i = identifiers(annos)
-    #print(i)
 
     t = citation_tree(annos)
     PREFIXES = {'protc':'http://protc.olympiangods.org/curation/tags/',
@@ -408,6 +411,7 @@ def main():
     tree, extra = creatTree('hl:ma2015.pdf', RFU, 'OUTGOING', 10, json=ref_graph)
 
     irs = sorted(inputRefs(annos))
+
 
     trees = makeAst()
     with open('/tmp/protcur.rkt', 'wt') as f:
