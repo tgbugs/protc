@@ -133,7 +133,7 @@ def render_idents(idents):
     #print(out)
     return out
 
-def render_2col_table(dict_, h1, h2, uriconv=lambda a:a):
+def render_2col_table(dict_, h1, h2, uriconv=lambda a:a):  # FIXME this sucks and uriconv only works on the first row...
     output = []
     output.append(table_style)
     output.append(f'<tr><th>{h1}</th><th>{h2}</th></tr>')
@@ -161,7 +161,12 @@ def main():
 
     @app.route('/curation/tags', methods=['GET'])
     def route_tags():
-        tags = {t:d for t, d in tagdefs(annos) if all(p not in t for p in ('RRID:', 'NIFORG:', 'CHEBI:')) }
+        querybase = ''
+
+        tags = {t:f'<a href=https://hypothes.is/search?q=tag:{t}>{d}</a>'
+                for t, d in tagdefs(annos).items()
+                if all(p not in t for p in ('RRID:', 'NIFORG:', 'CHEBI:')) }
+    
         def uriconv(v):
             uri = request.base_url + '/' + v
             return uri
@@ -184,7 +189,7 @@ def main():
             out += f'<a href={url}>{route}</a> <br>'
         return out
 
-    app.debug = False
+    app.debug = True
     app.run(host='localhost', port=7000, threaded=True)  # nginxwoo
     os.sys.exit()
 

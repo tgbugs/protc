@@ -102,7 +102,7 @@ def tagdefs(annos):
             tags[tag] += 1
     return dict(tags)
 
-def idFromShareLink(link):
+def idFromShareLink(link):  # XXX warning this will break
     if 'hyp.is' in link:
         id_ = link.split('/')[3]
         return id_
@@ -110,20 +110,28 @@ def idFromShareLink(link):
 def shareLinkFromId(id_):
     return 'https://hyp.is/' + id_
 
+def shareLinkFromAnno(anno):
+    if anno.type == 'reply':
+        #print(f'WARNING: Reply {anno.id} to {shareLinkFromId(parent.id)}')
+        parent = getParentForReply(anno)
+        return shareLinkFromId(parent.id)
+    else:
+        return shareLinkFromId(anno.id)
+
 def splitLines(text):
     for line in text.split('\n'):
         yield line
 
 def inputRefs(annos):
     for anno in annos:
-        if 'protc:input' in anno.tags:
+        if any(t in anno.tags for t in ('protc:input', 'protc:*measure', 'protc:symbolic-measure')):
             for line in splitLines(anno.text):
                 if line:
                     id_ = idFromShareLink(line)
                     if id_:
                         yield id_
 
-def getAnnoById(id_, annos):
+def getAnnoById(id_):
     try:
         return [_ for _ in annos if _.id == id_][0]
     except IndexError:
@@ -131,13 +139,15 @@ def getAnnoById(id_, annos):
         return None
 
 class AstNode:
-    def __init__(self, type_, value, anno_id, children):
+    def __init__(self, type_, value, anno, children):
         self.type_ = type_
-        self.value = value.strip()
-        self.anno_id = anno_id
+        self.value = value.strip() if type(value) == str else value
+        self.anno_id = anno.id
         self.children = children
+        self.shareLink = shareLinkFromAnno(anno)
+
     def __repr__(self, top=True, depth=1, nparens=1, plast=True):
-        link = f'  ; {shareLinkFromId(self.anno_id)}'
+        link = f'  ; {self.shareLink}'
 
         if self.children:
             linestart = '\n' + ' ' * 2 * depth
@@ -159,38 +169,73 @@ class AstNode:
                     raise TypeError('%s is not an AstNode' % c)
                 cs.append(s)
             childs = link + linestart + linestart.join(cs)
-
         else:
             childs = ')' * nparens + link  
 
+        if self.type_ == 'protc:parameter*' or self.type_ == 'protc:invariant':
+            value = repr(self.value)
+        else:
+            value = '"' + self.value.replace('"', '\\"') + '"'
+
         start = '\n(' if top else '('
-        try:
-            value = int(self.value)
-        except ValueError:
-            value = '"' + self.value + '"'
         return f'{start}{self.type_} {value}{childs}'
 
-test_params = []
-def protc_parameter(anno):
-    if anno.text:
+    def __eq__(self, other):
+        return self.anno_id == other.anno_id
+
+    def __gt__(self, other):
+        return repr(self) > repr(other)
+
+    def __lt__(self, other):
+        return not self.__gt__(other)
+
+def getParentForReply(anno):
+    if anno.type != 'reply':
+        return anno
+    else:
+        return getParentForReply(getAnnoById(anno.references[0]))
+
+def basic_start(anno):
+    if anno.text and not anno.text.startswith('SKIP') and not anno.text.startswith('https://hyp.is'):
         value = anno.text
         error = ('text found for annotaiton in addition to exact\n'
                  f'exact: {anno.exact}\n'
                  f'text: {anno.text}')
         error_output.append(error)
-    else:
+    elif anno.exact is not None:  # not a reply
         value = anno.exact
+    elif anno.type == 'reply':
+        value = ''
+    else:
+        raise ValueError(f'{anno.id} {shareLinkFromAnno(anno)} has no text and no exact and is not a reply.')
+    return value
 
+class ParameterValue:
+    def __init__(self, success, v, rest, front):
+        self.value = success, v, rest, front
+    def __repr__(self):
+        success, v, rest, front = self.value
+        if not success:
+            out = str((success, v, rest))
+        else:
+            out = v + f' (rest-front "{rest}" "{front}")'
+        return out
+
+test_params = []
+def protc_parameter(anno):
+    value = basic_start(anno)
     #cleaned = value.strip(' ').strip('(')
-    cleaned = value.replace('mL–1', '/mL').replace('kg–1','/kg')  # FIXME temporary (and bad) fix for superscript issues
+    cleaned = value.replace(' mL–1', ' * mL–1').replace(' kg–1',' * kg–1')  # FIXME temporary (and bad) fix for superscript issues
     cleaned = cleaned.strip()
+    #cleaned = value.strip()
     cleaned_orig = cleaned
 
     # ignore gargabe at the start
     success = False
     front = ''
     while not success:
-        success, v, rest = parsing.parameter_expression(cleaned)
+        success_always_true, v, rest = parsing.parameter_expression(cleaned)
+        success = v[0] != 'param:parse-failure'
         if not success:
             if len(cleaned) > 1:
                 more_front, cleaned = cleaned[0], cleaned[1:]
@@ -223,10 +268,7 @@ def protc_parameter(anno):
 
     if v is not None:
         v = format_value(v)
-    out = str((success, v, rest))
-    if front and front != rest:
-        out = "'" + front + "', " + out
-
+    out = ParameterValue(success, v, rest, front)
     test_params.append((value, (success, v, rest)))
     return out
 
@@ -235,7 +277,7 @@ def protc_invariant(anno):
 
 test_input = []
 def protc_input(anno):
-    value = anno.text if anno.type == 'reply' else anno.exact  # TODO
+    value = basic_start(anno)
     value = value.strip()
     data = sgv.findByTerm(value)  # TODO could try the annotate endpoint?
     if data:
@@ -251,14 +293,14 @@ def protc_input(anno):
 
     return value
 
-def buildAst(anno, annos, aspect_lookup, correction_lookup, trees, done, depth=0):
+def buildAst(anno, implied_lookup, correction_lookup, trees, done, depth=0):
     # check anno.tags for one of our known good tags
     # give that tag, switch to something for that tag
     # check anno.text for hyp.is
     # for line in splitLines(anno.text):
     #   buildAst(getAnnoById(idFromShareLink(line))
     
-    if anno.id in done:
+    if anno.id in done:  # woo memoization
         return done[anno.id]
 
     # corrections
@@ -276,7 +318,7 @@ def buildAst(anno, annos, aspect_lookup, correction_lookup, trees, done, depth=0
     if anno.tags:
         type_ = [_ for _ in anno.tags if 'protc:' in _][0]  # XXX this will fail in nasty ways
     else:
-        print('Anno with no tag!', shareLinkFromId(anno.id))
+        print('Anno with no tag!', shareLinkFromAnno(anno))
         type_ = None  # just see where it goes...
 
     #values
@@ -286,31 +328,57 @@ def buildAst(anno, annos, aspect_lookup, correction_lookup, trees, done, depth=0
         value = protc_invariant(anno)
     elif type_ == 'protc:input':
         value = protc_input(anno)
+    #elif type_ == 'protc:*measure':
+    #elif type_ == 'protc:symbolic-measure':
     else:
-        value = anno.exact
+        value = basic_start(anno)
 
     # next level
     children = []
-    for line in splitLines(anno.text):
-        if line:
-            id_ = idFromShareLink(line)
-            if id_ is not None:
-                child = getAnnoById(id_, annos)
-                if child is None: # sanity
-                    print('Problem in', shareLinkFromId(anno.id))
-                    continue
-                subtree = buildAst(child, annos, aspect_lookup, correction_lookup, trees, done, depth + 1)  # somehwere we try to get [0] and it fails if anno is none... ctrl a n
-                # TODO use depth and trees and maybe something else to figure out if we have already done this sub tree
-                children.append(subtree)
+    if not anno.text.startswith('SKIP'):
+        for line in splitLines(anno.text):
+            if line:
+                id_ = idFromShareLink(line)
+                if id_ is not None:
+                    child = getAnnoById(id_)
+                    if child is None: # sanity
+                        print('Problem in', shareLinkFromAnno(anno))
+                        continue
+                    try:
+                        subtree = buildAst(child, implied_lookup, correction_lookup, trees, done, depth + 1)  # somehwere we try to get [0] and it fails if anno is none... ctrl a n
+                        children.append(subtree)
+                    except RecursionError:
+                        print('Circular link in', shareLinkFromAnno(anno))
 
-    out = AstNode(type_, value, anno.id, children)
-    if type_ == 'protc:parameter*' and anno.id in aspect_lookup:
-        aid, atext = aspect_lookup[anno.id]
-        out = AstNode('protc:implied-aspect', atext, aid, [out])
+    out = AstNode(type_, value, anno, children)
+    #if type_ == 'protc:parameter*' and anno.id in implied_lookup:
+    if anno.id in implied_lookup:
+        a, atext = implied_lookup[anno.id]
+        type_ = [t for t in a.tags if t.startswith('protc:implied-')][0]
+        out = AstNode(type_, atext, a, [out])
     if depth == 0:
         trees.append(out)
     done[anno.id] = out
     return out
+
+def makeAst():
+    """ Outer wrapper that manages setup for buildAst """
+    implied_lookup = {a.references[0]:
+                     (a, a.text.split(':')[1].split('\n')[0].strip())
+                     if ':' in a.text
+                     else (a, a.text)
+                     for a in annos
+                     if 'protc:implied-aspect' in a.tags}# or 'protc:implied-output' in a.tags}  # FIXME implied-output is wack
+    correction_lookup = {a.references[0]:a for a in annos if 'PROTCUR:correction' in a.tags}
+    trees = []
+    done = {}
+    head_tags = 'protc:input', 'protc:implied-input', 'protc:*measure', 'protc:symbolic-measure', 'protc:output'  # FIXME output issues
+    skip_tags = 'PROTCUR:correction',
+    for anno in annos:
+        if any(t in anno.tags for t in head_tags) and not any(t in anno.tags for t in skip_tags):
+            buildAst(anno, implied_lookup, correction_lookup, trees, done)
+    # TODO we need a check somewhere that alerts when an input is not an output and has no parents -> dangling curation status
+    return trees
 
 def main():
     from pprint import pformat
@@ -318,6 +386,7 @@ def main():
     from time import sleep
     import requests
 
+    global annos  # this is too useful not to do
     annos, stream_loop = start_loop()  # TODO memoize annos... and maybe start with a big offset?
     stream_loop.start()
 
@@ -340,19 +409,9 @@ def main():
 
     irs = sorted(inputRefs(annos))
 
-
-    aspect_lookup = {a.references[0]:(a.id, a.text.split(':')[1].split('\n')[0].strip()) if ':' in a.text else (a.id, a.text) for a in annos if 'protc:implied-aspect' in a.tags}
-    correction_lookup = {a.references[0]:a for a in annos if 'PROTCUR:correction' in a.tags}
-    trees = []
-    done = {}
-    for anno in annos:
-        if 'protc:input' in anno.tags:
-            te = buildAst(anno, annos, aspect_lookup, correction_lookup, trees, done)
-            #trees.append(te)  # FIXME this duplicates inputs that are further down the list...
-
-    #print(trees)
+    trees = makeAst()
     with open('/tmp/protcur.rkt', 'wt') as f:
-        f.write(repr(trees))
+        f.write(repr(sorted(trees)))
 
     test_inputs = sorted(set(test_input))
     def check_inputs():

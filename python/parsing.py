@@ -166,6 +166,9 @@ def PVAL(prefix_name):
         return transform_value(parser_func, lambda v: ['param:' + prefix_name] + v)
     return transformed_prefix
 
+def STRINGIFY(func):
+    return transform_value(func, lambda v: '"' + str(v).replace('"', '\\"') + '"')
+
 def AT_MOST_ONE(func): return transform_value(TIMES(func, 0, 1), lambda v: v[0] if v else v)
 
 def EXACTLY_ONE(func): return transform_value(TIMES(func, 1, 1), lambda v: v[0] if v else v)
@@ -198,7 +201,11 @@ siprefix = OR(*make_funcs(col0(_SIPREFS), _siplookup))
 siunit = OR(*make_funcs(col0(_SIUNITS) + col0(_EXTRAS) +  # need both here to avoid collisions in unit_atom slower but worth it?
                              col1(_SIUNITS) + col1(_EXTRAS), _silookup))
 
-unit_atom = OR(JOINT(siprefix, siunit, join=False), JOINT(siunit, join=False))  # have to use OR cannot use TIMES  FIXME siunit by itself needs to not be followed by another char? so NOT(siunit)  (different than kgm/s example I used before...)
+def unit_atom(p): 
+    func = OR(JOINT(siprefix, siunit, join=False), JOINT(siunit, join=False))  # have to use OR cannot use TIMES  FIXME siunit by itself needs to not be followed by another char? so NOT(siunit)  (different than kgm/s example I used before...)
+    func = transform_value(func, lambda v: ["'" + e for e in v])  # return unit atoms quoted FIXME maybe we do this a bit later?
+    return func(p)
+
 exponent = COMP('^')
 def division(p): return comp(p, '/')
 def multiplication(p): return comp(p, '*')
@@ -320,7 +327,7 @@ quantity = PVAL('quantity')(OR(prefix_quantity, suffix_quantity))
 dilution_factor = JOINT(int_, colon, int_, join=False)
 sq = COMPOSE(spaces, quantity)
 sby = COMPOSE(spaces, by)
-dimensions = OR(JOINT(quantity, sby, sq, sby, sq), JOINT(quantity, sby, sq))  # ick
+dimensions = PVAL('dimensions')(OR(JOINT(quantity, COMPOSE(sby, sq), COMPOSE(sby, sq)), JOINT(quantity, COMPOSE(sby, sq))))  # ick
 
 #fold = OR(transform_value(JOINT(by, num, join=False), lambda v: [v[1], v[0]]),  # if we have 'force no space' in suffix/prefix can replace
                           #JOINT(num, by, join=False))
@@ -331,7 +338,7 @@ prefix_expression = JOINT(prefix_operator, COMPOSE(spaces, quantity))
 def infix_expression(p): return JOINT(quantity,
                                       COMPOSE(spaces, infix_operator),
                                       COMPOSE(spaces, OR(infix_expression, quantity)))(p)  # sigh, not being able to start with yourself
-expression = OR(prefix_expression, infix_expression)  # FIXME this doesn't work if you have prefix -> infix are there cases that can happen?
+expression = PVAL('expression')(OR(prefix_expression, infix_expression))  # FIXME this doesn't work if you have prefix -> infix are there cases that can happen?
 
 def approximate_thing(thing): return JOINT(EXACTLY_ONE(approx), COMPOSE(spaces, thing), join=False)
 
@@ -348,7 +355,7 @@ def parameter_expression(p): return OR(approximate_thing(parameter_expression),
                                        temp_for_biology,
                                        expression,
                                        quantity,
-                                      )(p)
+                                       PVAL('parse-failure')(TIMES(STRINGIFY(COMP(p)), 1, 1)))(p)  # now this is some stupid shit right here
 
 # tag docs
 whitespace_atom = OR(COMP(' '), COMP('\t'), COMP('\n'))
