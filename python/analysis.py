@@ -30,6 +30,15 @@ def url_doi(doi):
 def url_pmid(pmid):
     return 'https://www.ncbi.nlm.nih.gov/pubmed/' + pmid
 
+# docs
+
+def readTagDocs():
+    with open('../protc-tags.rkt', 'rt') as f:
+        text = f.read()
+    success, docs, rest = parsing.tag_docs(text)
+    tag_lookup = {tag:doc for _, tag, doc in docs}
+    return tag_lookup
+
 # stats
 
 def citation_tree(annos):

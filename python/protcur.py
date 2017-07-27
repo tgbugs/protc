@@ -4,15 +4,14 @@ import asyncio
 from os import environ
 from datetime import date
 from threading import Thread
+from markdown import markdown
 from hypothesis import HypothesisUtils, HypothesisAnnotation
-from analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid, identifiers, statistics, tagdefs
+from analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid, identifiers, statistics, tagdefs, readTagDocs
 from hypush.subscribe import preFilter, setup_websocket
 from hypush.handlers import filterHandler
 from IPython import embed
 
 from flask import Flask, url_for, redirect, request, render_template, render_template_string, make_response, abort 
-
-
 
 api_token = environ.get('HYP_API_TOKEN', 'TOKEN')  # Hypothesis API token
 username = environ.get('HYP_USERNAME', 'USERNAME') # Hypothesis username
@@ -163,7 +162,17 @@ def main():
     @app.route('/curation/tags', methods=['GET'])
     def route_tags():
         tags = tagdefs(annos)
-        return render_2col_table(tags)
+        def uriconv(v):
+            uri = request.base_url + '/' + v
+            return uri
+        return render_2col_table(tags, uriconv=uriconv)
+
+    @app.route('/curation/tags/<tagname>', methods=['GET'])
+    def route_tags_star(tagname):
+        try:
+            return markdown(readTagDocs()[tagname])  # sure it is slow but it allows live updates
+        except KeyError:
+            return abort(404)
 
     @app.route('/curation', methods=['GET'])
     @app.route('/curation/', methods=['GET'])
