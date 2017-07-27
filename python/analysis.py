@@ -9,7 +9,7 @@ from pyontutils.hierarchies import creatTree
 from pyontutils.utils import makeGraph, makePrefixes, async_getter
 from pyontutils.scigraph_client import Vocabulary
 import parsing
-from hypothesis import HypothesisAnnotation
+from scibot.hypothesis import HypothesisAnnotation
 
 sgv = Vocabulary(cache=True)
 RFU = 'protc:references-for-use'
@@ -196,7 +196,7 @@ def getParentForReply(anno):
         return getParentForReply(getAnnoById(anno.references[0]))
 
 def basic_start(anno):
-    if anno.text and not anno.text.startswith('SKIP') and not anno.text.startswith('https://hyp.is'):
+    if anno.text and not anno.text.startswith('SKIP') and not anno.text.startswith('https://hyp.is') and 'RRID' not in anno.text:
         value = anno.text
         error = ('text found for annotaiton in addition to exact\n'
                  f'exact: {anno.exact}\n'
@@ -293,6 +293,27 @@ def protc_input(anno):
 
     return value
 
+def valueForAnno(anno):
+    #type
+    if anno.tags:
+        type_ = [_ for _ in anno.tags if 'protc:' in _][0]  # XXX this will fail in nasty ways
+    else:
+        print('Anno with no tag!', shareLinkFromAnno(anno))
+        type_ = None  # just see where it goes...
+
+    # value
+    if type_ == 'protc:parameter*':
+        value = protc_parameter(anno)
+    elif type_ == 'protc:invariant':
+        value = protc_invariant(anno)
+    elif type_ == 'protc:input':
+        value = protc_input(anno)
+    #elif type_ == 'protc:*measure':
+    #elif type_ == 'protc:symbolic-measure':
+    else:
+        value = basic_start(anno)
+    return type_, value
+
 def buildAst(anno, implied_lookup, correction_lookup, trees, done, depth=0):
     # check anno.tags for one of our known good tags
     # give that tag, switch to something for that tag
@@ -314,25 +335,7 @@ def buildAst(anno, implied_lookup, correction_lookup, trees, done, depth=0):
             anno._orig_tags = anno.tags
             anno.tags = ctags
 
-    #types
-    if anno.tags:
-        type_ = [_ for _ in anno.tags if 'protc:' in _][0]  # XXX this will fail in nasty ways
-    else:
-        print('Anno with no tag!', shareLinkFromAnno(anno))
-        type_ = None  # just see where it goes...
-
-    #values
-    if type_ == 'protc:parameter*':
-        value = protc_parameter(anno)
-    elif type_ == 'protc:invariant':
-        value = protc_invariant(anno)
-    elif type_ == 'protc:input':
-        value = protc_input(anno)
-    #elif type_ == 'protc:*measure':
-    #elif type_ == 'protc:symbolic-measure':
-    else:
-        value = basic_start(anno)
-
+    type_, value = valueForAnno(anno)
     # next level
     children = []
     if not anno.text.startswith('SKIP'):
@@ -359,6 +362,13 @@ def buildAst(anno, implied_lookup, correction_lookup, trees, done, depth=0):
     if depth == 0:
         trees.append(out)
     done[anno.id] = out
+
+    # restore corrected
+    if anno.id in correction_lookup:
+        if hasattr(anno, '_orig_text'):
+            anno.text = anno._orig_text
+        if hasattr(anno, '_orig_tags'):
+            anno.tags = anno._orig_tags
     return out
 
 def makeAst():
@@ -378,16 +388,21 @@ def makeAst():
         if any(t in anno.tags for t in head_tags) and not any(t in anno.tags for t in skip_tags):
             buildAst(anno, implied_lookup, correction_lookup, trees, done)
     # TODO we need a check somewhere that alerts when an input is not an output and has no parents -> dangling curation status
+    #(protc:implied-input "pcr mix solution")  ; https://hyp.is/WxoSjG46EeewpVfX6gocoQ,  problematic with one text overwriting the other
+    #  I think I need to make it so that non correction replies don't overwrite??? max confusion
     return trees
 
 def main():
     from pprint import pformat
-    from protcur import start_loop
+    from protcur import get_annos, get_annos_from_api, start_loop
     from time import sleep
     import requests
 
+    mem_file = '/tmp/protocol-annotations.pickle'
+
     global annos  # this is too useful not to do
-    annos, stream_loop = start_loop()  # TODO memoize annos... and maybe start with a big offset?
+    annos = get_annos(mem_file)  # TODO memoize annos... and maybe start with a big offset?
+    stream_loop = start_loop(annos, mem_file)
 
     input_text_args = [(basic_start(a).strip(),) for a in annos if 'protc:input' in a.tags or 'protc:output' in a.tags]
     async_getter(sgv.findByTerm, input_text_args)  # prime the cache FIXME issues with conflicting loops...

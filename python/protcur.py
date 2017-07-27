@@ -1,11 +1,12 @@
 #!/usr/bin/env python3.6
 import os
+import pickle
 import asyncio
 from os import environ
 from datetime import date
 from threading import Thread
 from markdown import markdown
-from hypothesis import HypothesisUtils, HypothesisAnnotation
+from scibot.hypothesis import HypothesisUtils, HypothesisAnnotation
 from analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid, identifiers, statistics, tagdefs, readTagDocs, addDocLinks
 from hypush.subscribe import preFilter, setup_websocket
 from hypush.handlers import filterHandler
@@ -43,12 +44,65 @@ def fix_trailing_slash(annotated_urls):
 
 # hypothesis API
 
-def get_annos():
+def get_annos_from_api(offset=0, limit=None):
     h = HypothesisUtils(username=username, token=api_token, group=group, max_results=100000)
-    params = {'group' : h.group }
-    rows = h.search_all(params)
+    params = {'offset':offset,
+              'group':h.group}
+    if limit is None:
+        rows = h.search_all(params)
+    else:
+        params['limit'] = limit
+        obj = h.search(params)
+        rows = obj['rows']
+        print('n replies', limit, len(rows))
+        if 'replies' in obj:
+            rows += obj['replies']
+            print('y replies', limit, len(rows))
     annos = [HypothesisAnnotation(row) for row in rows]
     return annos
+
+def get_annos_from_file(memoization_file):
+    try:
+        with open(memoization_file, 'rb') as f:
+            annos = pickle.load(f)
+        if annos is None:
+            return []
+        else:
+            return annos
+    except FileNotFoundError:
+        return []
+
+def add_missing_annos(annos):
+    offset = 0
+    limit = 200
+    if not annos:
+        new_annos = get_annos_from_api()
+    done = False
+    while not done:
+        new_annos = get_annos_from_api(offset, limit)
+        offset += limit
+        if not new_annos:
+            break
+        for anno in new_annos:
+            if anno not in annos:
+                annos.append(anno)
+            else:
+                done = True
+                break  # assume that annotations return newest first
+
+    #annos = list(set(annos + new_annos))
+    #return annos
+
+def get_annos(memoization_file='/tmp/annotations.pickle'):
+    annos = get_annos_from_file(memoization_file)
+    add_missing_annos(annos)
+    memoize_annos(annos, memoization_file)
+    return annos
+
+def memoize_annos(annos, memoization_file):
+    print(f'annos updated, memoizing new version with, {len(annos)} members')
+    with open(memoization_file, 'wb') as f:
+        pickle.dump(annos, f)
 
 def export_json_impl(annos):
     output_json = [anno.__dict__ for anno in annos]
@@ -58,8 +112,9 @@ def export_json_impl(annos):
 # hypothesis websocket
 
 class protcurHandler(filterHandler):
-    def __init__(self, annos):
+    def __init__(self, annos, memoization_file):
         self.annos = annos
+        self.memoization_file = memoization_file
     def handler(self, message):
         try:
             act = message['options']['action'] 
@@ -71,12 +126,13 @@ class protcurHandler(filterHandler):
                 anno = HypothesisAnnotation(message['payload'][0])
                 self.annos.append(anno)
             #print(len(self.annos), 'annotations.')
+            memoize_annos(self.annos, self.memoization_file)
         except KeyError as e:
             embed()
 
-def streaming(annos):
+def streaming(annos, memoization_file):
     filters = preFilter(groups=[group]).export()
-    filter_handlers = [protcurHandler(annos)]
+    filter_handlers = [protcurHandler(annos, memoization_file)]
     ws_loop = setup_websocket(api_token, filters, filter_handlers)
     return ws_loop 
 
@@ -84,12 +140,11 @@ def loop_target(loop, ws_loop):
     asyncio.set_event_loop(loop)
     loop.run_until_complete(ws_loop())
 
-def start_loop():
-    annos = get_annos()
+def start_loop(annos, memoization_file):
     loop = asyncio.get_event_loop()
-    ws_loop = streaming(annos)
+    ws_loop = streaming(annos, memoization_file)
     stream_loop = Thread(target=loop_target, args=(loop, ws_loop))
-    return annos, stream_loop 
+    return stream_loop 
 
 # rendering
 
@@ -145,7 +200,8 @@ def render_2col_table(dict_, h1, h2, uriconv=lambda a:a):  # FIXME this sucks an
 
 def main():
     app = Flask('protc curation id service')
-    annos, stream_loop = start_loop()
+    annos = get_annos()
+    stream_loop = start_loop(annos, '/tmp/protcur-annos.pickle')
     stream_loop.start()
 
     # routes
