@@ -313,6 +313,7 @@ def buildAst(anno, annos, aspect_lookup, correction_lookup, trees, done, depth=0
     return out
 
 def main():
+    from pprint import pformat
     from protcur import start_loop
     from time import sleep
     import requests
@@ -363,14 +364,28 @@ def main():
             print(url)
             return requests.get(url)
 
-        res = [(_, getBiop(_)) for _ in test_inputs]
-        jsons = [r.json() for t, r in res if r.ok] 
+        res = [(t, getBiop(t)) for t in test_inputs]
+        jsons = [(t, r.json()) for t, r in res if r.ok] 
 
-        def chebis(j): return set((_['@id'], _['prefLabel'] if 'prefLabel' in _ else tuple(_['synonym'])) for _ in j['collection'] if 'CHEBI' in _['@id'])
-        cs = [chebis(j) for j in jsons]
-        return res, jsons, chebis
+        def chebis(j):
+            return set((c['@id'], c['prefLabel'] if 'prefLabel' in c else tuple(c['synonym']))
+                       for c in j['collection'] if 'CHEBI' in c['@id'])
+        cs = [(t, chebis(j)) for t, j in jsons]
+        cs = set((t, r) for t, a in cs for r in a if a)
+        cs = sorted(((t, (c.rsplit('/',1)[-1].replace('_',':'), m)) for t, (c, m) in cs), key=lambda v:v[0])
+        ids_only = sorted(set(list(zip(*cs))[1]), key=lambda v:v[0])
+        check = [(i, sgv.findById(i)) for i in sorted(set(i for i, n in ids_only))]
+        in_ = [c for c, v in check if v]
+        in_val = [(c, v) for c, v in check if v]
+        missing = [c for c, v in check if v is None]
+        ids_only = [(i, n) for i, n in ids_only if i not in in_]
+        cs_out = [(t, (c, n)) for t, (c, n) in cs if c not in in_]
+        return res, jsons, cs_out, ids_only, missing
 
-    #res, jsons, chebis = check_inputs()
+    #res, jsons, cs_out, ids_only, missing = check_inputs()
+    #with open(os.path.expanduser('~/ni/nifstd/chebimissing2.txt'), 'wt') as f: f.write(pformat(cs_out))
+    #with open(os.path.expanduser('~/ni/nifstd/chebimissing_id_names2.txt'), 'wt') as f: f.write(pformat(ids_only))
+    #with open(os.path.expanduser('~/ni/nifstd/chebimissing_ids2.txt'), 'wt') as f: f.write('\n'.join(missing))
 
     embed()
     # HOW DO I KILL THE STREAM LOOP!??!
