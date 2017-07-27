@@ -133,10 +133,10 @@ def render_idents(idents):
     #print(out)
     return out
 
-def render_2col_table(dict_, uriconv=lambda a:a):
+def render_2col_table(dict_, h1, h2, uriconv=lambda a:a):
     output = []
     output.append(table_style)
-    output.append(f'<tr><th>HLN</th><th>Thing</th></tr>')
+    output.append(f'<tr><th>{h1}</th><th>{h2}</th></tr>')
     for hl_name, thing in sorted(dict_.items()):
         output.append(f'<tr><th><a href={uriconv(hl_name)}>{hl_name}</a></th>'
                       f'<th>{thing}</th></tr>')
@@ -157,15 +157,15 @@ def main():
     @app.route('/curation/annotations', methods=['GET'])
     def route_annotations():
         stats = statistics(annos)
-        return render_2col_table(stats, hypothesis_local)
+        return render_2col_table(stats, 'HLN', 'Annotation count', hypothesis_local)
 
     @app.route('/curation/tags', methods=['GET'])
     def route_tags():
-        tags = tagdefs(annos)
+        tags = {t:d for t, d in tagdefs(annos) if all(p not in t for p in ('RRID:', 'NIFORG:', 'CHEBI:')) }
         def uriconv(v):
             uri = request.base_url + '/' + v
             return uri
-        return render_2col_table(tags, uriconv=uriconv)
+        return render_2col_table(tags, 'Tag', 'Count', uriconv=uriconv)
 
     @app.route('/curation/tags/<tagname>', methods=['GET'])
     def route_tags_star(tagname):
