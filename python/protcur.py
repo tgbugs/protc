@@ -6,7 +6,7 @@ from datetime import date
 from threading import Thread
 from markdown import markdown
 from hypothesis import HypothesisUtils, HypothesisAnnotation
-from analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid, identifiers, statistics, tagdefs, readTagDocs
+from analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid, identifiers, statistics, tagdefs, readTagDocs, addDocLinks
 from hypush.subscribe import preFilter, setup_websocket
 from hypush.handlers import filterHandler
 from IPython import embed
@@ -170,7 +170,8 @@ def main():
     @app.route('/curation/tags/<tagname>', methods=['GET'])
     def route_tags_star(tagname):
         try:
-            return markdown(readTagDocs()[tagname])  # sure it is slow but it allows live updates
+            return markdown(addDocLinks(request.base_url.rsplit('/',1)[0],
+                                        readTagDocs()[tagname]))  # sure it is slow but it allows live updates
         except KeyError:
             return abort(404)
 

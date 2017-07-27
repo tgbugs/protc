@@ -1,6 +1,7 @@
 #!/usr/bin/env python3.6
 
 import os
+import re
 import ast
 from collections import Counter
 from IPython import embed
@@ -38,6 +39,10 @@ def readTagDocs():
     success, docs, rest = parsing.tag_docs(text)
     tag_lookup = {tag:doc for _, tag, doc in docs}
     return tag_lookup
+
+def addDocLinks(base_url, doc):
+    prefix = base_url + '/'
+    return re.sub(r'`((?:protc|mo):[^\s]+)`', rf'[\1]({prefix}\1)', doc)
 
 # stats
 
