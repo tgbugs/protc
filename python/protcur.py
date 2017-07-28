@@ -77,21 +77,20 @@ def add_missing_annos(annos):
     limit = 200
     if not annos:
         new_annos = get_annos_from_api()
-    done = False
-    while not done:
-        new_annos = get_annos_from_api(offset, limit)
-        offset += limit
-        if not new_annos:
-            break
-        for anno in new_annos:
-            if anno not in annos:
-                annos.append(anno)
-            else:
-                done = True
-                break  # assume that annotations return newest first
-
-    #annos = list(set(annos + new_annos))
-    #return annos
+        annos.extend(new_annos)
+    else:
+        done = False
+        while not done:
+            new_annos = get_annos_from_api(offset, limit)
+            offset += limit
+            if not new_annos:
+                break
+            for anno in new_annos:
+                if anno not in annos:
+                    annos.append(anno)
+                else:
+                    done = True
+                    break  # assume that annotations return newest first
 
 def get_annos(memoization_file='/tmp/annotations.pickle'):
     annos = get_annos_from_file(memoization_file)
