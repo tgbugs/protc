@@ -780,6 +780,8 @@ a possibility.
 ## Dependencies
 `raco pkg install scribble-math`
 
+## Notes
+`raco exe -l run.rkt` to create a bash launcher
 
 ## License
 Obviously the language specification cannot be copyrighted and will be released
