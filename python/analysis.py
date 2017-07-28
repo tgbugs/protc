@@ -293,6 +293,17 @@ def protc_input(anno):
 
     return value
 
+def protc_implied_input(anno):
+    if ':\ ' in anno.text and 'hyp.is' in anno.text:
+        name_links = anno.text.split(':', 1)[1]
+        name, links = split('\n', 1)
+        value = name
+        anno._orig_text = anno.text
+        anno.text = links
+    else:
+        value = basic_start(anno)
+    return value
+
 def valueForAnno(anno):
     #type
     if anno.tags:
