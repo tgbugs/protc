@@ -60,7 +60,8 @@ def get_annos_from_api(offset=0, limit=None):
         if 'replies' in obj:
             rows += obj['replies']
     annos = [HypothesisAnnotation(row) for row in rows]
-    addReplies(annos)
+    if limit is None:
+        addReplies(annos)
     return annos
 
 def get_annos_from_file(memoization_file):

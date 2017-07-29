@@ -48,17 +48,18 @@ def addParent(anno):
 
 def _addParent(anno, annos):
     if anno.type == 'reply':
-        print(anno.references)
+        #print(anno.references)
         for parent_id in anno.references:
             parent = _getAnnoById(parent_id, annos)
             if parent is None:
-                print('Problem in', shareLinkFromId(anno.id), anno.text)  # no parent AND a replay _HALP_
                 continue
             anno.parent = parent
             if not hasattr(parent, 'replies'):
                 parent.replies = []
             elif anno not in parent.replies:
                 parent.replies.append(anno)
+        if not hasattr(anno, 'parent'):
+            print(f'Parent deleted for {anno.id} {anno.text} {sorted(anno.tags)} {anno.references}')
 
 class AstTreeHelper:
     def __init__(self, annos):
@@ -176,7 +177,7 @@ def getAnnoById(id_):
 
 def _getAnnoById(id_, annos):  # ah the taint of global
     try:
-        return [_ for _ in annos if _.id == id_][0]
+        return [a for a in annos if a.id == id_][0]
     except IndexError as e:
         print('could not find', id_, shareLinkFromId(id_))
         return None
@@ -239,7 +240,10 @@ def _getParentForReply(anno, annos):
     if anno.type != 'reply':
         return anno
     else:
-        return _getParentForReply(_getAnnoById(anno.references[0], annos), annos)
+        for refid in anno.references:
+            ref = _getAnnoById(refid, annos)
+            if ref is not None:
+                return _getParentForReply(ref, annos)
 
 def basic_start(anno):
     if anno.text and not anno.text.startswith('SKIP') and not anno.text.startswith('https://hyp.is') and 'RRID' not in anno.text:
