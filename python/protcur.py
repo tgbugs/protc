@@ -7,7 +7,9 @@ from datetime import date
 from threading import Thread
 from markdown import markdown
 from scibot.hypothesis import HypothesisUtils, HypothesisAnnotation
-from analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid, papers, statistics, tagdefs, readTagDocs, addDocLinks
+import analysis
+from analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid
+from analysis import papers, statistics, tagdefs, readTagDocs, addDocLinks, addReplies, _addParent
 from hypush.subscribe import preFilter, setup_websocket
 from hypush.handlers import filterHandler
 from IPython import embed
@@ -45,6 +47,7 @@ def fix_trailing_slash(annotated_urls):
 # hypothesis API
 
 def get_annos_from_api(offset=0, limit=None):
+    print('yes we have to start from here')
     h = HypothesisUtils(username=username, token=api_token, group=group, max_results=100000)
     params = {'offset':offset,
               'group':h.group}
@@ -57,6 +60,7 @@ def get_annos_from_api(offset=0, limit=None):
         if 'replies' in obj:
             rows += obj['replies']
     annos = [HypothesisAnnotation(row) for row in rows]
+    addReplies(annos)
     return annos
 
 def get_annos_from_file(memoization_file):
@@ -73,25 +77,25 @@ def get_annos_from_file(memoization_file):
 def add_missing_annos(annos):
     offset = 0
     limit = 200
-    if not annos:
-        new_annos = get_annos_from_api()
-        annos.extend(new_annos)
-    else:
-        done = False
-        while not done:
-            new_annos = get_annos_from_api(offset, limit)
-            offset += limit
-            if not new_annos:
-                break
-            for anno in new_annos:
-                if anno not in annos:
-                    annos.append(anno)
-                else:
-                    done = True
-                    break  # assume that annotations return newest first
+    done = False
+    while not done:
+        new_annos = get_annos_from_api(offset, limit)
+        offset += limit
+        if not new_annos:
+            break
+        for anno in new_annos:
+            if anno not in annos:
+                annos.append(anno)
+            else:
+                done = True
+                break  # assume that annotations return newest first
+    addReplies(annos)
 
 def get_annos(memoization_file='/tmp/annotations.pickle'):
     annos = get_annos_from_file(memoization_file)
+    if not annos:
+        new_annos = get_annos_from_api()
+        annos.extend(new_annos)
     add_missing_annos(annos)
     memoize_annos(annos, memoization_file)
     return annos
@@ -121,6 +125,7 @@ class protcurHandler(filterHandler):
                 self.annos.remove(gone)
             if act != 'delete':  # create update
                 anno = HypothesisAnnotation(message['payload'][0])
+                _addParent(anno, self.annos)  # this is safe because time exists!
                 self.annos.append(anno)
             #print(len(self.annos), 'annotations.')
             memoize_annos(self.annos, self.memoization_file)

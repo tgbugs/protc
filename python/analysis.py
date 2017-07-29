@@ -11,6 +11,13 @@ from pyontutils.scigraph_client import Vocabulary
 import parsing
 from scibot.hypothesis import HypothesisAnnotation
 
+from misc.debug import TDB
+
+tdb=TDB()
+printD=tdb.printD
+#printFuncDict=tdb.printFuncDict
+#tdbOff=tdb.tdbOff
+
 sgv = Vocabulary(cache=True)
 RFU = 'protc:references-for-use'
 __script_folder__ = os.path.dirname(os.path.realpath(__file__))
@@ -32,6 +39,35 @@ def url_doi(doi):
 def url_pmid(pmid):
     return 'https://www.ncbi.nlm.nih.gov/pubmed/' + pmid
 
+def addReplies(annos):
+    for anno in annos:
+        _addParent(anno, annos)
+
+def addParent(anno):
+    _addParent(anno, annos)
+
+def _addParent(anno, annos):
+    if anno.type == 'reply':
+        print(anno.references)
+        for parent_id in anno.references:
+            parent = _getAnnoById(parent_id, annos)
+            if parent is None:
+                print('Problem in', shareLinkFromId(anno.id), anno.text)  # no parent AND a replay _HALP_
+                continue
+            anno.parent = parent
+            if not hasattr(parent, 'replies'):
+                parent.replies = []
+            elif anno not in parent.replies:
+                parent.replies.append(anno)
+
+class AstTreeHelper:
+    def __init__(self, annos):
+        self.implied_lookup
+        self.correction_lookup
+        self.trees
+        self.done
+
+#
 # docs
 
 def readTagDocs():
@@ -112,9 +148,12 @@ def shareLinkFromId(id_):
     return 'https://hyp.is/' + id_
 
 def shareLinkFromAnno(anno):
+    return _shareLinkFromAnno(anno, annos)
+
+def _shareLinkFromAnno(anno, annos):
     if anno.type == 'reply':
         #print(f'WARNING: Reply {anno.id} to {shareLinkFromId(parent.id)}')
-        parent = getParentForReply(anno)
+        parent = _getParentForReply(anno, annos)
         return shareLinkFromId(parent.id)
     else:
         return shareLinkFromId(anno.id)
@@ -133,9 +172,12 @@ def inputRefs(annos):
                         yield id_
 
 def getAnnoById(id_):
+    return _getAnnoById(id_, annos)
+
+def _getAnnoById(id_, annos):  # ah the taint of global
     try:
         return [_ for _ in annos if _.id == id_][0]
-    except IndexError:
+    except IndexError as e:
         print('could not find', id_, shareLinkFromId(id_))
         return None
 
@@ -191,10 +233,13 @@ class AstNode:
         return not self.__gt__(other)
 
 def getParentForReply(anno):
+    return _getParentForReply(anno, annos)
+
+def _getParentForReply(anno, annos):
     if anno.type != 'reply':
         return anno
     else:
-        return getParentForReply(getAnnoById(anno.references[0]))
+        return _getParentForReply(_getAnnoById(anno.references[0], annos), annos)
 
 def basic_start(anno):
     if anno.text and not anno.text.startswith('SKIP') and not anno.text.startswith('https://hyp.is') and 'RRID' not in anno.text:
@@ -305,6 +350,10 @@ def protc_implied_input(anno):
         value = basic_start(anno)
     return value
 
+def protc_structured_data(anno):  # TODO we need another type tag here... 
+    value = basic_start(anno)
+    return value
+
 def valueForAnno(anno):
     #type
     if anno.tags:
@@ -322,19 +371,14 @@ def valueForAnno(anno):
         value = protc_input(anno)
     elif type_ == 'protc:implied-input':
         value = protc_implied_input(anno)
+    elif type_ == 'protc:structured-data':
+        value = protc_structured_data(anno)
 
     #elif type_ == 'protc:*measure':
     #elif type_ == 'protc:symbolic-measure':
     else:
         value = basic_start(anno)
     return type_, value
-
-class AstTreeHelper:
-    def __init__(self, annos):
-        self.implied_lookup
-        self.correction_lookup
-        self.trees
-        self.done
 
 
 def buildAst(anno, implied_lookup, correction_lookup, trees, done, depth=0):
@@ -436,7 +480,7 @@ def main():
 
     stream_loop.start()
 
-    i = identifiers(annos)
+    i = papers(annos)
 
     t = citation_tree(annos)
     PREFIXES = {'protc':'http://protc.olympiangods.org/curation/tags/',
