@@ -54,10 +54,8 @@ def get_annos_from_api(offset=0, limit=None):
         params['limit'] = limit
         obj = h.search(params)
         rows = obj['rows']
-        print('n replies', limit, len(rows))
         if 'replies' in obj:
             rows += obj['replies']
-            print('y replies', limit, len(rows))
     annos = [HypothesisAnnotation(row) for row in rows]
     return annos
 
