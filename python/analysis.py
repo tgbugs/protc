@@ -295,9 +295,9 @@ def protc_input(anno):
     return value
 
 def protc_implied_input(anno):
-    if ':\ ' in anno.text and 'hyp.is' in anno.text:
+    if ': ' in anno.text and 'hyp.is' in anno.text:
         name_links = anno.text.split(':', 1)[1]
-        name, links = split('\n', 1)
+        name, links = name_links.split('\n', 1)
         value = name
         anno._orig_text = anno.text
         anno.text = links
@@ -308,7 +308,7 @@ def protc_implied_input(anno):
 def valueForAnno(anno):
     #type
     if anno.tags:
-        type_ = [_ for _ in anno.tags if 'protc:' in _][0]  # XXX this will fail in nasty ways
+        type_ = [_ for _ in anno.tags if 'protc:' in _][0]  # XXX this will fail in nasty ways, suddently strong vs weak typing makes sense
     else:
         print('Anno with no tag!', shareLinkFromAnno(anno))
         type_ = None  # just see where it goes...
@@ -320,6 +320,9 @@ def valueForAnno(anno):
         value = protc_invariant(anno)
     elif type_ == 'protc:input':
         value = protc_input(anno)
+    elif type_ == 'protc:implied-input':
+        value = protc_implied_input(anno)
+
     #elif type_ == 'protc:*measure':
     #elif type_ == 'protc:symbolic-measure':
     else:
@@ -412,6 +415,10 @@ def makeAst():
     #  I think I need to make it so that non correction replies don't overwrite??? max confusion
     return trees
 
+def writeTrees(trees):
+    with open('/tmp/protcur.rkt', 'wt') as f:
+        f.write(repr(sorted(trees)))
+
 def main():
     from pprint import pformat
     from protcur import get_annos, get_annos_from_api, start_loop
@@ -447,10 +454,8 @@ def main():
 
     irs = sorted(inputRefs(annos))
 
-
     trees = makeAst()
-    with open('/tmp/protcur.rkt', 'wt') as f:
-        f.write(repr(sorted(trees)))
+    writeTrees(trees)
 
     test_inputs = sorted(set(test_input))
     def check_inputs():
