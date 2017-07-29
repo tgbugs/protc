@@ -6,13 +6,14 @@ import ast
 from collections import Counter
 from IPython import embed
 from pyontutils.hierarchies import creatTree
-from pyontutils.utils import makeGraph, makePrefixes, async_getter
+from pyontutils.utils import makeGraph, makePrefixes, async_getter 
 from pyontutils.scigraph_client import Vocabulary
 import parsing
 from scibot.hypothesis import HypothesisAnnotation
 
 sgv = Vocabulary(cache=True)
 RFU = 'protc:references-for-use'
+__script_folder__ = os.path.dirname(os.path.realpath(__file__))
 
 error_output = []
 
@@ -34,7 +35,7 @@ def url_pmid(pmid):
 # docs
 
 def readTagDocs():
-    with open('../protc-tags.rkt', 'rt') as f:
+    with open(f'{__script_folder__}/../protc-tags.rkt', 'rt') as f:
         text = f.read()
     success, docs, rest = parsing.tag_docs(text)
     tag_lookup = {tag:doc for _, tag, doc in docs}
@@ -324,6 +325,14 @@ def valueForAnno(anno):
     else:
         value = basic_start(anno)
     return type_, value
+
+class AstTreeHelper:
+    def __init__(self, annos):
+        self.implied_lookup
+        self.correction_lookup
+        self.trees
+        self.done
+
 
 def buildAst(anno, implied_lookup, correction_lookup, trees, done, depth=0):
     # check anno.tags for one of our known good tags

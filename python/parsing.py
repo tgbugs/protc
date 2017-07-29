@@ -1,14 +1,11 @@
 #!/usr/bin/env python3.6
 
 import os
+from pyontutils.utils import coln
 from IPython import embed
 
 infinity = 9999999  # you know it baby, if we go this deep we will get recursion errors
-
-# utility
-
-def col0(inpt): return list(zip(*inpt))[0]
-def col1(inpt): return list(zip(*inpt))[1]
+__script_folder__ = os.path.dirname(os.path.realpath(__file__))
 
 # combinators
 
@@ -196,10 +193,10 @@ def make_funcs(inpt, lookuptable):
         args.append(tvfn)
     return args
 
-siprefix = OR(*make_funcs(col0(_SIPREFS), _siplookup))
-#siunit = OR(*make_funcs(col0(_SIUNITS) + col0(_EXTRAS)))
-siunit = OR(*make_funcs(col0(_SIUNITS) + col0(_EXTRAS) +  # need both here to avoid collisions in unit_atom slower but worth it?
-                             col1(_SIUNITS) + col1(_EXTRAS), _silookup))
+siprefix = OR(*make_funcs(coln(0, _SIPREFS), _siplookup))
+#siunit = OR(*make_funcs(coln(0, _SIUNITS) + coln(0, _EXTRAS)))
+siunit = OR(*make_funcs(list(coln(0, _SIUNITS + _EXTRAS)) + # need both here to avoid collisions in unit_atom slower but worth it?
+                        list(coln(1, _SIUNITS + _EXTRAS)), _silookup))
 
 def unit_atom(p): 
     func = OR(JOINT(siprefix, siunit, join=False), JOINT(siunit, join=False))  # have to use OR cannot use TIMES  FIXME siunit by itself needs to not be followed by another char? so NOT(siunit)  (different than kgm/s example I used before...)
