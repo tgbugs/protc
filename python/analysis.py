@@ -64,11 +64,11 @@ def citation_tree(annos):
 
     return trips
 
-def identifiers(annos):
+def papers(annos):
     idents = {}
     def add_tag_text(hl, anno, tag):
-            if tag in anno.tags:
-                idents[hl][tag] = anno.text.strip()
+        if tag in anno.tags:
+            idents[hl][tag] = anno.text.strip()
 
     for anno in annos:
         hl = get_hypothesis_local(anno.uri)

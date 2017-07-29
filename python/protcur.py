@@ -7,7 +7,7 @@ from datetime import date
 from threading import Thread
 from markdown import markdown
 from scibot.hypothesis import HypothesisUtils, HypothesisAnnotation
-from analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid, identifiers, statistics, tagdefs, readTagDocs, addDocLinks
+from analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid, papers, statistics, tagdefs, readTagDocs, addDocLinks
 from hypush.subscribe import preFilter, setup_websocket
 from hypush.handlers import filterHandler
 from IPython import embed
@@ -205,9 +205,9 @@ def main():
 
     # routes
 
-    @app.route('/curation/identifiers', methods=['GET'])
-    def route_identifiers():
-        return render_idents(identifiers(annos))
+    @app.route('/curation/papers', methods=['GET'])
+    def route_papers():
+        return render_idents(papers(annos))
 
     @app.route('/curation/annotations', methods=['GET'])
     def route_annotations():
@@ -239,7 +239,7 @@ def main():
     @app.route('/curation/', methods=['GET'])
     def route_curation():
         out = ''
-        for route in 'identifiers', 'annotations', 'tags':
+        for route in 'papers', 'annotations', 'tags':
             url = 'http://protc.olympiangods.org/curation/' + route
             out += f'<a href={url}>{route}</a> <br>'
         return out
