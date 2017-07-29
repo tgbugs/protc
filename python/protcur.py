@@ -98,7 +98,7 @@ def get_annos(memoization_file='/tmp/annotations.pickle'):
     memoize_annos(annos, memoization_file)
     return annos
 
-def memoize_annos(annos, memoization_file):
+def memoize_annos(annos, memoization_file):  # FIXME if there are multiple ws listeners we will have race conditions?
     print(f'annos updated, memoizing new version with, {len(annos)} members')
     with open(memoization_file, 'wb') as f:
         pickle.dump(annos, f)
@@ -244,7 +244,7 @@ def main():
             out += f'<a href={url}>{route}</a> <br>'
         return out
 
-    app.debug = True
+    app.debug = False
     app.run(host='localhost', port=7000, threaded=True)  # nginxwoo
     os.sys.exit()
 
