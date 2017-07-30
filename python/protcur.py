@@ -83,7 +83,7 @@ def add_missing_annos(annos):
         if not new_annos:
             break
         for anno in new_annos:
-            if anno not in annos:
+            if anno not in annos:  # this will catch edits
                 annos.append(anno)
             else:
                 done = True

@@ -226,7 +226,7 @@ class Hybrid:  # a better HypothesisAnnotation
         self.references = anno.references
         self.parent  # populate self._replies
         if self not in self._replies:
-            self._replies[self] = set()
+            self._replies[self.id] = set()
 
     def getAnnoById(self, id_):
         try:
@@ -279,8 +279,8 @@ class Hybrid:  # a better HypothesisAnnotation
                 parent = self.getHybridById(parent_id)
                 if parent is not None:
                     if parent not in self._replies:
-                        self._replies[parent] = set()
-                    self._replies[parent].add(self)
+                        self._replies[parent.id] = set()
+                    self._replies[parent.id].add(self)
                     return parent
 
     @property
@@ -288,13 +288,13 @@ class Hybrid:  # a better HypothesisAnnotation
         # for the record, the naieve implementation of this
         # looping over annos everytime is 3 orders of magnitude slower
         try:
-            return self._replies[self]
+            return self._replies[self.id]  # we use self.id here instead of self to avoid recursion on __eq__
         except KeyError:
-            self._replies[self] = set()
+            self._replies[self.id] = set()
             for anno in self.annos:
                 if anno.id not in self.hybrids:
                     h = self.__class__(anno, self.annos)
-            return self._replies[self]
+            return self._replies[self.id]
 
     #@property
     #def type(self):
@@ -443,7 +443,9 @@ class Hybrid:  # a better HypothesisAnnotation
                 f'{childs_text}'
                 f'\n{t}____________________')
     def __eq__(self, other):
-        return self.id == other.id and self.text == other.text and set(self.tags) == set(other.tags)
+        return (self.id == other.id
+                and self.text == other.text
+                and set(self.tags) == set(other.tags))
     
     def __hash__(self):
         return hash(self.__class__.__name__ + self.id)
