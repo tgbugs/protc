@@ -6,17 +6,21 @@ import ast
 from collections import Counter
 from IPython import embed
 from pyontutils.hierarchies import creatTree
-from pyontutils.utils import makeGraph, makePrefixes, async_getter 
+from pyontutils.utils import makeGraph, makePrefixes, async_getter, noneMembers, allMembers, anyMembers
 from pyontutils.scigraph_client import Vocabulary
 import parsing
 from scibot.hypothesis import HypothesisAnnotation
+from desc.prof import profile_me
 
-from misc.debug import TDB
-
-tdb=TDB()
-printD=tdb.printD
-#printFuncDict=tdb.printFuncDict
-#tdbOff=tdb.tdbOff
+try:
+    from misc.debug import TDB
+    tdb=TDB()
+    printD=tdb.printD
+    #printFuncDict=tdb.printFuncDict
+    #tdbOff=tdb.tdbOff
+except ImportError:
+    print('WARNING: you do not have tgbugs misc on this system')
+    printD = print
 
 sgv = Vocabulary(cache=True)
 RFU = 'protc:references-for-use'
@@ -47,6 +51,7 @@ def addParent(anno):
     _addParent(anno, annos)
 
 def _addParent(anno, annos):
+    return  # short circuit
     if anno.type == 'reply':
         #print(anno.references)
         for parent_id in anno.references:
@@ -165,7 +170,7 @@ def splitLines(text):
 
 def inputRefs(annos):
     for anno in annos:
-        if any(t in anno.tags for t in ('protc:input', 'protc:*measure', 'protc:symbolic-measure')):
+        if anyMembers(anno.tags, 'protc:input', 'protc:*measure', 'protc:symbolic-measure'):
             for line in splitLines(anno.text):
                 if line:
                     id_ = idFromShareLink(line)
@@ -181,6 +186,272 @@ def _getAnnoById(id_, annos):  # ah the taint of global
     except IndexError as e:
         print('could not find', id_, shareLinkFromId(id_))
         return None
+
+
+# HypothesisAnnotation class customized to deal with replacing
+#  exact, text, and tags based on its replies
+#  also for augmenting the annotation with distinct fields
+#  using annotation-text:exact or something like that... (currently using PROTCUR:annotation-exact which is super akward)
+#  eg annotation-text:children to say exactly what the fields are when there needs to be more than one
+#  it is possible to figure most of them out from their content but not always
+
+class Hybrid:  # a better HypothesisAnnotation
+    control_tags = 'annotation-correction', 'annotation-tags:replace', 'annotation-tags:add', 'annotation-tags:delete' 
+    prefix_skip_tags = 'PROTCUR:', 'annotation-'
+    text_tags = 'annotation-text:exact', 'annotation-text:text', 'annotation-text:value', 'annotation-text:children', 'annotation-correction'
+    prefix_ast = 'protc:',
+    hybrids = {}  # TODO updates
+    _replies = {}
+    def __new__(cls, anno, annos):
+        try: 
+            self = cls.hybrids[anno.id]
+            if self._text == anno.text and self._tags == anno.tags:
+                #printD(f'{self.id} already exists')
+                return self
+            else:
+                #printD(f'{self.id} already exists but something has changed')
+                return super().__new__(cls)
+        except KeyError:
+            #printD(f'{anno.id} doesnt exist')
+            return super().__new__(cls)
+            
+    def __init__(self, anno, annos):
+        self.annos = annos
+        self.id = anno.id
+        self.hybrids[self.id] = self
+        self._tags = anno.tags
+        self._type = anno.type  # we really need this? anno, pagenote, reply, replies are distinguesd by references as we know
+        self._exact = anno.exact
+        self._text = anno.text
+        self.references = anno.references
+        self.parent  # populate self._replies
+        if self not in self._replies:
+            self._replies[self] = set()
+
+    def getAnnoById(self, id_):
+        try:
+            return [a for a in self.annos if a.id == id_][0]
+        except IndexError as e:
+            print('could not find', id_, shareLinkFromId(id_))
+            return None
+
+    def getHybridById(self, id_):
+        try:
+            return self.hybrids[id_]
+        except KeyError as e:
+            anno = self.getAnnoById(id_)
+            if anno is None:
+                self.hybrids[id_] = None
+                print('Problem in', self.shareLink)  # must come after self.hybrids[id_] = None else RecursionError
+                return None
+            else:
+                h = self.__class__(anno, self.annos)
+                return h
+
+    def _fix_implied_input(self):
+        if ': ' in self.text and 'hyp.is' in self.text:
+            value_children_text = self.text.split(':', 1)[1]
+            value, children_text = value_children_text.split('\n', 1)
+            return value.strip(), children_text.strip()
+        else:
+            return '', ''
+
+    @property
+    def isAstNode(self):
+        return (noneMembers(self._tags, *self.control_tags)
+                and all(noneMembers(tag, *self.prefix_skip_tags) for tag in self._tags)
+                and any(anyMembers(tag, *self.prefix_ast) for tag in self._tags)
+               )
+
+    @property
+    def shareLink(self):
+        if self.parent is not None:
+            return self.parent.shareLink
+        else:
+            return shareLinkFromId(self.id)
+
+    @property
+    def parent(self):
+        if not self.references:
+            return None
+        else:
+            for parent_id in self.references:
+                parent = self.getHybridById(parent_id)
+                if parent is not None:
+                    if parent not in self._replies:
+                        self._replies[parent] = set()
+                    self._replies[parent].add(self)
+                    return parent
+
+    @property
+    def replies(self):
+        # for the record, the naieve implementation of this
+        # looping over annos everytime is 3 orders of magnitude slower
+        try:
+            return self._replies[self]
+        except KeyError:
+            self._replies[self] = set()
+            for anno in self.annos:
+                if anno.id not in self.hybrids:
+                    h = self.__class__(anno, self.annos)
+            return self._replies[self]
+
+    #@property
+    #def type(self):
+
+    @property
+    def exact(self):
+        # FIXME last one wins for multiple corrections? vs first?
+        for reply in self.replies:
+            correction = reply.text_correction('exact')
+            if correction:  # None and ''
+                return correction
+        return self._exact
+
+    @property
+    def text(self):
+        for reply in self.replies:
+            correction = reply.text_correction('text')
+            if correction:
+                return correction
+            correction = reply.text_correction('annotation-correction')
+            if correction:
+                return correction
+
+        if self._text.startswith('SKIP'):
+            return ''
+
+        return self._text
+
+    @property
+    def value(self):
+        for reply in self.replies:
+            correction = reply.text_correction('value')
+            if correction:
+                return correction
+
+        if self.text and not self.text.startswith('https://hyp.is'):
+            if 'RRID' not in self.text:
+                return self.text
+            else:
+                return ''
+        elif 'protc:implied-input' in self.tags:  # FIXME hardcoded fix
+            value, children_text = self._fix_implied_input()
+            if value:
+                return value
+
+        if self.exact is not None:
+            return self.exact
+        elif self._type == 'reply':
+            return ''
+        else:
+            raise ValueError(f'{self.shareLink} {self.id} has no text and no exact and is not a reply.')
+
+    @property
+    def tags(self):
+        skip_tags = []
+        add_tags = []
+        for reply in self.replies:
+            corrections = reply.tag_corrections
+            if corrections is not None:
+                op = corrections[0].split(':',1)[1]
+                if op not in ('delete', 'replace'):
+                    add_tags.extend(corrections[1:])
+                if op not in ('add', 'replace'):
+                    skip_tags.extend(self._cleaned_tags)
+        out = []
+        for tag in self._tags:
+            if tag not in skip_tags:
+                out.append(tag)
+        return out + add_tags
+
+    @property
+    def _cleaned_tags(self):
+        for tag in self.tags:
+            if not any(tag.startswith(prefix) for prefix in self.prefix_skip_tags):
+                yield tag
+
+    @property
+    def tag_corrections(self):
+        tagset = self._tags
+        for ctag in self.control_tags:
+            if ctag in self._tags:
+                if ctag == 'annotation-correction':
+                    ctag = 'annotation-tags:replace'
+                return [ctag] + list(self._cleaned_tags)
+
+    def text_correction(self, suffix):  # also handles additions
+        ctag = 'annotation-text:' + suffix
+        if ctag in self.tags:
+            return self.text
+        elif suffix == 'children' and self.text.startswith('https://hyp.is'):
+            return self.text
+
+    @property
+    def _children_text(self):
+        for reply in self.replies:
+            correction = reply.text_correction('children')
+            if correction:
+                return correction
+        if 'hyp.is' not in self.text:
+            return ''
+        elif 'protc:implied-input' in self.tags:  # FIXME hardcoded fix
+            value, children_text = self._fix_implied_input()
+            if children_text:
+                return children_text
+        elif 'PROTCUR:feedback' in self.tags and noneMembers(self.tags, *self.text_tags):
+            # accidental inclusion of feedback that doesn't start with SKIP eg https://hyp.is/HLv_5G43EeemJDuFu3a5hA
+            return ''
+        return self.text
+
+    @property
+    def children(self):
+        for line in splitLines(self._children_text):
+            if line:
+                id_ = idFromShareLink(line)
+                if id_ is not None:
+                    child = self.getHybridById(id_)
+                    if child is None: # sanity
+                        continue
+                    yield child  # buildAst will have a much eaiser time operating on these single depth childs
+
+    def __repr__(self, depth=0):
+        start = '|' if depth else ''
+        t = ' ' * 4 * depth + start
+        ct = f'\n{t}cleaned tags: {list(self._cleaned_tags)}' if self.references else ''
+
+        replies = ''.join(r.__repr__(depth + 1) for r in self.replies)
+        replies_text = f'\n{t}replies:{replies}' if replies else ''
+        childs = ''.join(c.__repr__(depth + 1)
+                         if self not in c.children
+                         else f'\n{" " * 4 * (depth + 1)}* {c.id} has a circular reference with this node {self.id}'  # avoid recursion
+                         for c in self.children
+                         if c is not self.parent  # avoid accidental recursion with replies
+                        )
+        childs_text = f'\n{t}children:{childs}' if childs else ''
+        tc = f'\n{t}tag_corrections: {self.tag_corrections}' if self.tag_corrections else ''
+        return (f'\n{t.replace("|","")}*--------------------'
+                f'\n{t}Hybrid:       {self.shareLink}'
+                f'\n{t}isAstNode:    {self.isAstNode}'
+                f'\n{t}exact:        {self.exact}'
+                f'\n{t}text:         {self.text}'
+                f'\n{t}tags:         {self.tags}'
+                f'{ct}'
+                f'{tc}'
+                f'{replies_text}'
+                f'\n{t}value:        {self.value}'
+                f'{childs_text}'
+                f'\n{t}____________________')
+    def __eq__(self, other):
+        return self.id == other.id and self.text == other.text and set(self.tags) == set(other.tags)
+    
+    def __hash__(self):
+        return hash(self.__class__.__name__ + self.id)
+
+'W4SfAguoEeeTxcft4RtbfA'
+#Hybrid.__repr__ = __repr__
+#
+# utility
 
 class AstNode:
     def __init__(self, type_, value, anno, children):
@@ -361,7 +632,7 @@ def protc_structured_data(anno):  # TODO we need another type tag here...
 def valueForAnno(anno):
     #type
     if anno.tags:
-        type_ = [_ for _ in anno.tags if 'protc:' in _][0]  # XXX this will fail in nasty ways, suddently strong vs weak typing makes sense
+        type_ = [a for a in anno.tags if 'protc:' in a][0]  # XXX this will fail in nasty ways, suddently strong vs weak typing makes sense
     else:
         print('Anno with no tag!', shareLinkFromAnno(anno))
         type_ = None  # just see where it goes...
@@ -396,7 +667,10 @@ def buildAst(anno, implied_lookup, correction_lookup, trees, done, depth=0):
         return done[anno.id]
 
     # corrections
-    if anno.id in correction_lookup:
+    if hasattr(anno, 'replies'):
+        for reply in anno.replies:
+            process_reply(anno, reply)  # TODO consider subclassing HypothesisAnnotation for our own purposes
+    if anno.id in correction_lookup:  # OLD WAY
         corr = correction_lookup[anno.id]
         ctags = [t for t in corr.tags if t != 'PROTCUR:correction']
         if corr.text and not corr.text.startswith('SKIP'):
@@ -453,10 +727,13 @@ def makeAst():
     correction_lookup = {a.references[0]:a for a in annos if 'PROTCUR:correction' in a.tags}
     trees = []
     done = {}
-    head_tags = 'protc:input', 'protc:implied-input', 'protc:*measure', 'protc:symbolic-measure', 'protc:output'  # FIXME output issues
+    head_tags = ('protc:input', 'protc:implied-input', 'protc:*measure',
+                 'protc:symbolic-measure', 'protc:output',  # FIXME output issues
+                 'protc:structured-data', 
+                )
     skip_tags = 'PROTCUR:correction',
     for anno in annos:
-        if any(t in anno.tags for t in head_tags) and not any(t in anno.tags for t in skip_tags):
+        if anyMembers(anno.tags, *head_tags) and noneMembers(anno.tags, *skip_tags):
             buildAst(anno, implied_lookup, correction_lookup, trees, done)
     # TODO we need a check somewhere that alerts when an input is not an output and has no parents -> dangling curation status
     #(protc:implied-input "pcr mix solution")  ; https://hyp.is/WxoSjG46EeewpVfX6gocoQ,  problematic with one text overwriting the other
@@ -478,6 +755,13 @@ def main():
     global annos  # this is too useful not to do
     annos = get_annos(mem_file)  # TODO memoize annos... and maybe start with a big offset?
     stream_loop = start_loop(annos, mem_file)
+    hybrids = [Hybrid(a, annos) for a in annos]
+    @profile_me
+    def rep():
+        repr(hybrids)
+    rep()
+    embed()
+    return
 
     input_text_args = [(basic_start(a).strip(),) for a in annos if 'protc:input' in a.tags or 'protc:output' in a.tags]
     async_getter(sgv.findByTerm, input_text_args)  # prime the cache FIXME issues with conflicting loops...

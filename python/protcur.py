@@ -22,8 +22,6 @@ group = environ.get('HYP_GROUP', '__world__')
 
 print(api_token, username, group)  # sanity check
 
-# utility
-
 def get_proper_citation(xml):
     root = etree.fromstring(xml)
     if root.findall('error'):
