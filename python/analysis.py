@@ -441,14 +441,14 @@ class Hybrid:  # a better HypothesisAnnotation
         start = '|' if depth else ''
         t = ' ' * 4 * depth + start
 
-        parent_id = f"\n{t}parent_id:    {self.parent.id} Hybrid.byId('{self.parent.id}')" if self.parent else ''
+        parent_id = f"\n{t}parent_id:    {self.parent.id} {self.__class__.__name__}.byId('{self.parent.id}')" if self.parent else ''
         tag_text = f'\n{t}tags:         {self.tags}' if self.tags else ''
         lct = list(self._cleaned_tags)
         ct = f'\n{t}cleaned tags: {lct}' if self.references and lct and lct != self.tags else ''
         tc = f'\n{t}tag_corrections: {self.tag_corrections}' if self.tag_corrections else ''
 
         replies = ''.join(r.__repr__(depth + 1) for r in self.replies)
-        rep_ids = f'\n{t}replies:      ' + ' '.join(f"Hybrid.byId('{r.id}')" for r in self.replies)
+        rep_ids = f'\n{t}replies:      ' + ' '.join(f"{self.__class__.__name__}.byId('{r.id}')" for r in self.replies)
         replies_text = f'\n{t}replies:{replies}' if self.reprReplies else rep_ids if replies else ''
         childs = ''.join(c.__repr__(depth + 1)
                          if self not in c.children
@@ -458,7 +458,7 @@ class Hybrid:  # a better HypothesisAnnotation
                         )
         childs_text = f'\n{t}children:{childs}' if childs else ''
         return (f'\n{t.replace("|","")}*--------------------'
-                f"\n{t}Hybrid:       {self.shareLink} Hybrid.byId('{self.id}')"
+                f"\n{t}Hybrid:       {self.shareLink} {self.__class__.__name__}.byId('{self.id}')"
                 f'\n{t}isAstNode:    {self.isAstNode}'
                 f'{parent_id}'
                 f'\n{t}exact:        {self.exact}'
@@ -471,9 +471,134 @@ class Hybrid:  # a better HypothesisAnnotation
                 f'{childs_text}'
                 f'\n{t}____________________')
 
-Hybrid.__repr__ = __repr__
-#Hybrid.byId('4IGe3G5SEeeO_7Nfp2Nrdg')  # somehow missing from references...
-#Hybrid.byId('OMSliHFrEeeDu9c9nSatmQ')
+#Hybrid.__repr__ = __repr__
+
+Hybrid.byId('zCjL7HCUEee0NXeXdJjPjg')  # FIXME RecursionError
+
+class protc(Hybrid):
+    order = (
+        'input',
+        'implied-input',
+        'parameter*',
+        'invariant',
+        '*measure',
+        'symbolic-measure',
+        'output',
+    )
+    mapping = {tp:tp.replace('*', '').replace('-', '_') for tp in order}
+
+    def __init__(self, anno, annos):
+        super().__init__(anno, annos)  # FIXME does NOT place nicely with Hybrid.hybrids
+
+    def _dispatch(self, tag):
+        def inner(sup=super()): return sup.value
+        return getattr(self, self.mapping[tag], inner)()
+
+    def parsed(self):  # TODO probably better to pass on this one
+        out = ''
+        for tag in self.order:
+            ctag = 'protc:' + tag
+            if ctag in self.tags:
+                out += '\n'
+                out += ctag
+                out += ' '
+                out += self._dispatch(tag)
+                break
+        for child in self.children:
+            ctext =  child.parsed()
+            if ctext:
+                out += '\n' + ' ' * 4 + ctext
+        return out
+
+    def parameter(self):
+        value = super().value
+        if value == '':  # breaks the parser :/
+            return ''
+        cleaned = value.replace(' mL–1', ' * mL–1').replace(' kg–1', ' * kg–1')  # FIXME temporary (and bad) fix for superscript issues
+        cleaned = cleaned.strip()
+        cleaned_orig = cleaned
+
+        # ignore gargabe at the start
+        success = False
+        front = ''
+        while not success:
+            success_always_true, v, rest = parsing.parameter_expression(cleaned)
+            try:
+                success = v[0] != 'param:parse-failure'
+            except TypeError:
+                raise
+                #embed()
+            if not success:
+                if len(cleaned) > 1:
+                    more_front, cleaned = cleaned[0], cleaned[1:]
+                    front += more_front
+                else:
+                    front += cleaned
+                    success, v, rest = parsing.parameter_expression(cleaned_orig)  # reword but whatever
+                    error_output.append((success, v, rest))
+                    break
+
+        def format_unit_atom(param_unit, name, prefix=None):
+            if prefix is not None:
+                return f"({param_unit} '{name} '{prefix})"
+            else:
+                return f"({param_unit} '{name})"
+
+        def format_value(list_):
+            out = []
+            if list_:
+                if 0:  # list_[0] == 'param:unit':  # TODO unit atom, unit by itself can be much more complex
+                    return format_unit(*list_)
+                else:
+                    for v in list_:
+                        if type(v) is list:
+                            v = format_value(v)
+                        if v is not None:
+                            out.append(f'{v}')
+            if out:
+                return '(' + ' '.join(out) + ')'
+
+        if v is not None:
+            v = format_value(v)
+        out = ParameterValue(success, v, rest, front)
+        test_params.append((value, (success, v, rest)))
+        return repr(out)
+
+    def invariant(self):
+        return self.parameter()
+
+    @property
+    def value(self):
+        for tag in self.order:
+            ctag = 'protc:' + tag
+            if ctag in self.tags:
+                return self._dispatch(tag)
+        return 'U WOT M8'
+
+    def input(self):
+        value = super().value
+        data = sgv.findByTerm(value)  # TODO could try the annotate endpoint?
+        if data:
+            subset = [d for d in data if value in d['labels']]
+            if subset:
+                data = subset[0]
+            else:
+                data = data[0]  # TODO could check other rules I have used in the past
+            id_ = data['curie'] if 'curie' in data else data['iri']
+            value += f" ({id_}, {data['labels'][0]})"
+        else:
+            test_input.append(value)
+        return value
+
+    def output(self): return self.input()
+    #def implied_input(self): return value
+    #def structured_data(self): return self.value
+    #def measure(self): return self.value
+    #def symbolic_measure(self): return self.value
+
+    def __repr__(self, depth=0):  # TODO this is probably the simplest way to do the export...
+        return super().__repr__(depth)
+
 #
 # utility
 
@@ -779,11 +904,12 @@ def main():
     global annos  # this is too useful not to do
     annos = get_annos(mem_file)  # TODO memoize annos... and maybe start with a big offset?
     stream_loop = start_loop(annos, mem_file)
-    hybrids = [Hybrid(a, annos) for a in annos]
-    @profile_me
+    #hybrids = [Hybrid(a, annos) for a in annos]
+    ps = [protc(a, annos) for a in annos]
+    #@profile_me
     def rep():
         repr(hybrids)
-    rep()
+    #rep()
     embed()
     return
 
