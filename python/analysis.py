@@ -202,6 +202,11 @@ class Hybrid:  # a better HypothesisAnnotation
     prefix_ast = 'protc:',
     hybrids = {}  # TODO updates
     _replies = {}
+    reprReplies = False
+    @classmethod
+    def byId(cls, id_):
+        return next(v for v in cls.hybrids.values()).getHybridById(id_)
+
     def __new__(cls, anno, annos):
         try: 
             self = cls.hybrids[anno.id]
@@ -210,23 +215,32 @@ class Hybrid:  # a better HypothesisAnnotation
                 return self
             else:
                 #printD(f'{self.id} already exists but something has changed')
-                return super().__new__(cls)
+                self.__init__(anno, annos)  # just updated the underlying refs no worries
+                return self
         except KeyError:
             #printD(f'{anno.id} doesnt exist')
             return super().__new__(cls)
             
     def __init__(self, anno, annos):
         self.annos = annos
-        self.id = anno.id
+        self.id = anno.id  # hardset this to prevent shenanigans
         self.hybrids[self.id] = self
-        self._tags = anno.tags
-        self._type = anno.type  # we really need this? anno, pagenote, reply, replies are distinguesd by references as we know
-        self._exact = anno.exact
-        self._text = anno.text
-        self.references = anno.references
+        self._anno = anno
         self.parent  # populate self._replies
         if self not in self._replies:
             self._replies[self.id] = set()
+
+    @property
+    def _type(self): return self._anno.type
+    @property
+    def _exact(self): return self._anno.exact
+    @property
+    def _text(self): return self._anno.text
+    @property
+    def _tags(self): return self._anno.tags
+    @property
+    def references(self): return self._anno.references
+
 
     def getAnnoById(self, id_):
         try:
@@ -275,10 +289,10 @@ class Hybrid:  # a better HypothesisAnnotation
         if not self.references:
             return None
         else:
-            for parent_id in self.references:
+            for parent_id in self.references[::-1]:  # go backward to get the direct parent first, slower for shareLink but ok
                 parent = self.getHybridById(parent_id)
                 if parent is not None:
-                    if parent not in self._replies:
+                    if parent.id not in self._replies:
                         self._replies[parent.id] = set()
                     self._replies[parent.id].add(self)
                     return parent
@@ -293,7 +307,7 @@ class Hybrid:  # a better HypothesisAnnotation
             self._replies[self.id] = set()
             for anno in self.annos:
                 if anno.id not in self.hybrids:
-                    h = self.__class__(anno, self.annos)
+                    self.__class__(anno, self.annos)
             return self._replies[self.id]
 
     #@property
@@ -415,33 +429,6 @@ class Hybrid:  # a better HypothesisAnnotation
                         continue
                     yield child  # buildAst will have a much eaiser time operating on these single depth childs
 
-    def __repr__(self, depth=0):
-        start = '|' if depth else ''
-        t = ' ' * 4 * depth + start
-        ct = f'\n{t}cleaned tags: {list(self._cleaned_tags)}' if self.references else ''
-
-        replies = ''.join(r.__repr__(depth + 1) for r in self.replies)
-        replies_text = f'\n{t}replies:{replies}' if replies else ''
-        childs = ''.join(c.__repr__(depth + 1)
-                         if self not in c.children
-                         else f'\n{" " * 4 * (depth + 1)}* {c.id} has a circular reference with this node {self.id}'  # avoid recursion
-                         for c in self.children
-                         if c is not self.parent  # avoid accidental recursion with replies
-                        )
-        childs_text = f'\n{t}children:{childs}' if childs else ''
-        tc = f'\n{t}tag_corrections: {self.tag_corrections}' if self.tag_corrections else ''
-        return (f'\n{t.replace("|","")}*--------------------'
-                f'\n{t}Hybrid:       {self.shareLink}'
-                f'\n{t}isAstNode:    {self.isAstNode}'
-                f'\n{t}exact:        {self.exact}'
-                f'\n{t}text:         {self.text}'
-                f'\n{t}tags:         {self.tags}'
-                f'{ct}'
-                f'{tc}'
-                f'{replies_text}'
-                f'\n{t}value:        {self.value}'
-                f'{childs_text}'
-                f'\n{t}____________________')
     def __eq__(self, other):
         return (self.id == other.id
                 and self.text == other.text
@@ -450,8 +437,43 @@ class Hybrid:  # a better HypothesisAnnotation
     def __hash__(self):
         return hash(self.__class__.__name__ + self.id)
 
-'W4SfAguoEeeTxcft4RtbfA'
-#Hybrid.__repr__ = __repr__
+    def __repr__(self, depth=0):
+        start = '|' if depth else ''
+        t = ' ' * 4 * depth + start
+
+        parent_id = f"\n{t}parent_id:    {self.parent.id} Hybrid.byId('{self.parent.id}')" if self.parent else ''
+        tag_text = f'\n{t}tags:         {self.tags}' if self.tags else ''
+        lct = list(self._cleaned_tags)
+        ct = f'\n{t}cleaned tags: {lct}' if self.references and lct and lct != self.tags else ''
+        tc = f'\n{t}tag_corrections: {self.tag_corrections}' if self.tag_corrections else ''
+
+        replies = ''.join(r.__repr__(depth + 1) for r in self.replies)
+        rep_ids = f'\n{t}replies:      ' + ' '.join(f"Hybrid.byId('{r.id}')" for r in self.replies)
+        replies_text = f'\n{t}replies:{replies}' if self.reprReplies else rep_ids if replies else ''
+        childs = ''.join(c.__repr__(depth + 1)
+                         if self not in c.children
+                         else f'\n{" " * 4 * (depth + 1)}* {c.id} has a circular reference with this node {self.id}'  # avoid recursion
+                         for c in self.children
+                         if c is not self.parent  # avoid accidental recursion with replies of depth 1 TODO WE NEED TO GO DEEPER
+                        )
+        childs_text = f'\n{t}children:{childs}' if childs else ''
+        return (f'\n{t.replace("|","")}*--------------------'
+                f"\n{t}Hybrid:       {self.shareLink} Hybrid.byId('{self.id}')"
+                f'\n{t}isAstNode:    {self.isAstNode}'
+                f'{parent_id}'
+                f'\n{t}exact:        {self.exact}'
+                f'\n{t}text:         {self.text}'
+                f'\n{t}value:        {self.value}'
+                f'{tag_text}'
+                f'{ct}'
+                f'{tc}'
+                f'{replies_text}'
+                f'{childs_text}'
+                f'\n{t}____________________')
+
+Hybrid.__repr__ = __repr__
+#Hybrid.byId('4IGe3G5SEeeO_7Nfp2Nrdg')  # somehow missing from references...
+#Hybrid.byId('OMSliHFrEeeDu9c9nSatmQ')
 #
 # utility
 
