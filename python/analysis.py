@@ -205,7 +205,10 @@ class Hybrid:  # a better HypothesisAnnotation
     reprReplies = False
     @classmethod
     def byId(cls, id_):
-        return next(v for v in cls.hybrids.values()).getHybridById(id_)
+        try:
+            return next(v for v in cls.hybrids.values()).getHybridById(id_)
+        except StopIteration as e:
+            raise Warning('Hybrid.hybrids has not been populated with annotations yet!') from e
 
     def __new__(cls, anno, annos):
         try: 
@@ -369,10 +372,13 @@ class Hybrid:  # a better HypothesisAnnotation
             corrections = reply.tag_corrections
             if corrections is not None:
                 op = corrections[0].split(':',1)[1]
-                if op not in ('delete', 'replace'):
+                if op in ('add', 'replace'):
                     add_tags.extend(corrections[1:])
-                if op not in ('add', 'replace'):
-                    skip_tags.extend(self._cleaned_tags)
+                if op == 'replace':
+                    skip_tags.extend(self._cleaned__tags)  # FIXME recursion error
+                elif op == 'delete':
+                    skip_tags.extend(corrections[1:])
+
         out = []
         for tag in self._tags:
             if tag not in skip_tags:
@@ -382,6 +388,12 @@ class Hybrid:  # a better HypothesisAnnotation
     @property
     def _cleaned_tags(self):
         for tag in self.tags:
+            if not any(tag.startswith(prefix) for prefix in self.prefix_skip_tags):
+                yield tag
+
+    @property
+    def _cleaned__tags(self):
+        for tag in self._tags:
             if not any(tag.startswith(prefix) for prefix in self.prefix_skip_tags):
                 yield tag
 
@@ -473,7 +485,7 @@ class Hybrid:  # a better HypothesisAnnotation
 
 #Hybrid.__repr__ = __repr__
 
-Hybrid.byId('zCjL7HCUEee0NXeXdJjPjg')  # FIXME RecursionError
+#Hybrid.byId('zCjL7HCUEee0NXeXdJjPjg')  # FIXME RecursionError
 
 class protc(Hybrid):
     order = (
@@ -905,7 +917,7 @@ def main():
     annos = get_annos(mem_file)  # TODO memoize annos... and maybe start with a big offset?
     stream_loop = start_loop(annos, mem_file)
     #hybrids = [Hybrid(a, annos) for a in annos]
-    ps = [protc(a, annos) for a in annos]
+    protcs = [protc(a, annos) for a in annos]
     #@profile_me
     def rep():
         repr(hybrids)
