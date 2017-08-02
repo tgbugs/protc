@@ -329,10 +329,10 @@ class Hybrid:  # a better HypothesisAnnotation
     def text(self):
         for reply in self.replies:
             correction = reply.text_correction('text')
-            if correction:
+            if correction is not None:
                 return correction
             correction = reply.text_correction('annotation-correction')
-            if correction:
+            if correction is not None:
                 return correction
 
         if self._text.startswith('SKIP'):
