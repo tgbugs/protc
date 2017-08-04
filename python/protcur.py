@@ -9,7 +9,7 @@ from markdown import markdown
 from scibot.hypothesis import HypothesisUtils, HypothesisAnnotation
 import analysis
 from analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid
-from analysis import papers, statistics, tagdefs, readTagDocs, addDocLinks, addReplies, _addParent
+from analysis import papers, statistics, tagdefs, readTagDocs, addDocLinks, addReplies, _addParent, protc
 from hypush.subscribe import preFilter, setup_websocket
 from hypush.handlers import filterHandler
 from IPython import embed
@@ -204,8 +204,13 @@ def main():
     annos = get_annos()
     stream_loop = start_loop(annos, '/tmp/protcur-annos.pickle')
     stream_loop.start()
+    protcs = [protc(a, annos) for a in annos]
 
     # routes
+
+    @app.route('/curation/tree', methods=['GET'])
+    def route_tree():
+        return '<pre>' + '\n'.join(repr(p) for p in protcs) + '</pre>'
 
     @app.route('/curation/papers', methods=['GET'])
     def route_papers():
@@ -241,7 +246,7 @@ def main():
     @app.route('/curation/', methods=['GET'])
     def route_curation():
         out = ''
-        for route in 'papers', 'annotations', 'tags':
+        for route in 'papers', 'annotations', 'tags', 'tree':
             url = 'http://protc.olympiangods.org/curation/' + route
             out += f'<a href={url}>{route}</a> <br>'
         return out
