@@ -202,7 +202,7 @@ class Hybrid:  # a better HypothesisAnnotation
     prefix_ast = 'protc:',
     objects = {}  # TODO updates
     _replies = {}
-    reprReplies = False
+    reprReplies = True
 
     @classmethod
     def byId(cls, id_):
@@ -233,6 +233,7 @@ class Hybrid:  # a better HypothesisAnnotation
         self.parent  # populate self._replies
         if self not in self._replies:
             self._replies[self.id] = set()
+        list(self.children)  # populate annotation links from the text field to catch issues early
 
     @property
     def _type(self): return self._anno.type
@@ -300,6 +301,8 @@ class Hybrid:  # a better HypothesisAnnotation
                         self._replies[parent.id] = set()
                     self._replies[parent.id].add(self)
                     return parent
+                else:
+                    printD('Replies Issues')
 
     @property
     def replies(self):
@@ -426,7 +429,7 @@ class Hybrid:  # a better HypothesisAnnotation
             value, children_text = self._fix_implied_input()
             if children_text:
                 return children_text
-        elif 'PROTCUR:feedback' in self.tags and noneMembers(self.tags, *self.text_tags):
+        elif any(tag.startswith('PROTCUR:') for tag in self.tags) and noneMembers(self.tags, *self.text_tags):
             # accidental inclusion of feedback that doesn't start with SKIP eg https://hyp.is/HLv_5G43EeemJDuFu3a5hA
             return ''
         return self.text
@@ -439,6 +442,7 @@ class Hybrid:  # a better HypothesisAnnotation
                 if id_ is not None:
                     child = self.getObjectById(id_)
                     if child is None: # sanity
+                        printD('Children Issues')
                         continue
                     yield child  # buildAst will have a much eaiser time operating on these single depth childs
 
@@ -471,7 +475,7 @@ class Hybrid:  # a better HypothesisAnnotation
                         )
         childs_text = f'\n{t}children:{childs}' if childs else ''
         return (f'\n{t.replace("|","")}*--------------------'
-                f"\n{t}{self.__class__.__name__}:        {self.shareLink} {self.__class__.__name__}.byId('{self.id}')"
+                f"\n{t}{self.__class__.__name__ + ':':<14}{self.shareLink} {self.__class__.__name__}.byId('{self.id}')"
                 f'\n{t}isAstNode:    {self.isAstNode}'
                 f'{parent_id}'
                 f'\n{t}exact:        {self.exact}'
@@ -491,36 +495,39 @@ class Hybrid:  # a better HypothesisAnnotation
 class protc(Hybrid):
     indentDepth = 2
     objects = {}  # TODO updates
-    order = (  # ordered based on dependence and then by frequency of occurence for performance (TODO tagdefs stats automatically)
-             'structured-data-record',  # needs to come first since record contents also have a type (e.g. protc:parameter*)
-             'parameter*',
-             'input',
-             'invariant',
-             'references-for-use',
-             'aspect',
-             'black-box-component',
-             '*measure',  # under represented
-             'output',
-             'objective*',
-             'no-how-error',
-             'order',
-             'repeat',
-             'implied-aspect',
-             'how',
-             '*make*',  # FIXME output?? also yay higher order functions :/
-             'symbolic-measure',
-             'implied-input',
-             'result',
-             'output-spec',
-             'structured-data-header',
-             'telos',
-             'executor-verb',
+    _order = (  # ordered based on dependence and then by frequency of occurence for performance (TODO tagdefs stats automatically)
+              'structured-data-record',  # needs to come first since record contents also have a type (e.g. protc:parameter*)
+              'parameter*',
+              'input',
+              'invariant',
+              'references-for-use',
+              'aspect',
+              'black-box-component',
+              '*measure',  # under represented
+              'output',
+              'objective*',
+              'no-how-error',
+              'order',
+              'repeat',
+              'implied-aspect',
+              'how',
+              '*make*',  # FIXME output?? also yay higher order functions :/
+              'symbolic-measure',
+              'implied-input',
+              'result',
+              'output-spec',
+              'structured-data-header',
+              'telos',
+              'executor-verb',
             )
+
+    @staticmethod
+    def _value_escape(value):
+        return '"' + value.replace('"', '\\"') + '"'
 
     def _dispatch(self):
         def inner():
-            value = '"' + self.value.replace('"', '\\"') + '"'
-            return value
+            return self._value_escape(self.value)
         type_ = self.astType
         if type_ is None:
             raise TypeError(f'Cannot dispatch on NoneType!\n{super().__repr__()}')
@@ -533,7 +540,8 @@ class protc(Hybrid):
 
     @classmethod
     def parsed(cls):
-        return repr(sorted(o for o in cls.objects.values() if o.isAstNode))
+        #return ''.join(sorted(repr(o) for o in cls.objects.values() if o is not None and o.isAstNode))
+        return None
 
     def parameter(self):
         value = self.value
@@ -550,8 +558,8 @@ class protc(Hybrid):
             success_always_true, v, rest = parsing.parameter_expression(cleaned)
             try:
                 success = v[0] != 'param:parse-failure'
-            except TypeError:
-                raise
+            except TypeError as e:
+                raise e
                 #embed()
             if not success:
                 if len(cleaned) > 1:
@@ -596,7 +604,7 @@ class protc(Hybrid):
     def astType(self):
         if self.isAstNode:
             tags = self.tags
-            for tag in self.order:
+            for tag in self._order:
                 ctag = 'protc:' + tag
                 if ctag in tags:
                     return ctag
@@ -606,7 +614,7 @@ class protc(Hybrid):
                 return next(iter(self._cleaned_tags))
             else:
                 tl = ' '.join(f"'{t}" for t in sorted(tags))
-                print(f'Warning: something weird is going on with (annotation-tags {tl}) and self.order {self.order}')
+                print(f'Warning: something weird is going on with (annotation-tags {tl}) and self._order {self._order}')
 
     @property
     def astValue(self):
@@ -626,7 +634,7 @@ class protc(Hybrid):
             value += f" ({id_}, {data['labels'][0]})"
         else:
             test_input.append(value)
-        return value
+        return self._value_escape(value)
 
     def output(self):
         return self.input()
@@ -636,10 +644,24 @@ class protc(Hybrid):
     #def symbolic_measure(self): return self.value
     
     def __gt__(self, other):
-        return self.astType + self.astValue >= other.astType + other.astValue
+        #if type(self) == type(other):
+        if not self.isAstNode:
+            return False
+        elif not other.isAstNode:
+            return True
+        else:
+            try:
+                #return self.astType + self.astValue >= other.astType + other.astValue
+                return self.astType + self.value >= other.astType + other.value
+            except TypeError as e:
+                embed()
+                raise e
 
     def __lt__(self, other):
+        #if type(self) == type(other) and self.isAstNode and other.isAstNode:
         return not self.__gt__(other)
+        #else:
+            #return False
 
     def __repr__(self, depth=1, nparens=1, plast=True, top=True):
         out = ''
@@ -662,6 +684,9 @@ class protc(Hybrid):
                 else:
                     new_nparens = 1  # new children start their own tree, nparens only tracks the last node
                 try:
+                    if self in c.children:  # FIXME cannot detect longer cycles
+                        print('Circular link in', self.shareLink)
+                        continue
                     s = c.__repr__(depth + 1, new_nparens, new_plast, False)
                 except TypeError as e:
                     raise TypeError(f'{c} is not an {self.__class__.__name__}') from e
@@ -978,12 +1003,20 @@ def main():
     global annos  # this is too useful not to do
     annos = get_annos(mem_file)  # TODO memoize annos... and maybe start with a big offset?
     stream_loop = start_loop(annos, mem_file)
-    #hybrids = [Hybrid(a, annos) for a in annos]
+    hybrids = [Hybrid(a, annos) for a in annos]
+    printD('protcs')
     protcs = [protc(a, annos) for a in annos]
+    # TODO need to resolve all the references cases in the even they are none at __init__ I think...
     #@profile_me
     def rep():
         repr(hybrids)
     #rep()
+    def text():
+        t = ''.join(repr(p) for p in protcs if p.isAstNode)
+        with open('/tmp/protcur.rkt', 'wt') as f: f.write(t)
+        return t
+        #return protc.parsed()
+    #t = text()
     embed()
     return
 
