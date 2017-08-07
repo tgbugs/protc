@@ -198,7 +198,12 @@ def _getAnnoById(id_, annos):  # ah the taint of global
 class Hybrid:  # a better HypothesisAnnotation
     control_tags = 'annotation-correction', 'annotation-tags:replace', 'annotation-tags:add', 'annotation-tags:delete' 
     prefix_skip_tags = 'PROTCUR:', 'annotation-'
-    text_tags = 'annotation-text:exact', 'annotation-text:text', 'annotation-text:value', 'annotation-text:children', 'annotation-correction'
+    text_tags = ('annotation-text:exact',
+                 'annotation-text:text',
+                 'annotation-text:value',
+                 'annotation-text:children',
+                 'annotation-correction')
+    children_tags = 'annotation-children:delete',
     prefix_ast = 'protc:',
     objects = {}  # TODO updates
     _replies = {}
@@ -230,10 +235,13 @@ class Hybrid:  # a better HypothesisAnnotation
         self.id = anno.id  # hardset this to prevent shenanigans
         self.objects[self.id] = self
         self._anno = anno
-        self.parent  # populate self._replies
-        if self not in self._replies:
-            self._replies[self.id] = set()
+        self.parent  # populate self._replies before the recursive call
+        self.replies
+        #if self.replies:
+            #print(self.replies)
         list(self.children)  # populate annotation links from the text field to catch issues early
+        #if self.id not in self._replies:
+            #self._replies[self.id] = set()  # This is bad becuase it means we don't trigger a search
 
     @property
     def _type(self): return self._anno.type
@@ -261,7 +269,8 @@ class Hybrid:  # a better HypothesisAnnotation
             anno = self.getAnnoById(id_)
             if anno is None:
                 self.objects[id_] = None
-                print('Problem in', self.shareLink)  # must come after self.objects[id_] = None else RecursionError
+                #print('Problem in', self.shareLink)  # must come after self.objects[id_] = None else RecursionError
+                print('Problem in', self.shareLink, f"{self.__class__.__name__}.byId('{self.id}')")
                 return None
             else:
                 h = self.__class__(anno, self.annos)
@@ -279,8 +288,7 @@ class Hybrid:  # a better HypothesisAnnotation
     def isAstNode(self):
         return (noneMembers(self._tags, *self.control_tags)
                 and all(noneMembers(tag, *self.prefix_skip_tags) for tag in self._tags)
-                and any(anyMembers(tag, *self.prefix_ast) for tag in self._tags)
-               )
+                and any(anyMembers(tag, *self.prefix_ast) for tag in self._tags))
 
     @property
     def shareLink(self):
@@ -312,9 +320,8 @@ class Hybrid:  # a better HypothesisAnnotation
             return self._replies[self.id]  # we use self.id here instead of self to avoid recursion on __eq__
         except KeyError:
             self._replies[self.id] = set()
-            for anno in self.annos:
-                if anno.id not in self.objects:
-                    self.__class__(anno, self.annos)
+            for anno in [a for a in self.annos if self.id in a.references]:  # super slow :/
+                self.__class__(anno, self.annos)
             return self._replies[self.id]
 
     #@property
@@ -351,15 +358,15 @@ class Hybrid:  # a better HypothesisAnnotation
             if correction:
                 return correction
 
-        if self.text and not self.text.startswith('https://hyp.is'):
+        if 'protc:implied-input' in self.tags:  # FIXME hardcoded fix
+            value, children_text = self._fix_implied_input()
+            if value:
+                return value
+        elif self.text and not self.text.startswith('https://hyp.is'):
             if 'RRID' not in self.text:
                 return self.text
             else:
                 return ''
-        elif 'protc:implied-input' in self.tags:  # FIXME hardcoded fix
-            value, children_text = self._fix_implied_input()
-            if value:
-                return value
 
         if self.exact is not None:
             return self.exact
@@ -414,37 +421,83 @@ class Hybrid:  # a better HypothesisAnnotation
         ctag = 'annotation-text:' + suffix
         if ctag in self.tags:
             return self.text
-        elif suffix == 'children' and self.text.startswith('https://hyp.is'):
+        #elif suffix == 'children' and self.text.startswith('https://hyp.is'):
+            #return self.text
+
+    def children_correction(self, suffix):
+        ctag = 'annotation-children:' + suffix
+        if ctag in self.tags:
             return self.text
 
     @property
     def _children_text(self):
+        correction = ''
         for reply in self.replies:
-            correction = reply.text_correction('children')
-            if correction:
-                return correction
-        if 'hyp.is' not in self.text:
-            return ''
-        elif 'protc:implied-input' in self.tags:  # FIXME hardcoded fix
+            _correction = reply.text_correction('children')
+            if _correction is not None:
+                correction = _correction
+        if correction:
+            return correction
+
+        if 'protc:implied-input' in self.tags:  # FIXME hardcoded fix
             value, children_text = self._fix_implied_input()
             if children_text:
                 return children_text
+
+        if 'hyp.is' not in self.text:
+            children_text = ''
+        elif anyMembers(self.tags, *self.children_tags):
+            children_text = ''
         elif any(tag.startswith('PROTCUR:') for tag in self.tags) and noneMembers(self.tags, *self.text_tags):
             # accidental inclusion of feedback that doesn't start with SKIP eg https://hyp.is/HLv_5G43EeemJDuFu3a5hA
-            return ''
-        return self.text
+            children_text = ''
+        else:
+            children_text = self.text
+        return children_text
 
-    @property
-    def children(self):
-        for line in splitLines(self._children_text):
+    @staticmethod
+    def _get_children_ids(children_text):
+        for line in splitLines(children_text):
             if line:
                 id_ = idFromShareLink(line)
                 if id_ is not None:
-                    child = self.getObjectById(id_)
-                    if child is None: # sanity
-                        printD('Children Issues')
-                        continue
-                    yield child  # buildAst will have a much eaiser time operating on these single depth childs
+                    yield id_
+
+    @property
+    def _children_delete(self):  # FIXME not mutex with annotation-text:children... will always override
+        delete = ''
+        for reply in self.replies:  # FIXME assumes the ordering of replies is in chronological order... validate?
+            _delete = reply.children_correction('delete')
+            if _delete is not None:
+                delete = _delete
+        if delete:
+            for id_ in self._get_children_ids(delete):
+                yield id_
+
+    @property
+    def _children_ids(self):
+        skip = set(self._children_delete)
+        if skip:
+            for id_ in self._get_children_ids(self._children_text):
+                if id_ not in skip:
+                    yield id_
+                else:
+                    printD('deleted', id_)
+        else:
+            yield from self._get_children_ids(self._children_text)
+
+    @property
+    def children(self):
+        for id_ in self._children_ids:
+            if id_ == 'e4UHUHFrEeen4U_myNDXUw' and not self.replies:
+                embed()
+                #printD('WHAT IN THE FUCK IS GOING ON')
+                #raise NameError('WTF')
+            child = self.getObjectById(id_)
+            if child is not None: # sanity
+                yield child  # buildAst will have a much eaiser time operating on these single depth childs
+            else:
+                printD('Children Issues', id_)
 
     def __eq__(self, other):
         return (self.id == other.id
@@ -1003,9 +1056,9 @@ def main():
     global annos  # this is too useful not to do
     annos = get_annos(mem_file)  # TODO memoize annos... and maybe start with a big offset?
     stream_loop = start_loop(annos, mem_file)
-    hybrids = [Hybrid(a, annos) for a in annos]
-    printD('protcs')
-    protcs = [protc(a, annos) for a in annos]
+    #hybrids = [Hybrid(a, annos) for a in annos]
+    #printD('protcs')
+    #protcs = [protc(a, annos) for a in annos]
     # TODO need to resolve all the references cases in the even they are none at __init__ I think...
     #@profile_me
     def rep():
