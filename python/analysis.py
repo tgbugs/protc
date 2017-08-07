@@ -208,6 +208,7 @@ class Hybrid:  # a better HypothesisAnnotation
     objects = {}  # TODO updates
     _replies = {}
     reprReplies = True
+    _embedded = False
 
     @classmethod
     def byId(cls, id_):
@@ -287,8 +288,8 @@ class Hybrid:  # a better HypothesisAnnotation
     @property
     def isAstNode(self):
         return (noneMembers(self._tags, *self.control_tags)
-                and all(noneMembers(tag, *self.prefix_skip_tags) for tag in self._tags)
-                and any(anyMembers(tag, *self.prefix_ast) for tag in self._tags))
+                and all(noneMembers(tag, *self.prefix_skip_tags) for tag in self.tags)
+                and any(anyMembers(tag, *self.prefix_ast) for tag in self.tags))
 
     @property
     def shareLink(self):
@@ -481,18 +482,14 @@ class Hybrid:  # a better HypothesisAnnotation
             for id_ in self._get_children_ids(self._children_text):
                 if id_ not in skip:
                     yield id_
-                else:
-                    printD('deleted', id_)
+                #else:
+                    #printD('deleted', id_)  # FIXME this seems like it is called too many times...
         else:
             yield from self._get_children_ids(self._children_text)
 
     @property
     def children(self):
         for id_ in self._children_ids:
-            if id_ == 'e4UHUHFrEeen4U_myNDXUw' and not self.replies:
-                embed()
-                #printD('WHAT IN THE FUCK IS GOING ON')
-                #raise NameError('WTF')
             child = self.getObjectById(id_)
             if child is not None: # sanity
                 yield child  # buildAst will have a much eaiser time operating on these single depth childs
@@ -613,7 +610,6 @@ class protc(Hybrid):
                 success = v[0] != 'param:parse-failure'
             except TypeError as e:
                 raise e
-                #embed()
             if not success:
                 if len(cleaned) > 1:
                     more_front, cleaned = cleaned[0], cleaned[1:]
@@ -667,7 +663,11 @@ class protc(Hybrid):
                 return next(iter(self._cleaned_tags))
             else:
                 tl = ' '.join(f"'{t}" for t in sorted(tags))
-                print(f'Warning: something weird is going on with (annotation-tags {tl}) and self._order {self._order}')
+                printD(f'Warning: something weird is going on with (annotation-tags {tl}) and self._order {self._order}')
+                if not self.__class__._embedded:
+                    self.__class__._embedded = True
+                    embed()
+                    self.__class__._embedded = False
 
     @property
     def astValue(self):
@@ -716,11 +716,15 @@ class protc(Hybrid):
         #else:
             #return False
 
-    def __repr__(self, depth=1, nparens=1, plast=True, top=True):
+    def __repr__(self, depth=1, nparens=1, plast=True, top=True, cycle=False):
         out = ''
         type_ = self.astType 
         if type_ is None:
-            return out
+            if cycle:
+                print('Circular link in', self.shareLink)
+                out = f"'(circular-link no-type {cycle.id}))"
+            else:
+                return super().__repr__()
         value = self.astValue
         comment = f'  ; {self.shareLink}'
 
@@ -738,9 +742,13 @@ class protc(Hybrid):
                     new_nparens = 1  # new children start their own tree, nparens only tracks the last node
                 try:
                     if self in c.children:  # FIXME cannot detect longer cycles
-                        print('Circular link in', self.shareLink)
-                        continue
-                    s = c.__repr__(depth + 1, new_nparens, new_plast, False)
+                        if cycle:
+                            print('Circular link in', self.shareLink)
+                            s = f"'(circular-link {cycle.id}))"
+                        else:
+                            s = c.__repr__(depth + 1, new_nparens, new_plast, False, self)
+                    else:
+                        s = c.__repr__(depth + 1, new_nparens, new_plast, False)
                 except TypeError as e:
                     raise TypeError(f'{c} is not an {self.__class__.__name__}') from e
                 cs.append(s)
@@ -1058,12 +1066,14 @@ def main():
     stream_loop = start_loop(annos, mem_file)
     #hybrids = [Hybrid(a, annos) for a in annos]
     #printD('protcs')
-    #protcs = [protc(a, annos) for a in annos]
-    # TODO need to resolve all the references cases in the even they are none at __init__ I think...
     #@profile_me
     def rep():
         repr(hybrids)
     #rep()
+
+    protcs = [protc(a, annos) for a in annos]
+    p = protc.byId('nofnAgwtEeeIoHcLZfi9DQ')  # serialization error due to a cycle
+    repr(p)
     def text():
         t = ''.join(repr(p) for p in protcs if p.isAstNode)
         with open('/tmp/protcur.rkt', 'wt') as f: f.write(t)
@@ -1071,8 +1081,8 @@ def main():
         #return protc.parsed()
     #t = text()
     embed()
-    return
 
+def _more_main():
     input_text_args = [(basic_start(a).strip(),) for a in annos if 'protc:input' in a.tags or 'protc:output' in a.tags]
     async_getter(sgv.findByTerm, input_text_args)  # prime the cache FIXME issues with conflicting loops...
 
