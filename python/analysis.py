@@ -359,15 +359,14 @@ class Hybrid:  # a better HypothesisAnnotation
             if correction:
                 return correction
 
-        if 'protc:implied-input' in self.tags:  # FIXME hardcoded fix
+        if anyMembers(self.tags, *('protc:implied-' + s for s in ('input', 'output', 'aspect'))):  # FIXME hardcoded fix
             value, children_text = self._fix_implied_input()
             if value:
                 return value
-        elif self.text and not self.text.startswith('https://hyp.is'):
+
+        if self.text and not self.text.startswith('https://hyp.is'):
             if 'RRID' not in self.text:
                 return self.text
-            else:
-                return ''
 
         if self.exact is not None:
             return self.exact
@@ -488,13 +487,20 @@ class Hybrid:  # a better HypothesisAnnotation
             yield from self._get_children_ids(self._children_text)
 
     @property
-    def children(self):
+    def children(self):  # TODO various protc:implied- situations...
+        if 'protc:implied-aspect' in self.tags:
+            yield self.parent
+            return
         for id_ in self._children_ids:
             child = self.getObjectById(id_)
+            for reply in child.replies:
+                if 'protc:implied-aspect' in reply.tags:
+                    yield reply
+                    child = None  # inject the implied aspect between the input and the parameter
+                    break
+
             if child is not None: # sanity
                 yield child  # buildAst will have a much eaiser time operating on these single depth childs
-            else:
-                printD('Children Issues', id_)
 
     def __eq__(self, other):
         return (self.id == other.id
@@ -570,6 +576,14 @@ class protc(Hybrid):
               'telos',
               'executor-verb',
             )
+    _topLevel = tuple('protc:' + t for t in ('input',
+                                             'output',
+                                             'implied-input',
+                                             'implied-output',
+                                             '*measure',
+                                             'symbolic-measure',
+                                             'black-black-component',
+                                            ))
 
     @staticmethod
     def _value_escape(value):
@@ -590,10 +604,16 @@ class protc(Hybrid):
 
     @classmethod
     def parsed(cls):
-        #return ''.join(sorted(repr(o) for o in cls.objects.values() if o is not None and o.isAstNode))
-        return None
+        return ''.join(sorted(repr(o) for o in cls.objects.values() if o is not None and o.isAstNode))
+
+    @classmethod
+    def topLevel(cls):
+        return ''.join(sorted(repr(o) for o in cls.objects.values() if o is not None and o.isAstNode and o.astType in cls._topLevel))
 
     def parameter(self):
+        out = getattr(self, '_parameter', None)
+        if out is not None:
+            return repr(out)
         value = self.value
         if value == '':  # breaks the parser :/
             return ''
@@ -642,9 +662,9 @@ class protc(Hybrid):
 
         if v is not None:
             v = format_value(v)
-        out = ParameterValue(success, v, rest, front)
         test_params.append((value, (success, v, rest)))
-        return repr(out)
+        self._parameter = ParameterValue(success, v, rest, front)
+        return repr(self._parameter)
 
     def invariant(self):
         return self.parameter()
@@ -664,10 +684,6 @@ class protc(Hybrid):
             else:
                 tl = ' '.join(f"'{t}" for t in sorted(tags))
                 printD(f'Warning: something weird is going on with (annotation-tags {tl}) and self._order {self._order}')
-                if not self.__class__._embedded:
-                    self.__class__._embedded = True
-                    embed()
-                    self.__class__._embedded = False
 
     @property
     def astValue(self):
@@ -676,7 +692,8 @@ class protc(Hybrid):
 
     def input(self):
         value = self.value
-        data = sgv.findByTerm(value)  # TODO could try the annotate endpoint?
+        #data = sgv.findByTerm(value)  # TODO could try the annotate endpoint? FIXME _extremely_ slow so skipping
+        data = None
         if data:
             subset = [d for d in data if value in d['labels']]
             if subset:
@@ -722,7 +739,7 @@ class protc(Hybrid):
         if type_ is None:
             if cycle:
                 print('Circular link in', self.shareLink)
-                out = f"'(circular-link no-type {cycle.id}))"
+                out = f"'(circular-link no-type {cycle.id})" + ')' * nparens
             else:
                 return super().__repr__()
         value = self.astValue
@@ -744,7 +761,7 @@ class protc(Hybrid):
                     if self in c.children:  # FIXME cannot detect longer cycles
                         if cycle:
                             print('Circular link in', self.shareLink)
-                            s = f"'(circular-link {cycle.id}))"
+                            s = f"'(circular-link {cycle.id})" + ')' * nparens
                         else:
                             s = c.__repr__(depth + 1, new_nparens, new_plast, False, self)
                     else:
@@ -848,7 +865,7 @@ class ParameterValue:
         if not success:
             out = str((success, v, rest))
         else:
-            out = v + f' (rest-front "{rest}" "{front}")'
+            out = v + (f' (rest-front "{rest}" "{front}")' if rest or front else '')
         return out
 
 test_params = []
@@ -1071,15 +1088,21 @@ def main():
         repr(hybrids)
     #rep()
 
-    protcs = [protc(a, annos) for a in annos]
-    p = protc.byId('nofnAgwtEeeIoHcLZfi9DQ')  # serialization error due to a cycle
-    repr(p)
+    @profile_me
+    def perftest():
+        protcs = [protc(a, annos) for a in annos]
+        return protcs
+    protcs = perftest()
+    @profile_me
     def text():
-        t = ''.join(repr(p) for p in protcs if p.isAstNode)
+        t = protc.parsed()
         with open('/tmp/protcur.rkt', 'wt') as f: f.write(t)
-        return t
-        #return protc.parsed()
-    #t = text()
+        # don't return to avoid accidentally repring these fellows :/
+    #p = protc.byId('nofnAgwtEeeIoHcLZfi9DQ')  # serialization error due to a cycle
+    #print(repr(p))
+    text()
+    tl = protc.topLevel()
+    with open('/tmp/top-protcur.rkt', 'wt') as f: f.write(tl)
     embed()
 
 def _more_main():
