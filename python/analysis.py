@@ -587,7 +587,7 @@ class protc(Hybrid):
 
     @staticmethod
     def _value_escape(value):
-        return '"' + value.replace('"', '\\"') + '"'
+        return '"' + value.strip().replace('"', '\\"') + '"'
 
     def _dispatch(self):
         def inner():

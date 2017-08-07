@@ -210,7 +210,7 @@ def main():
 
     @app.route('/curation/tree', methods=['GET'])
     def route_tree():
-        return '<pre>' + '\n'.join(repr(p) for p in protcs) + '</pre>'
+        return '<pre>' + protc.topLevel() + '</pre>'
 
     @app.route('/curation/papers', methods=['GET'])
     def route_papers():
@@ -247,7 +247,7 @@ def main():
     def route_curation():
         out = ''
         for route in 'papers', 'annotations', 'tags', 'tree':
-            url = 'http://protc.olympiangods.org/curation/' + route
+            url = request.base_url + route
             out += f'<a href={url}>{route}</a> <br>'
         return out
 
