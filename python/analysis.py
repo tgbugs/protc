@@ -66,13 +66,6 @@ def _addParent(anno, annos):
         if not hasattr(anno, 'parent'):
             print(f'Parent deleted for {anno.id} {anno.text} {sorted(anno.tags)} {anno.references}')
 
-class AstTreeHelper:
-    def __init__(self, annos):
-        self.implied_lookup
-        self.correction_lookup
-        self.trees
-        self.done
-
 #
 # docs
 
@@ -152,17 +145,6 @@ def idFromShareLink(link):  # XXX warning this will break
 
 def shareLinkFromId(id_):
     return 'https://hyp.is/' + id_
-
-def shareLinkFromAnno(anno):
-    return _shareLinkFromAnno(anno, annos)
-
-def _shareLinkFromAnno(anno, annos):
-    if anno.type == 'reply':
-        #print(f'WARNING: Reply {anno.id} to {shareLinkFromId(parent.id)}')
-        parent = _getParentForReply(anno, annos)
-        return shareLinkFromId(parent.id)
-    else:
-        return shareLinkFromId(anno.id)
 
 def splitLines(text):
     for line in text.split('\n'):
@@ -321,12 +303,11 @@ class Hybrid:  # a better HypothesisAnnotation
             return self._replies[self.id]  # we use self.id here instead of self to avoid recursion on __eq__
         except KeyError:
             self._replies[self.id] = set()
-            for anno in [a for a in self.annos if self.id in a.references]:  # super slow :/
+            for anno in [a for a in self.annos if self.id in a.references]:
+                # super slow? think again alternate implementations are even slower
+                # and induce all sorts of hair raising recursion issues :/
                 self.__class__(anno, self.annos)
             return self._replies[self.id]
-
-    #@property
-    #def type(self):
 
     @property
     def exact(self):
@@ -544,47 +525,13 @@ class Hybrid:  # a better HypothesisAnnotation
                 f'{childs_text}'
                 f'\n{t}____________________')
 
-#Hybrid.__repr__ = __repr__
 
-#Hybrid.byId('zCjL7HCUEee0NXeXdJjPjg')  # FIXME RecursionError
-
-class protc(Hybrid):
-    indentDepth = 2
-    objects = {}  # TODO updates
-    _order = (  # ordered based on dependence and then by frequency of occurence for performance (TODO tagdefs stats automatically)
-              'structured-data-record',  # needs to come first since record contents also have a type (e.g. protc:parameter*)
-              'parameter*',
-              'input',
-              'invariant',
-              'references-for-use',
-              'aspect',
-              'black-box-component',
-              '*measure',  # under represented
-              'output',
-              'objective*',
-              'no-how-error',
-              'order',
-              'repeat',
-              'implied-aspect',
-              'how',
-              '*make*',  # FIXME output?? also yay higher order functions :/
-              'symbolic-measure',
-              'implied-input',
-              'result',
-              'output-spec',
-              'structured-data-header',
-              'telos',
-              'executor-verb',
-            )
-    _topLevel = tuple('protc:' + t for t in ('input',
-                                             'output',
-                                             'implied-input',
-                                             'implied-output',
-                                             '*measure',
-                                             'symbolic-measure',
-                                             'black-black-component',
-                                            ))
-
+class AstGeneric(Hybrid):
+    """ Base class that implements the core methods needed for parsing various namespaces """
+    #indentDepth = 2
+    #objects = {}
+    #_order = tuple()
+    #_topLevel = tuple()
     @staticmethod
     def _value_escape(value):
         return '"' + value.strip().replace('"', '\\"') + '"'
@@ -610,65 +557,6 @@ class protc(Hybrid):
     def topLevel(cls):
         return ''.join(sorted(repr(o) for o in cls.objects.values() if o is not None and o.isAstNode and o.astType in cls._topLevel))
 
-    def parameter(self):
-        out = getattr(self, '_parameter', None)
-        if out is not None:
-            return repr(out)
-        value = self.value
-        if value == '':  # breaks the parser :/
-            return ''
-        cleaned = value.replace(' mL–1', ' * mL–1').replace(' kg–1', ' * kg–1')  # FIXME temporary (and bad) fix for superscript issues
-        cleaned = cleaned.strip()
-        cleaned_orig = cleaned
-
-        # ignore gargabe at the start
-        success = False
-        front = ''
-        while not success:
-            success_always_true, v, rest = parsing.parameter_expression(cleaned)
-            try:
-                success = v[0] != 'param:parse-failure'
-            except TypeError as e:
-                raise e
-            if not success:
-                if len(cleaned) > 1:
-                    more_front, cleaned = cleaned[0], cleaned[1:]
-                    front += more_front
-                else:
-                    front += cleaned
-                    success, v, rest = parsing.parameter_expression(cleaned_orig)  # reword but whatever
-                    error_output.append((success, v, rest))
-                    break
-
-        def format_unit_atom(param_unit, name, prefix=None):
-            if prefix is not None:
-                return f"({param_unit} '{name} '{prefix})"
-            else:
-                return f"({param_unit} '{name})"
-
-        def format_value(list_):
-            out = []
-            if list_:
-                if 0:  # list_[0] == 'param:unit':  # TODO unit atom, unit by itself can be much more complex
-                    return format_unit(*list_)
-                else:
-                    for v in list_:
-                        if type(v) is list:
-                            v = format_value(v)
-                        if v is not None:
-                            out.append(f'{v}')
-            if out:
-                return '(' + ' '.join(out) + ')'
-
-        if v is not None:
-            v = format_value(v)
-        test_params.append((value, (success, v, rest)))
-        self._parameter = ParameterValue(success, v, rest, front)
-        return repr(self._parameter)
-
-    def invariant(self):
-        return self.parameter()
-
     @property
     def astType(self):
         if self.isAstNode:
@@ -690,29 +578,6 @@ class protc(Hybrid):
         if self.isAstNode:
             return self._dispatch()
 
-    def input(self):
-        value = self.value
-        #data = sgv.findByTerm(value)  # TODO could try the annotate endpoint? FIXME _extremely_ slow so skipping
-        data = None
-        if data:
-            subset = [d for d in data if value in d['labels']]
-            if subset:
-                data = subset[0]
-            else:
-                data = data[0]  # TODO could check other rules I have used in the past
-            id_ = data['curie'] if 'curie' in data else data['iri']
-            value += f" ({id_}, {data['labels'][0]})"
-        else:
-            test_input.append(value)
-        return self._value_escape(value)
-
-    def output(self):
-        return self.input()
-    #def implied_input(self): return value
-    #def structured_data(self): return self.value
-    #def measure(self): return self.value
-    #def symbolic_measure(self): return self.value
-    
     def __gt__(self, other):
         #if type(self) == type(other):
         if not self.isAstNode:
@@ -776,6 +641,124 @@ class protc(Hybrid):
         start = '\n(' if top else '('
         return f'{start}{type_} {value}{childs}'
 
+
+class protc(AstGeneric):
+    indentDepth = 2
+    objects = {}  # TODO updates
+    _order = (  # ordered based on dependence and then by frequency of occurence for performance (TODO tagdefs stats automatically)
+              'structured-data-record',  # needs to come first since record contents also have a type (e.g. protc:parameter*)
+              'parameter*',
+              'input',
+              'invariant',
+              'references-for-use',
+              'aspect',
+              'black-box-component',
+              '*measure',  # under represented
+              'output',
+              'objective*',
+              'no-how-error',
+              'order',
+              'repeat',
+              'implied-aspect',
+              'how',
+              '*make*',  # FIXME output?? also yay higher order functions :/
+              'symbolic-measure',
+              'implied-input',
+              'result',
+              'output-spec',
+              'structured-data-header',
+              'telos',
+              'executor-verb',
+            )
+    _topLevel = tuple('protc:' + t for t in ('input',
+                                             'output',
+                                             'implied-input',
+                                             'implied-output',
+                                             '*measure',
+                                             'symbolic-measure',
+                                             'black-black-component',
+                                            ))
+
+    def parameter(self):
+        out = getattr(self, '_parameter', None)
+        if out is not None:
+            return repr(out)
+        value = self.value
+        if value == '':  # breaks the parser :/
+            return ''
+        cleaned = value.replace(' mL–1', ' * mL–1').replace(' kg–1', ' * kg–1')  # FIXME temporary (and bad) fix for superscript issues
+        cleaned = cleaned.strip()
+        cleaned_orig = cleaned
+
+        # ignore gargabe at the start
+        success = False
+        front = ''
+        while not success:
+            success_always_true, v, rest = parsing.parameter_expression(cleaned)
+            try:
+                success = v[0] != 'param:parse-failure'
+            except TypeError as e:
+                raise e
+            if not success:
+                if len(cleaned) > 1:
+                    more_front, cleaned = cleaned[0], cleaned[1:]
+                    front += more_front
+                else:
+                    front += cleaned
+                    success, v, rest = parsing.parameter_expression(cleaned_orig)  # reword but whatever
+                    error_output.append((success, v, rest))
+                    break
+
+        def format_unit_atom(param_unit, name, prefix=None):
+            if prefix is not None:
+                return f"({param_unit} '{name} '{prefix})"
+            else:
+                return f"({param_unit} '{name})"
+
+        def format_value(list_):
+            out = []
+            if list_:
+                if 0:  # list_[0] == 'param:unit':  # TODO unit atom, unit by itself can be much more complex
+                    return format_unit(*list_)
+                else:
+                    for v in list_:
+                        if type(v) is list:
+                            v = format_value(v)
+                        if v is not None:
+                            out.append(f'{v}')
+            if out:
+                return '(' + ' '.join(out) + ')'
+
+        if v is not None:
+            v = format_value(v)
+        test_params.append((value, (success, v, rest)))
+        self._parameter = ParameterValue(success, v, rest, front)
+        return repr(self._parameter)
+
+    def invariant(self):
+        return self.parameter()
+    def input(self):
+        value = self.value
+        #data = sgv.findByTerm(value)  # TODO could try the annotate endpoint? FIXME _extremely_ slow so skipping
+        data = None
+        if data:
+            subset = [d for d in data if value in d['labels']]
+            if subset:
+                data = subset[0]
+            else:
+                data = data[0]  # TODO could check other rules I have used in the past
+            id_ = data['curie'] if 'curie' in data else data['iri']
+            value += f" ({id_}, {data['labels'][0]})"
+        else:
+            test_input.append(value)
+        return self._value_escape(value)
+
+    def output(self):
+        return self.input()
+    #def implied_input(self): return value
+    #def structured_data(self): return self.value
+    #def measure(self): return self.value
+    #def symbolic_measure(self): return self.value
 #
 # utility
 
