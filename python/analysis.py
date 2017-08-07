@@ -200,19 +200,20 @@ class Hybrid:  # a better HypothesisAnnotation
     prefix_skip_tags = 'PROTCUR:', 'annotation-'
     text_tags = 'annotation-text:exact', 'annotation-text:text', 'annotation-text:value', 'annotation-text:children', 'annotation-correction'
     prefix_ast = 'protc:',
-    hybrids = {}  # TODO updates
+    objects = {}  # TODO updates
     _replies = {}
     reprReplies = False
+
     @classmethod
     def byId(cls, id_):
         try:
-            return next(v for v in cls.hybrids.values()).getHybridById(id_)
+            return next(v for v in cls.objects.values()).getObjectById(id_)
         except StopIteration as e:
-            raise Warning('Hybrid.hybrids has not been populated with annotations yet!') from e
+            raise Warning(f'{cls.__name__}.objects has not been populated with annotations yet!') from e
 
     def __new__(cls, anno, annos):
         try: 
-            self = cls.hybrids[anno.id]
+            self = cls.objects[anno.id]
             if self._text == anno.text and self._tags == anno.tags:
                 #printD(f'{self.id} already exists')
                 return self
@@ -227,7 +228,7 @@ class Hybrid:  # a better HypothesisAnnotation
     def __init__(self, anno, annos):
         self.annos = annos
         self.id = anno.id  # hardset this to prevent shenanigans
-        self.hybrids[self.id] = self
+        self.objects[self.id] = self
         self._anno = anno
         self.parent  # populate self._replies
         if self not in self._replies:
@@ -252,14 +253,14 @@ class Hybrid:  # a better HypothesisAnnotation
             print('could not find', id_, shareLinkFromId(id_))
             return None
 
-    def getHybridById(self, id_):
+    def getObjectById(self, id_):
         try:
-            return self.hybrids[id_]
+            return self.objects[id_]
         except KeyError as e:
             anno = self.getAnnoById(id_)
             if anno is None:
-                self.hybrids[id_] = None
-                print('Problem in', self.shareLink)  # must come after self.hybrids[id_] = None else RecursionError
+                self.objects[id_] = None
+                print('Problem in', self.shareLink)  # must come after self.objects[id_] = None else RecursionError
                 return None
             else:
                 h = self.__class__(anno, self.annos)
@@ -293,7 +294,7 @@ class Hybrid:  # a better HypothesisAnnotation
             return None
         else:
             for parent_id in self.references[::-1]:  # go backward to get the direct parent first, slower for shareLink but ok
-                parent = self.getHybridById(parent_id)
+                parent = self.getObjectById(parent_id)
                 if parent is not None:
                     if parent.id not in self._replies:
                         self._replies[parent.id] = set()
@@ -309,7 +310,7 @@ class Hybrid:  # a better HypothesisAnnotation
         except KeyError:
             self._replies[self.id] = set()
             for anno in self.annos:
-                if anno.id not in self.hybrids:
+                if anno.id not in self.objects:
                     self.__class__(anno, self.annos)
             return self._replies[self.id]
 
@@ -436,7 +437,7 @@ class Hybrid:  # a better HypothesisAnnotation
             if line:
                 id_ = idFromShareLink(line)
                 if id_ is not None:
-                    child = self.getHybridById(id_)
+                    child = self.getObjectById(id_)
                     if child is None: # sanity
                         continue
                     yield child  # buildAst will have a much eaiser time operating on these single depth childs
@@ -457,7 +458,7 @@ class Hybrid:  # a better HypothesisAnnotation
         tag_text = f'\n{t}tags:         {self.tags}' if self.tags else ''
         lct = list(self._cleaned_tags)
         ct = f'\n{t}cleaned tags: {lct}' if self.references and lct and lct != self.tags else ''
-        tc = f'\n{t}tag_corrections: {self.tag_corrections}' if self.tag_corrections else ''
+        tc = f'\n{t}tag_corrs:    {self.tag_corrections}' if self.tag_corrections else ''
 
         replies = ''.join(r.__repr__(depth + 1) for r in self.replies)
         rep_ids = f'\n{t}replies:      ' + ' '.join(f"{self.__class__.__name__}.byId('{r.id}')" for r in self.replies)
@@ -470,7 +471,7 @@ class Hybrid:  # a better HypothesisAnnotation
                         )
         childs_text = f'\n{t}children:{childs}' if childs else ''
         return (f'\n{t.replace("|","")}*--------------------'
-                f"\n{t}Hybrid:       {self.shareLink} {self.__class__.__name__}.byId('{self.id}')"
+                f"\n{t}{self.__class__.__name__}:        {self.shareLink} {self.__class__.__name__}.byId('{self.id}')"
                 f'\n{t}isAstNode:    {self.isAstNode}'
                 f'{parent_id}'
                 f'\n{t}exact:        {self.exact}'
@@ -488,42 +489,54 @@ class Hybrid:  # a better HypothesisAnnotation
 #Hybrid.byId('zCjL7HCUEee0NXeXdJjPjg')  # FIXME RecursionError
 
 class protc(Hybrid):
-    order = (
-        'input',
-        'implied-input',
-        'parameter*',
-        'invariant',
-        '*measure',
-        'symbolic-measure',
-        'output',
-    )
-    mapping = {tp:tp.replace('*', '').replace('-', '_') for tp in order}
+    indentDepth = 2
+    objects = {}  # TODO updates
+    order = (  # ordered based on dependence and then by frequency of occurence for performance (TODO tagdefs stats automatically)
+             'structured-data-record',  # needs to come first since record contents also have a type (e.g. protc:parameter*)
+             'parameter*',
+             'input',
+             'invariant',
+             'references-for-use',
+             'aspect',
+             'black-box-component',
+             '*measure',  # under represented
+             'output',
+             'objective*',
+             'no-how-error',
+             'order',
+             'repeat',
+             'implied-aspect',
+             'how',
+             '*make*',  # FIXME output?? also yay higher order functions :/
+             'symbolic-measure',
+             'implied-input',
+             'result',
+             'output-spec',
+             'structured-data-header',
+             'telos',
+             'executor-verb',
+            )
 
-    def __init__(self, anno, annos):
-        super().__init__(anno, annos)  # FIXME does NOT place nicely with Hybrid.hybrids
+    def _dispatch(self):
+        def inner():
+            value = '"' + self.value.replace('"', '\\"') + '"'
+            return value
+        type_ = self.astType
+        if type_ is None:
+            raise TypeError(f'Cannot dispatch on NoneType!\n{super().__repr__()}')
+        namespace, dispatch_on = type_.split(':', 1)
+        if namespace != self.__class__.__name__:
+            raise TypeError(f'{self.__class__.__name__} does not dispatch on types from '
+                            f'another namespace ({namespace}).')
+        dispatch_on = dispatch_on.replace('*', '').replace('-', '_')
+        return getattr(self, dispatch_on, inner)()
 
-    def _dispatch(self, tag):
-        def inner(sup=super()): return sup.value
-        return getattr(self, self.mapping[tag], inner)()
-
-    def parsed(self):  # TODO probably better to pass on this one
-        out = ''
-        for tag in self.order:
-            ctag = 'protc:' + tag
-            if ctag in self.tags:
-                out += '\n'
-                out += ctag
-                out += ' '
-                out += self._dispatch(tag)
-                break
-        for child in self.children:
-            ctext =  child.parsed()
-            if ctext:
-                out += '\n' + ' ' * 4 + ctext
-        return out
+    @classmethod
+    def parsed(cls):
+        return repr(sorted(o for o in cls.objects.values() if o.isAstNode))
 
     def parameter(self):
-        value = super().value
+        value = self.value
         if value == '':  # breaks the parser :/
             return ''
         cleaned = value.replace(' mL–1', ' * mL–1').replace(' kg–1', ' * kg–1')  # FIXME temporary (and bad) fix for superscript issues
@@ -580,15 +593,28 @@ class protc(Hybrid):
         return self.parameter()
 
     @property
-    def value(self):
-        for tag in self.order:
-            ctag = 'protc:' + tag
-            if ctag in self.tags:
-                return self._dispatch(tag)
-        return 'U WOT M8'
+    def astType(self):
+        if self.isAstNode:
+            tags = self.tags
+            for tag in self.order:
+                ctag = 'protc:' + tag
+                if ctag in tags:
+                    return ctag
+            if len(tags) == 1:
+                return tags[0]
+            elif len(list(self._cleaned_tags)) == 1:
+                return next(iter(self._cleaned_tags))
+            else:
+                tl = ' '.join(f"'{t}" for t in sorted(tags))
+                print(f'Warning: something weird is going on with (annotation-tags {tl}) and self.order {self.order}')
+
+    @property
+    def astValue(self):
+        if self.isAstNode:
+            return self._dispatch()
 
     def input(self):
-        value = super().value
+        value = self.value
         data = sgv.findByTerm(value)  # TODO could try the annotate endpoint?
         if data:
             subset = [d for d in data if value in d['labels']]
@@ -602,14 +628,50 @@ class protc(Hybrid):
             test_input.append(value)
         return value
 
-    def output(self): return self.input()
+    def output(self):
+        return self.input()
     #def implied_input(self): return value
     #def structured_data(self): return self.value
     #def measure(self): return self.value
     #def symbolic_measure(self): return self.value
+    
+    def __gt__(self, other):
+        return self.astType + self.astValue >= other.astType + other.astValue
 
-    def __repr__(self, depth=0):  # TODO this is probably the simplest way to do the export...
-        return super().__repr__(depth)
+    def __lt__(self, other):
+        return not self.__gt__(other)
+
+    def __repr__(self, depth=1, nparens=1, plast=True, top=True):
+        out = ''
+        type_ = self.astType 
+        if type_ is None:
+            return out
+        value = self.astValue
+        comment = f'  ; {self.shareLink}'
+
+        children = list(self.children)  # better to run the generator once up here
+        if children:
+            linestart = '\n' + ' ' * self.indentDepth * depth
+            nsibs = len(children)
+            cs = []
+            for i, c in enumerate(children):
+                new_plast = i + 1 == nsibs
+                # if we are at the end of multiple children the child node needs to add one more paren
+                if new_plast:
+                    new_nparens = nparens + 1
+                else:
+                    new_nparens = 1  # new children start their own tree, nparens only tracks the last node
+                try:
+                    s = c.__repr__(depth + 1, new_nparens, new_plast, False)
+                except TypeError as e:
+                    raise TypeError(f'{c} is not an {self.__class__.__name__}') from e
+                cs.append(s)
+            childs = comment + linestart + linestart.join(cs)
+        else:
+            childs = ')' * nparens + comment  
+
+        start = '\n(' if top else '('
+        return f'{start}{type_} {value}{childs}'
 
 #
 # utility
