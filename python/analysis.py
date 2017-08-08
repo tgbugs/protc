@@ -710,7 +710,7 @@ class protc(AstGeneric):
                     error_output.append((success, v, rest))
                     break
 
-        def format_unit_atom(param_unit, name, prefix=None):
+        def format_unit_atom(param_unit, name, prefix=None):  # dealt with in parsing
             if prefix is not None:
                 return f"({param_unit} '{name} '{prefix})"
             else:
@@ -719,14 +719,11 @@ class protc(AstGeneric):
         def format_value(tuple_):
             out = []
             if tuple_:
-                if 0:  # list_[0] == 'param:unit':  # TODO unit atom, unit by itself can be much more complex
-                    return format_unit(*tuple_)
-                else:
-                    for v in tuple_:
-                        if type(v) is tuple:
-                            v = format_value(v)
-                        if v is not None:
-                            out.append(f'{v}')
+                for v in tuple_:
+                    if type(v) is tuple:
+                        v = format_value(v)
+                    if v is not None:
+                        out.append(f'{v}')
             if out:
                 return '(' + ' '.join(out) + ')'
 
@@ -734,7 +731,7 @@ class protc(AstGeneric):
             v = format_value(v)
         test_params.append((value, (success, v, rest)))
         self._parameter = ParameterValue(success, v, rest, front)
-        return repr(self._parameter)
+        return repr(self._parameter)  # TODO implement as part of processing the children?
 
 
     def _parameter_parsec(self):  # more than 2x slower than my version >_<
@@ -765,23 +762,14 @@ class protc(AstGeneric):
             rest = cleaned
             front = ''
 
-        def format_unit_atom(param_unit, name, prefix=None):
-            if prefix is not None:
-                return f"({param_unit} '{name} '{prefix})"
-            else:
-                return f"({param_unit} '{name})"
-
         def format_value(tuple_):
             out = []
             if tuple_:
-                if 0:  # list_[0] == 'param:unit':  # TODO unit atom, unit by itself can be much more complex
-                    return format_unit(*list_)
-                else:
-                    for v in tuple_:
-                        if type(v) is tuple:
-                            v = format_value(v)
-                        if v is not None:
-                            out.append(f'{v}')
+                for v in tuple_:
+                    if type(v) is tuple:
+                        v = format_value(v)
+                    if v is not None:
+                        out.append(f'{v}')
             if out:
                 return '(' + ' '.join(out) + ')'
 

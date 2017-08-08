@@ -125,13 +125,19 @@ def SKIP(func1, func2):
             return success2, v2, rest2
     return skip
 
-def comp(p, val):
-    lv = len(val)
+def comp(p, val, lv):
     if p:
         v = p[:lv]  # warning: this will produce order dependencies when you spec the parser
     else:
         return False, None, p  # we are at the end
     return v == val, v, p[lv:]
+
+def comp1(p, val):
+    if p:
+        v = p[0]  # warning: this will produce order dependencies when you spec the parser
+    else:
+        return False, None, p  # we are at the end
+    return v == val, v, p[1:]
 
 def oper(p, func):
     if p:
@@ -145,16 +151,22 @@ def noneof(string):
         if not p:
             return True, p, p
         for s in string:
-            success, v, rest = comp(p, s)
+            success, v, rest = comp(p, s, 1)
             if success:
                 return False, v, p
         return True, p[0], p[1:]
     return noneof_
 
 def COMP(val):
-    def comp_(p):
-        return comp(p, val)
-    return comp_
+    lv = len(val)
+    if lv == 1:
+        def comp1_(p):
+            return  comp1(p, val)
+        return comp1_
+    else:
+        def comp_(p):
+            return comp(p, val, lv)
+        return comp_
 
 #
 # function to allow implementation of what the parser actually does/outputs
@@ -203,9 +215,10 @@ _siplookup = {k: "'" + v for k, v in _SIPREFS}
 def make_funcs(inpt, lookuptable):
     args = []
     for token in sorted(inpt, key=lambda a: -len(a)):  # sort to simulate right associativity (ie da recognized even if d a token)
-        def fn(p, tok=token):  # late binding stupidity
-            return comp(p, tok)
-        tvfn =  transform_value(fn , lambda v: lookuptable[v])
+        #lv_ = len(token)
+        #def fn(p, tok=token, lv=lv_):  # late binding stupidity
+            #return comp(p, tok, lv)
+        tvfn =  transform_value(COMP(token), lambda v: lookuptable[v])
         args.append(tvfn)
     return args
 
@@ -216,8 +229,8 @@ siunit = OR(*make_funcs(list(coln(0, _SIUNITS + _EXTRAS)) + # need both here to 
 
 
 exponent = COMP('^')
-def division(p): return comp(p, '/')
-def multiplication(p): return comp(p, '*')
+division = COMP('/')
+multiplication = COMP('*')
 unit_op = OR(division, multiplication)
 
 #siprefix = OR(*[lambda p, t=tok: comp(p, t) for tok, n in SIPREFS])  # that thing about late binding and lambdas..
@@ -241,19 +254,19 @@ def num_word_cap(p): return num_word_lower(p.lower())
 num_word = OR(num_word_lower, num_word_cap)
 
 # basic tokens
-def space(p): return comp(p, ' ')
+space = COMP(' ')
 spaces = MANY(space)
 spaces1 = MANY1(space)
-def colon(p): return comp(p, ':')
-def plus_or_minus_symbol(p): return comp(p, '±')  # NOTE range and +- are interconvertable...
-def plus_or_minus_pair(p): return comp(p, '+-')  # yes that is an b'\x2d'
+colon = COMP(':')
+plus_or_minus_symbol = COMP('±')  # NOTE range and +- are interconvertable...
+plus_or_minus_pair = COMP('+-')  # yes that is an b'\x2d'
 plus_or_minus = transform_value(OR(plus_or_minus_symbol, plus_or_minus_pair), lambda v: 'plus-or-minus')
 
 # I hate the people who felt the need to make different type blocks for this stuff in 1673
 EN_DASH = b'\xe2\x80\x93'.decode()
 HYPHEN_MINUS = b'\x2d'.decode()  # yes, the thing that most keyboards have
-def en_dash(p): return comp(p, EN_DASH)
-def hyphen_minus(p): return comp(p, HYPHEN_MINUS)
+en_dash = COMP(EN_DASH)
+hyphen_minus = COMP(HYPHEN_MINUS)
 _dash_thing = OR(en_dash, hyphen_minus)  # THERE ARE TOO MANY AND THEY ALL LOOK THE SAME
 dash_thing = transform_value(_dash_thing, lambda v: HYPHEN_MINUS)
 double_dash_thing = TIMES(dash_thing, 2)
@@ -263,21 +276,21 @@ thing_accepted_as_a_dash = transform_value(OR(double_dash_thing, dash_thing), la
 #explicit_range_pair = TIMES(explicit_range_single, 2)
 #explicit_range = OR(explicit_range_pair, explicit_range_single)  # order matters since '-' is in '--'
 
-def lt(p): return comp(p, '<')
-def lte(p): return comp(p, '<=')
-def gt(p): return comp(p, '>')
-def gte(p): return comp(p, '>=')
+lt = COMP('<')
+lte = COMP('<=')
+gt = COMP('>')
+gte = COMP('>=')
 comparison = OR(lte, gte, lt, gt)
 
 CROSS = b'\xc3\x97'.decode()
 cross = COMP(CROSS)
 x = COMP('x')
 by = OR(cross, x)
-def _approx(p): return comp(p, '~')
+_approx = COMP('~')
 approx = transform_value(_approx, lambda v: 'approximately')
 digits = [str(_) for _ in range(10)]
 def digit(p): return oper(p, lambda d: d in digits)
-def point(p): return comp(p,'.')
+point = COMP('.')
 def char(p): return oper(p, lambda c: c.isalpha())
 _int_ = JOINT(TIMES(dash_thing, 0, 1), MANY1(digit), join=True)
 int_ = transform_value(_int_, lambda i: int(''.join(i)))
@@ -316,13 +329,13 @@ def unit(p):  # TODO cases like '5 mg mL–1' need to be carful with '5mg made t
 
 def plus_or_minus_thing(thing): return JOINT(plus_or_minus, COMPOSE(spaces, thing), join=False)
 
-def to(p): return comp(p, 'to')
+to = COMP('to')
 range_indicator = transform_value(OR(thing_accepted_as_a_dash, to), lambda v: 'range')
 def range_thing(func): return JOINT(func, COMPOSE(spaces, range_indicator), COMPOSE(spaces, func))
 
-def _ph(p): return comp(p, 'pH')
+_ph = COMP('pH')
 ph = transform_value(_ph, BOX)
-def P(p): return comp(p, 'P')
+P = COMP('P')
 post_natal_day = transform_value(P, lambda v: BOX("'postnatal-day"))  # FIXME note that in our unit hierarchy this is a subclass of days
 _fold_prefix = END(by, num)
 fold_prefix = transform_value(_fold_prefix, lambda v: BOX("'fold"))
@@ -364,7 +377,7 @@ expression = PVAL('expression')(OR(prefix_expression, infix_expression))  # FIXM
 
 def approximate_thing(thing): return JOINT(EXACTLY_ONE(approx), COMPOSE(spaces, thing), join=False)
 
-def _C_for_temp(p): return comp(p, 'C')
+_C_for_temp = COMP('C')
 
 C_for_temp = PVAL('unit')(transform_value(_C_for_temp, lambda v: BOX(_silookup['degrees-celcius'])))
 temp_for_biology = JOINT(num, C_for_temp, join=False)
