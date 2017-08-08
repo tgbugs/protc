@@ -30,14 +30,15 @@ def make_funcs(inpt, lookuptable):
 space = parsec.space()
 spaces = parsec.spaces()
 spaces1 = parsec.many1(space)
-exponent = parsec.string('^')
+carrot = parsec.string('^')
+exponent = carrot.parsecmap(lambda v: 'exponent')
 division = parsec.string('/')
 multiplication = parsec.string('*')
 unit_op = division ^ multiplication
 colon = parsec.string(':')
 plus_or_minus_symbol = parsec.string('±')
 plus_or_minus_pair = parsec.string('+-')  # yes that is an b'\x2d'
-plus_or_minus = OR(plus_or_minus_symbol, plus_or_minus_pair)
+plus_or_minus = OR(plus_or_minus_symbol, plus_or_minus_pair).parsecmap(lambda v: 'plus-or-minus')
 # I hate the people who felt the need to make different type blocks for this stuff in 1673
 EN_DASH = b'\xe2\x80\x93'.decode()
 HYPHEN_MINUS = b'\x2d'.decode()  # yes, the thing that most keyboards have
@@ -74,6 +75,7 @@ def num_word_cap(text, index):
     return num_word_lower(text.lower(), index)
 num_word = num_word_lower ^ num_word_cap
 
+# note that the behavior of these differes from mine in that they do not fail if we exceed max
 def AT_MOST_ONE(parser): return parsec.times(parser, 0, 1).parsecmap(lambda v: v[0] if v else '')
 def EXACTLY_ONE(parser): return parsec.times(parser, 1, 1).parsecmap(lambda v: v[0])
 
@@ -90,85 +92,108 @@ float_ = parsec.joint(AT_MOST_ONE(dash_thing),
                      ).parsecmap(join)
 E = parsec.string('E')
 times = parsec.string('*')
-scientific_notation = parsec.joint((float_ ^ int_), E, int_).parsecmap(join) #parsecmap(join).parsecmap(float)
+scientific_notation = parsec.joint((float_ ^ int_), E, int_).parsecmap(join)
 num = OR(scientific_notation.parsecmap(float),
          float_.parsecmap(float),
          int_.parsecmap(int),
-         num_word.parsecmap(lambda v: _numlookup[v])) # float first so that int doesn't capture it
+         num_word.parsecmap(lambda v: _numlookup[v])) # float first so int can't capture
 #num = parsec.regex(r'-?(0|[1-9][0-9]*)([.][0-9]+)?([eE][+-]?[0-9]+)?')
 siprefix = OR(*make_funcs(coln(0, _SIPREFS), _siplookup))
-siunit = OR(*make_funcs(list(coln(0, _SIUNITS + _EXTRAS)) + # need both here to avoid collisions in unit_atom slower but worth it?
+siunit = OR(*make_funcs(list(coln(0, _SIUNITS + _EXTRAS)) +
                         list(coln(1, _SIUNITS + _EXTRAS)), _silookup))
-unit_atom = siprefix + siunit ^ siunit
-unit_dimension = parsec.joint(unit_atom, AT_MOST_ONE(exponent).parsecmap(lambda v: 'exponent'), int_)
-unit_base = unit_dimension ^ unit_atom  # might be possible to chain with choice...
+@parsec.generate
+def unit_atom():
+    prefix = yield AT_MOST_ONE(siprefix)
+    unit = yield siunit
+    if prefix:
+        return unit, prefix
+    return unit,
+
+#unit_dimension = parsec.joint(unit_atom, AT_MOST_ONE(exponent).parsecmap(lambda v: 'exponent'), int_)
+#unit_base = (unit_dimension ^ unit_atom) # might be possible to chain with choice...
+@parsec.generate
+def unit_base():
+    atom = yield unit_atom << spaces
+    exp = yield AT_MOST_ONE(AT_MOST_ONE(exponent) + (spaces >> int_))
+    if exp:
+        return atom, exp
+    return atom
+
 @parsec.generate
 def unit():
-    u1 = yield unit_base
+    u = yield unit_base
     op = yield spaces >> AT_MOST_ONE(unit_op)
     more = yield parsec.many(spaces >> unit)
     if op and more:
-        return u1, op, more
+        return u, op, more
     elif op:
-        return u1, op
+        return u, op
     elif more:
-        return u1, more
+        return u, more
     else:
-        return u1
+        return u
 
 to = parsec.string('to')
-range_indicator = (thing_accepted_as_a_dash ^ to).parsecmap('range')
+range_indicator = (thing_accepted_as_a_dash ^ to).parsecmap(lambda v: 'range')
 ph = parsec.string('pH')
-P = parsec.string('P').parsecmap(lambda v: 'postnatal-day')
-post_natal_day = P
-fold_prefix = parsec.ends_with(by, num)
+P = parsec.string('P')
+post_natal_day = P.parsecmap(lambda v: 'postnatal-day')
+fold_prefix = parsec.ends_with(by, num).parsecmap(lambda v: 'fold')
 prefix_unit = OR(ph, post_natal_day, fold_prefix)
-prefix_quantity = prefix_unit + spaces >> num
+prefix_quantity = (prefix_unit + (spaces >> num)).parsecmap(lambda v: (v[1], v[0]))
 percent = parsec.string('%').parsecmap(lambda v: 'percent')
-fold_suffix = parsec.ends_with(by, parsec.eof() ^ parsec.none_of('1234567890'))  # FIXME spaces >> ?
+fold_suffix = parsec.ends_with(by, parsec.eof() ^ parsec.none_of('1234567890')).parsecmap(lambda v: 'fold')  # FIXME spaces >> ?
 suffix_unit = percent ^ unit
-suffix_quantity_no_space = num + parsec.times(fold_suffix, 1, 1)  # FIXME this is really bad :/ and breaks dimensions...
-suffix_quantity = suffix_quantity_no_space ^ num + spaces >> parsec.times(suffix_unit, 0, 1)
+@parsec.generate
+def suffix_quantity():
+    v = yield num
+    u = yield EXACTLY_ONE(fold_suffix) ^ (spaces >> AT_MOST_ONE(suffix_unit))
+    return v, u
+
 quantity = prefix_quantity ^ suffix_quantity
 dilution_factor = int_ + colon + int_
-sq = spaces >> quantity
-sby = spaces >> by
-#dimensions = parsec.joint(quantity, sby >> sq, sby >> sq) ^ quantity + sby >> sq
 @parsec.generate
 def dimensions():
     first = yield quantity
     yield spaces >> by
-    middle = yield parsec.many(spaces >> quantity << spaces >> by)
+    middle = yield parsec.many((spaces >> quantity) << (spaces >> by))
     last = yield spaces >> quantity
-    if middle:
-        return first, middle, last
-    return first, last
+    return (first, *middle, last)
 
 prefix_operator = plus_or_minus ^ comparison
 infix_operator = OR(plus_or_minus, range_indicator, multiplication, division, exponent)
-prefix_expression = prefix_operator + spaces >> quantity
-@parsec.Parser
-def infix_expression(text, index):
-    return ((quantity + spaces >> infix_operator + spaces)
-            >>
-            (infix_expression ^ quantity))(text, index)  # sigh, not being able to start with yourself
+prefix_expression = prefix_operator + (spaces >> quantity)
+@parsec.generate
+def infix_expression():
+    start = yield quantity << spaces
+    op = yield infix_operator << spaces
+    end = yield infix_expression ^ quantity
+    return start, op, end
 
 expression = prefix_expression ^ infix_expression
 
 def approximate_thing(parser):
-    return parsec.times(approx, 1, 1) + spaces >> parser
+    return EXACTLY_ONE(approx) + (spaces >> parser)
 
 C_for_temp = parsec.string('C')
 temp_for_biology = num + C_for_temp
 
+@parsec.generate
+def parameter_expression():
+    aval = yield AT_MOST_ONE(approx << spaces)
+    value = yield OR(dimensions,
+                     dilution_factor,
+                     temp_for_biology,
+                     expression,
+                     quantity,
+                     FAILED)
+    if aval:
+        return aval, value
+    return value
+
 @parsec.Parser
-def parameter_expression(text, index): return OR(approximate_thing(parameter_expression),
-                                                 dimensions,
-                                                 dilution_factor,
-                                                 temp_for_biology,
-                                                 expression,
-                                                 quantity,
-                                                 parsec.times(parsec.string(text), 1, 1))(text, index)
+def FAILED(text, index):
+    return parsec.Value.success(len(text), f'(parse-failure "{text}")')
 
 def main():
     tests = ('1 daL', "300 mOsm", "0.5 mM", "7 mM", "0.1 Hz.", "-50 pA",
