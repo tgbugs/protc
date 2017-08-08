@@ -9,6 +9,7 @@ from pyontutils.hierarchies import creatTree
 from pyontutils.utils import makeGraph, makePrefixes, async_getter, noneMembers, allMembers, anyMembers
 from pyontutils.scigraph_client import Vocabulary
 import parsing
+import parsing_parsec
 from scibot.hypothesis import HypothesisAnnotation
 from desc.prof import profile_me
 
@@ -715,14 +716,14 @@ class protc(AstGeneric):
             else:
                 return f"({param_unit} '{name})"
 
-        def format_value(list_):
+        def format_value(tuple_):
             out = []
-            if list_:
+            if tuple_:
                 if 0:  # list_[0] == 'param:unit':  # TODO unit atom, unit by itself can be much more complex
-                    return format_unit(*list_)
+                    return format_unit(*tuple_)
                 else:
-                    for v in list_:
-                        if type(v) is list:
+                    for v in tuple_:
+                        if type(v) is tuple:
                             v = format_value(v)
                         if v is not None:
                             out.append(f'{v}')
@@ -732,6 +733,61 @@ class protc(AstGeneric):
         if v is not None:
             v = format_value(v)
         test_params.append((value, (success, v, rest)))
+        self._parameter = ParameterValue(success, v, rest, front)
+        return repr(self._parameter)
+
+
+    def _parameter_parsec(self):  # more than 2x slower than my version >_<
+        out = getattr(self, '_parameter', None)
+        if out is not None:
+            return repr(out)
+        value = self.value
+        if value == '':  # breaks the parser :/
+            return ''
+        cleaned = value.replace(' mL–1', ' * mL–1').replace(' kg–1', ' * kg–1')  # FIXME temporary (and bad) fix for superscript issues
+        cleaned = cleaned.strip()
+        cleaned_orig = cleaned
+
+        # ignore gargabe at the start
+        success = False
+        front = ''
+        max_ = len(cleaned)
+        v = None
+        for i in range(max_):
+            Value = parsing_parsec.parameter_expression(cleaned, i)
+            if Value.status:
+                v = Value.value
+                front = cleaned[:i]
+                rest = cleaned[Value.index:]
+                break
+
+        if v is None:
+            rest = cleaned
+            front = ''
+
+        def format_unit_atom(param_unit, name, prefix=None):
+            if prefix is not None:
+                return f"({param_unit} '{name} '{prefix})"
+            else:
+                return f"({param_unit} '{name})"
+
+        def format_value(tuple_):
+            out = []
+            if tuple_:
+                if 0:  # list_[0] == 'param:unit':  # TODO unit atom, unit by itself can be much more complex
+                    return format_unit(*list_)
+                else:
+                    for v in tuple_:
+                        if type(v) is tuple:
+                            v = format_value(v)
+                        if v is not None:
+                            out.append(f'{v}')
+            if out:
+                return '(' + ' '.join(out) + ')'
+
+        if v is not None:
+            v = format_value(v)
+        test_params.append((value, (Value.status, v, rest)))
         self._parameter = ParameterValue(success, v, rest, front)
         return repr(self._parameter)
 

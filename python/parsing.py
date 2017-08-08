@@ -32,7 +32,7 @@ def TIMES(func, min_, max_=None):
             for i in range(max_ - min_):
                 success, v, rest = func(p)
                 if not success:
-                    return True, matches, p
+                    return True, tuple(matches), p
                 else:
                     matches.append(v)
                     p = rest
@@ -43,7 +43,7 @@ def TIMES(func, min_, max_=None):
                 success = True
                 rest = p
 
-        return success, matches, rest
+        return success, tuple(matches), rest
     return times
 
 def MANY(func):
@@ -59,7 +59,7 @@ def ANDTHEN(func1, func2):
             p2 = rest
             success, v2, rest = func2(p2)
             if success:
-                return success, [v1, v2], rest
+                return success, (v1, v2), rest
         return success, None, p
     return andthen
 
@@ -76,7 +76,7 @@ def JOINT(*funcs, join=False):  # FIXME something is up with multichar tokens wh
                     matches.extend(v)
                 else:
                     matches.append(v)
-        return success, matches, rest 
+        return success, tuple(matches), rest 
     return joint
 
 def JOINT_OR_FIRST(*funcs, join=False):  # TODO improve performance in cases where there is a base that should return true even when the rest fails
@@ -89,7 +89,6 @@ def COMPOSE(func1, func2):
             success, v, rest = func2(rest)
             if success:
                 return success, v, rest
-
         return success, None, p
     return compose
 
@@ -141,6 +140,17 @@ def oper(p, func):
         return False, None, p  # we are at the end
     return func(v), v, p[1:]
 
+def noneof(string):
+    def noneof_(p):
+        if not p:
+            return True, p, p
+        for s in string:
+            success, v, rest = comp(p, s)
+            if success:
+                return False, v, p
+        return True, p[0], p[1:]
+    return noneof_
+
 def COMP(val):
     def comp_(p):
         return comp(p, val)
@@ -148,6 +158,12 @@ def COMP(val):
 
 #
 # function to allow implementation of what the parser actually does/outputs
+
+def BOX(v):
+    return v,
+
+def FLOP(v):
+    return tuple(v[::-1])
 
 def transform_value(parser_func, func_to_apply):
     def transformed(p):
@@ -160,7 +176,7 @@ def transform_value(parser_func, func_to_apply):
 
 def PVAL(prefix_name):
     def transformed_prefix(parser_func):
-        return transform_value(parser_func, lambda v: ['param:' + prefix_name] + v)
+        return transform_value(parser_func, lambda v: ('param:' + prefix_name,) + v)
     return transformed_prefix
 
 def STRINGIFY(func):
@@ -181,8 +197,8 @@ def get_quoted_list(filename):
     return [line.strip("'").strip('(').rstrip(')').split(' . ') for line in lines if line and '.' in line]
 
 _SIPREFS, _SIEXPS, _SIUNITS, _EXTRAS = [get_quoted_list(_) for _ in ('si-prefixes-data.rkt', 'si-prefixes-exp-data.rkt', 'si-units-data.rkt', 'si-units-extras.rkt')]
-_silookup = {k:v for k, v in _SIUNITS + _EXTRAS + [[v, v] for k, v in _SIUNITS] + [[v, v] for k, v in _EXTRAS]}
-_siplookup = {k:v for k, v in _SIPREFS}
+_silookup = {k: "'" + v for k, v in _SIUNITS + _EXTRAS + [[v, v] for k, v in _SIUNITS] + [[v, v] for k, v in _EXTRAS]}
+_siplookup = {k: "'" + v for k, v in _SIPREFS}
 
 def make_funcs(inpt, lookuptable):
     args = []
@@ -198,10 +214,6 @@ siprefix = OR(*make_funcs(coln(0, _SIPREFS), _siplookup))
 siunit = OR(*make_funcs(list(coln(0, _SIUNITS + _EXTRAS)) + # need both here to avoid collisions in unit_atom slower but worth it?
                         list(coln(1, _SIUNITS + _EXTRAS)), _silookup))
 
-def unit_atom(p): 
-    func = OR(JOINT(siprefix, siunit, join=False), JOINT(siunit, join=False))  # have to use OR cannot use TIMES  FIXME siunit by itself needs to not be followed by another char? so NOT(siunit)  (different than kgm/s example I used before...)
-    func = transform_value(func, lambda v: ["'" + e for e in v])  # return unit atoms quoted FIXME maybe we do this a bit later?
-    return func(p)
 
 exponent = COMP('^')
 def division(p): return comp(p, '/')
@@ -280,15 +292,26 @@ exponental_notation = JOINT(OR(float_, int_),  # FIXME not including as a num fo
                             COMPOSE(spaces, OR(by, times)),
                             COMPOSE(spaces, COMP('10')),
                             exponent, int_)
-scientific_notation = JOINT(OR(float_, int_), E, int_)
+_scientific_notation = JOINT(OR(_float_, _int_), E, _int_)
+scientific_notation = transform_value(_scientific_notation, lambda v: float(v))
 num = OR(scientific_notation, float_, int_, num_word)  # float first so that int doesn't capture it
+
+def unit_atom(p): 
+    func = OR(JOINT(siprefix, siunit, join=False),
+              JOINT(siunit, join=False))  # have to use OR cannot use TIMES  FIXME siunit by itself needs to not be followed by another char? so NOT(siunit)  (different than kgm/s example I used before...)
+    func = transform_value(func, FLOP)
+    return func(p)
 
 maybe_exponent = transform_value(AT_MOST_ONE(exponent), lambda v: 'exponent')  # ICK not the best way...
 unit_dimension = JOINT(unit_atom, maybe_exponent, int_)
-unit_base = OR(unit_dimension, unit_atom)  # FIXME this is a hilariously inefficient way to get right associativity, there are better ways
+unit_base = OR(unit_dimension, unit_atom)  # FIXME this is a hilariously inefficient way to get right associativity
+
 def unit(p):  # TODO cases like '5 mg mL–1' need to be carful with '5mg made to' since that would parse as mg m :/
-    func = OR(JOINT(unit_base, COMPOSE(spaces, unit_op), COMPOSE(spaces, unit), join=False), unit_base)
-    func = transform_value(func, lambda v: [v[1], v[0]] if len(v) == 2 else v)  # the unit must always be there so it should be first
+    func = OR(JOINT(unit_base,
+                    COMPOSE(spaces, unit_op),
+                    COMPOSE(spaces, unit),
+                    join=False),
+              unit_base)
     return func(p)  # beware false order of operations
 
 def plus_or_minus_thing(thing): return JOINT(plus_or_minus, COMPOSE(spaces, thing), join=False)
@@ -298,30 +321,32 @@ range_indicator = transform_value(OR(thing_accepted_as_a_dash, to), lambda v: 'r
 def range_thing(func): return JOINT(func, COMPOSE(spaces, range_indicator), COMPOSE(spaces, func))
 
 def _ph(p): return comp(p, 'pH')
-ph = transform_value(_ph, lambda v: [v])
+ph = transform_value(_ph, BOX)
 def P(p): return comp(p, 'P')
-post_natal_day = transform_value(P, lambda v: ['postnatal-day'])  # FIXME note that in our unit hierarchy this is a subclass of days
+post_natal_day = transform_value(P, lambda v: BOX("'postnatal-day"))  # FIXME note that in our unit hierarchy this is a subclass of days
 _fold_prefix = END(by, num)
-fold_prefix = transform_value(_fold_prefix, lambda v: ['fold'])
+fold_prefix = transform_value(_fold_prefix, lambda v: BOX("'fold"))
 
 prefix_unit = PVAL('prefix-unit')(OR(ph, post_natal_day, fold_prefix))
 _prefix_quantity = JOINT(prefix_unit, COMPOSE(spaces, num))  # OR(JOINT(fold, num))
-prefix_quantity = transform_value(_prefix_quantity, lambda v: [v[1], v[0]])
+prefix_quantity = transform_value(_prefix_quantity, FLOP)
 
 _percent = COMP('%')
-percent = transform_value(_percent, lambda v: ['percent'])
-fold_suffix = transform_value(END(by, NOT(num)), lambda v: ['fold'])  # NOT(num) required to prevent issue with dimensions
+percent = transform_value(_percent, lambda v: BOX("'percent"))
+#fold_suffix = transform_value(END(by, NOT(num)), lambda v: BOX("'fold"))  # NOT(num) required to prevent issue with dimensions
+fold_suffix = transform_value(END(by, noneof('0123456789')), lambda v: BOX("'fold"))  # NOT(num) required to prevent issue with dimensions
 suffix_unit = PVAL('unit')(OR(percent, unit))
 suffix_quantity_no_space = JOINT(num, PVAL('unit')(EXACTLY_ONE(fold_suffix)))  # FIXME this is really bad :/ and breaks dimensions...
-suffix_quantity = OR(suffix_quantity_no_space, JOINT(num, COMPOSE(spaces, AT_MOST_ONE(suffix_unit))))  # this catches the num by itself and leaves a blank unit
+suffix_quantity = OR(suffix_quantity_no_space,
+                     JOINT(num,
+                           COMPOSE(spaces, AT_MOST_ONE(suffix_unit))))  # this catches the num by itself and leaves a blank unit
 #suffix_quantity1 = OR(suffix_quantity_no_space, JOINT(num, COMPOSE(spaces, EXACTLY_ONE(suffix_unit))))
 
 quantity = PVAL('quantity')(OR(prefix_quantity, suffix_quantity))
 #quantity_require_unit = OR(prefix_quantity, suffix_quantity1)
 #quantity_with_uncertainty = JOINT(quantity, COMPOSE(spaces, plus_or_minus_thing(quantity)))  # could be error or could be a range spec, also 2nd quantity needs to require unit?? is there some way to do 'if not a then b?' or 'a unit must be in here somwhere?'
 
-
-dilution_factor = JOINT(int_, colon, int_, join=False)
+dilution_factor = PVAL('dilution')(JOINT(SKIP(int_, colon), int_, join=False))
 sq = COMPOSE(spaces, quantity)
 sby = COMPOSE(spaces, by)
 dimensions = PVAL('dimensions')(OR(JOINT(quantity, COMPOSE(sby, sq), COMPOSE(sby, sq)), JOINT(quantity, COMPOSE(sby, sq))))  # ick
@@ -341,10 +366,13 @@ def approximate_thing(thing): return JOINT(EXACTLY_ONE(approx), COMPOSE(spaces, 
 
 def _C_for_temp(p): return comp(p, 'C')
 
-C_for_temp = PVAL('unit')(transform_value(_C_for_temp, lambda v: [_silookup['degrees-celcius']]))
+C_for_temp = PVAL('unit')(transform_value(_C_for_temp, lambda v: BOX(_silookup['degrees-celcius'])))
 temp_for_biology = JOINT(num, C_for_temp, join=False)
 
 # TODO objective specifications...
+
+def FAILURE(p):
+    return PVAL('parse-failure')(lambda null: (True, tuple(), p))(p)
 
 def parameter_expression(p): return OR(approximate_thing(parameter_expression),
                                        dimensions,
@@ -352,7 +380,7 @@ def parameter_expression(p): return OR(approximate_thing(parameter_expression),
                                        temp_for_biology,
                                        expression,
                                        quantity,
-                                       PVAL('parse-failure')(TIMES(STRINGIFY(COMP(p)), 1, 1)))(p)  # now this is some stupid shit right here
+                                       FAILURE)(p)  # now this is some stupid shit right here
 
 # tag docs
 whitespace_atom = OR(COMP(' '), COMP('\t'), COMP('\n'))
@@ -405,11 +433,14 @@ def main():
     should_fail = ('~~~~1',
                    "(pH 7.3",
                   )
+    q = "'"
     fun = [t.split(' ')[-1] for t in tests][:5]
     test_unit_atom = [unit_atom(f) for f in fun]
     test_unit = [unit(f) for f in fun]
     test_quantity = [quantity(t) for t in tests]
     test_expression = [parameter_expression(t) for t in tests + weirds]
+    test_expression = '\n'.join(f"'{t+q:<25} -> {parameter_expression(t)[1]}" for t in tests + weirds)
+    print(test_expression)
     test_fails = [parameter_expression(t) for t in tests]
     embed()
 
