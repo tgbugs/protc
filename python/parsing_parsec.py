@@ -5,10 +5,18 @@ import os
 from pyontutils.utils import coln
 from IPython import embed
 
-def OR(*parsers):
-    if len(parsers) == 1:
-        return parsers[0]
-    return parsec.try_choice(parsers[0], OR(*parsers[1:]))
+def param(symbol):
+    def decorator(parser):
+        return parser.parsecmap(lambda v: ('param:' + symbol, *v))
+    return decorator
+
+def BOX(v):
+    return v,
+
+def OR(parser, *parsers):
+    if not parsers:
+        return parser
+    return parsec.try_choice(parser, OR(*parsers))
 
 DEGREES_UNDERLINE = b'\xc2\xba'.decode()  # º sometimes pdfs misencode these
 DEGREES_FEAR = b'\xe2\x97\xa6' # this thing is scary and I have no id what it is or why it wont change color ◦
@@ -18,12 +26,15 @@ def get_quoted_list(filename):
     return [line.strip("'").strip('(').rstrip(')').split(' . ') for line in lines if line and '.' in line]
 
 _SIPREFS, _SIEXPS, _SIUNITS, _EXTRAS = [get_quoted_list(_) for _ in ('si-prefixes-data.rkt', 'si-prefixes-exp-data.rkt', 'si-units-data.rkt', 'si-units-extras.rkt')]
-_silookup = {k:v for k, v in _SIUNITS + _EXTRAS + [[v, v] for k, v in _SIUNITS] + [[v, v] for k, v in _EXTRAS]}
-_siplookup = {k:v for k, v in _SIPREFS}
+_silookup = {k: "'" + v for k, v in
+             _SIUNITS + _EXTRAS +
+             [[v, v] for k, v in _SIUNITS] +
+             [[v, v] for k, v in _EXTRAS]}
+_siplookup = {k: "'" + v for k, v in _SIPREFS}
 
 def make_funcs(inpt, lookuptable):
     args = []
-    for token in sorted(inpt, key=lambda a: -len(a)):  # sort to simulate right associativity (ie da recognized even if d a token)
+    for token in sorted(inpt, key=lambda a: -len(a)):  # right associativity (ie da recognized even if d a token)
         args.append(parsec.string(token).parsecmap(lambda v: lookuptable[v]))
     return args
 
@@ -85,36 +96,33 @@ digit = parsec.digit()
 digits = parsec.many(digit).parsecmap(lambda v: ''.join(v))
 digits1 = parsec.many1(digit).parsecmap(lambda v: ''.join(v))
 point = parsec.string('.')
-int_ = (AT_MOST_ONE(dash_thing) + digits1).parsecmap(join)
-float_ = parsec.joint(AT_MOST_ONE(dash_thing),
-                      parsec.try_choice(parsec.joint(digits1, point, digits).parsecmap(join),
-                                        parsec.joint(digits, point, digits1).parsecmap(join))
-                     ).parsecmap(join)
+_int_ = (AT_MOST_ONE(dash_thing) + digits1).parsecmap(join)
+int_ = _int_.parsecmap(int)
+_float_ = parsec.joint(AT_MOST_ONE(dash_thing),
+                       parsec.try_choice(parsec.joint(digits1, point, digits).parsecmap(join),
+                                         parsec.joint(digits, point, digits1).parsecmap(join))
+                      ).parsecmap(join)
+float_ = _float_.parsecmap(float)
 E = parsec.string('E')
 times = parsec.string('*')
-scientific_notation = parsec.joint((float_ ^ int_), E, int_).parsecmap(join)
-num = OR(scientific_notation.parsecmap(float),
-         float_.parsecmap(float),
-         int_.parsecmap(int),
-         num_word.parsecmap(lambda v: _numlookup[v])) # float first so int can't capture
+scientific_notation = parsec.joint((_float_ ^ _int_), E, _int_).parsecmap(join).parsecmap(float)
+num = OR(scientific_notation,
+         float_,  # float first so int can't capture
+         int_,
+         num_word)
 #num = parsec.regex(r'-?(0|[1-9][0-9]*)([.][0-9]+)?([eE][+-]?[0-9]+)?')
 siprefix = OR(*make_funcs(coln(0, _SIPREFS), _siplookup))
 siunit = OR(*make_funcs(list(coln(0, _SIUNITS + _EXTRAS)) +
                         list(coln(1, _SIUNITS + _EXTRAS)), _silookup))
 @parsec.generate
 def unit_atom():
-    prefix = yield AT_MOST_ONE(siprefix)
-    unit = yield siunit
-    if prefix:
-        return unit, prefix
-    return unit,
+    unit = yield (siprefix + siunit).parsecmap(lambda v: (v[1], v[0])) ^ siunit.parsecmap(BOX)
+    return unit
 
-#unit_dimension = parsec.joint(unit_atom, AT_MOST_ONE(exponent).parsecmap(lambda v: 'exponent'), int_)
-#unit_base = (unit_dimension ^ unit_atom) # might be possible to chain with choice...
 @parsec.generate
 def unit_base():
     atom = yield unit_atom << spaces
-    exp = yield AT_MOST_ONE(AT_MOST_ONE(exponent) + (spaces >> int_))
+    exp = yield AT_MOST_ONE(AT_MOST_ONE(exponent).parsecmap(lambda v: 'exponent') + (spaces >> int_))
     if exp:
         return atom, exp
     return atom
@@ -125,11 +133,11 @@ def unit():
     op = yield spaces >> AT_MOST_ONE(unit_op)
     more = yield parsec.many(spaces >> unit)
     if op and more:
-        return u, op, more
+        return (u, op, *more)
     elif op:
         return u, op
     elif more:
-        return u, more
+        return (u, '*', *more)  # no operator interpreted as multiplication eg kgm/s2
     else:
         return u
 
@@ -137,21 +145,32 @@ to = parsec.string('to')
 range_indicator = (thing_accepted_as_a_dash ^ to).parsecmap(lambda v: 'range')
 ph = parsec.string('pH')
 P = parsec.string('P')
-post_natal_day = P.parsecmap(lambda v: 'postnatal-day')
-fold_prefix = parsec.ends_with(by, num).parsecmap(lambda v: 'fold')
-prefix_unit = OR(ph, post_natal_day, fold_prefix)
+post_natal_day = P.parsecmap(lambda v: "'postnatal-day")
+fold_prefix = parsec.ends_with(by, num).parsecmap(lambda v: "'fold")
+prefix_unit = param('prefix-unit')(OR(ph, post_natal_day, fold_prefix).parsecmap(BOX))
 prefix_quantity = (prefix_unit + (spaces >> num)).parsecmap(lambda v: (v[1], v[0]))
-percent = parsec.string('%').parsecmap(lambda v: 'percent')
-fold_suffix = parsec.ends_with(by, parsec.eof() ^ parsec.none_of('1234567890')).parsecmap(lambda v: 'fold')  # FIXME spaces >> ?
-suffix_unit = percent ^ unit
+percent = parsec.string('%').parsecmap(lambda v: "'percent").parsecmap(BOX)
+fold_suffix = parsec.ends_with(by.parsecmap(lambda v: "'fold"), parsec.eof() ^
+                               parsec.none_of('1234567890')).parsecmap(BOX)
+suffix_unit_no_space = param('unit')(EXACTLY_ONE(fold_suffix))
+suffix_unit = param('unit')(percent ^ unit)
 @parsec.generate
 def suffix_quantity():
     v = yield num
-    u = yield EXACTLY_ONE(fold_suffix) ^ (spaces >> AT_MOST_ONE(suffix_unit))
-    return v, u
+    u = yield suffix_unit_no_space ^ (spaces >> AT_MOST_ONE(suffix_unit))
+    return v, u if u else tuple()
 
-quantity = prefix_quantity ^ suffix_quantity
-dilution_factor = int_ + colon + int_
+quantity = param('quantity')(prefix_quantity ^ suffix_quantity)
+
+@param('dilution')
+@parsec.generate
+def dilution_factor():
+    one = yield int_
+    yield colon
+    times = yield int_
+    return one, times
+
+@param('dimensions')
 @parsec.generate
 def dimensions():
     first = yield quantity
@@ -163,19 +182,20 @@ def dimensions():
 prefix_operator = plus_or_minus ^ comparison
 infix_operator = OR(plus_or_minus, range_indicator, multiplication, division, exponent)
 prefix_expression = prefix_operator + (spaces >> quantity)
+
 @parsec.generate
 def infix_expression():
     start = yield quantity << spaces
     op = yield infix_operator << spaces
-    end = yield infix_expression ^ quantity
-    return start, op, end
+    end = yield infix_expression ^ quantity.parsecmap(BOX)
+    return (start, op, *end)
 
-expression = prefix_expression ^ infix_expression
+expression = param('expression')(prefix_expression ^ infix_expression)
 
 def approximate_thing(parser):
     return EXACTLY_ONE(approx) + (spaces >> parser)
 
-C_for_temp = parsec.string('C')
+C_for_temp = param('unit')(parsec.string('C').parsecmap(lambda v: (_silookup['degrees-celcius'],)))
 temp_for_biology = num + C_for_temp
 
 @parsec.generate
@@ -193,7 +213,7 @@ def parameter_expression():
 
 @parsec.Parser
 def FAILED(text, index):
-    return parsec.Value.success(len(text), f'(parse-failure "{text}")')
+    return parsec.Value.success(len(text), ('parse-failure', text))
 
 def main():
     tests = ('1 daL', "300 mOsm", "0.5 mM", "7 mM", "0.1 Hz.", "-50 pA",
@@ -218,7 +238,9 @@ def main():
     #test_unit_atom = [unit_atom(f) for f in fun]
     #test_unit = [unit(f) for f in fun]
     #test_quantity = [quantity(t) for t in tests]
-    #test_expression = [parameter_expression(t) for t in tests + weirds]
+    q = "'"
+    test_expression = '\n'.join(f"'{t+q:<25} -> {parameter_expression(t, 0).value}" for t in tests + weirds)
+    print(test_expression)
     #test_fails = [parameter_expression(t) for t in tests]
     embed()
 
