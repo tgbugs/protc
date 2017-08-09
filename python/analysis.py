@@ -685,36 +685,31 @@ class protc(AstGeneric):
         if out is not None:
             return repr(out)
         value = self.value
+        #print(value)
         if value == '':  # breaks the parser :/
             return ''
-        cleaned = value.replace(' mL–1', ' * mL–1').replace(' kg–1', ' * kg–1')  # FIXME temporary (and bad) fix for superscript issues
-        cleaned = cleaned.strip()
+        #cleaned = value.replace(' mL–1', ' * mL–1').replace(' kg–1', ' * kg–1')  # FIXME temporary (and bad) fix for superscript issues
+        #cleaned = cleaned.strip()
+        cleaned = value.strip()
         cleaned_orig = cleaned
 
         # ignore gargabe at the start
         success = False
         front = ''
-        while not success:
-            success_always_true, v, rest = parsing.parameter_expression(cleaned)
-            try:
-                success = v[0] != 'param:parse-failure'
-            except TypeError as e:
-                raise e
+        while cleaned and not success:
+            _, v, rest = parsing.parameter_expression(cleaned)
+            success = v[0] != 'param:parse-failure'
             if not success:
-                if len(cleaned) > 1:
-                    more_front, cleaned = cleaned[0], cleaned[1:]
-                    front += more_front
-                else:
-                    front += cleaned
-                    success, v, rest = parsing.parameter_expression(cleaned_orig)  # reword but whatever
-                    error_output.append((success, v, rest))
-                    break
+                cleaned = cleaned[1:]
 
+        #return repr(v)  # calling this there adds 4 secons to the runtime...
         def format_unit_atom(param_unit, name, prefix=None):  # dealt with in parsing
             if prefix is not None:
-                return f"({param_unit} '{name} '{prefix})"
+                return f"({param_unit} '{name} '{prefix})"  # perf is a tossup...
+                return '(' + param_unit + " '" + name + " '" + prefix + ')'
             else:
                 return f"({param_unit} '{name})"
+                return '(' + param_unit + " '" + name + ')'
 
         def format_value(tuple_):
             out = []
@@ -723,7 +718,8 @@ class protc(AstGeneric):
                     if type(v) is tuple:
                         v = format_value(v)
                     if v is not None:
-                        out.append(f'{v}')
+                        #out.append(f'{v}')
+                        out.append(str(v))
             if out:
                 return '(' + ' '.join(out) + ')'
 
@@ -735,6 +731,7 @@ class protc(AstGeneric):
 
 
     def _parameter_parsec(self):  # more than 2x slower than my version >_<
+        #def parameter(self):
         out = getattr(self, '_parameter', None)
         if out is not None:
             return repr(out)
@@ -823,7 +820,7 @@ test_input = []
 def main():
     from pprint import pformat
     from protcur import get_annos, get_annos_from_api, start_loop
-    from time import sleep
+    from time import sleep, time
     import requests
 
     mem_file = '/tmp/protocol-annotations.pickle'
@@ -838,19 +835,25 @@ def main():
         repr(hybrids)
     #rep()
 
-    @profile_me
+    #@profile_me
     def perftest():
         protcs = [protc(a, annos) for a in annos]
         return protcs
+    start = time()
     protcs = perftest()
-    @profile_me
+    stop = time()
+    print('BAD TIME', stop - start)
+    #@profile_me  # a note that trying ot get pref data when there are lots of function calls nearly doubles actual time...
     def text():
         t = protc.parsed()
         with open('/tmp/protcur.rkt', 'wt') as f: f.write(t)
         # don't return to avoid accidentally repring these fellows :/
     #p = protc.byId('nofnAgwtEeeIoHcLZfi9DQ')  # serialization error due to a cycle
     #print(repr(p))
+    start = time()
     text()
+    stop = time()
+    print('BAD TIME', stop - start)
     tl = protc.topLevel()
     with open('/tmp/top-protcur.rkt', 'wt') as f: f.write(tl)
     embed()

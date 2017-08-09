@@ -428,6 +428,8 @@ tag_docs = MANY1(SKIP(tag_doc, whitespace))
 
 
 def main():
+    from desc.prof import profile_me
+    from time import time
     tests = ('1 daL', "300 mOsm", "0.5 mM", "7 mM", "0.1 Hz.", "-50 pA",
              "200–500mm", "0.3%–0.5%", "1:500", "4%", "10 U/ml",
              "–20°C", "<10 mV", "–70 ± 1 mV", "30 to 150 pA",
@@ -446,6 +448,28 @@ def main():
     should_fail = ('~~~~1',
                    "(pH 7.3",
                   )
+    with open(os.path.expanduser('~/ni/protocols/rkt/test-params.rkt'), 'rt') as f:
+        param_test_strings = [l.strip().strip('"') for l in f.readlines()][3:-1]
+    test_all = []
+
+    #@profile_me  # THIS IS WHAT MAKES IT SLOW!
+    def timeit():
+        for t in param_test_strings:
+            success = False
+            t2 = t
+            while t2 and not success:
+                _, v, rest = parameter_expression(t2)
+                success = v[0] != 'param:parse-failure'
+                if not success:
+                    t2 = t2[1:]
+            if not success:
+                rest = t
+            test_all.append((success, v, rest))
+    start = time()
+    timeit()
+    stop = time()
+    print('BAD TIME', stop - start)
+
     q = "'"
     fun = [t.split(' ')[-1] for t in tests][:5]
     test_unit_atom = [unit_atom(f) for f in fun]
@@ -453,7 +477,7 @@ def main():
     test_quantity = [quantity(t) for t in tests]
     test_expression = [parameter_expression(t) for t in tests + weirds]
     test_expression = '\n'.join(f"'{t+q:<25} -> {parameter_expression(t)[1]}" for t in tests + weirds)
-    print(test_expression)
+    #print(test_expression)
     test_fails = [parameter_expression(t) for t in tests]
     embed()
 
