@@ -1,6 +1,7 @@
 #lang racket/base
 (require (rename-in racket/base [string char->string]))
-(require parsack)
+(require parsack racket/string)
+(require parsack racket/set)
 (require "../../../ni/protocols/rkt/units/si-prefixes-data.rkt")
 (require "../../../ni/protocols/rkt/units/si-prefixes-exp-data.rkt")
 (require "../../../ni/protocols/rkt/units/si-units-data.rkt")
@@ -52,7 +53,14 @@
   (apply <or> (map try rest)))
 
 (define (AT-MOST-ONE parser)
-  (<any> parser (return '())))
+  (try-choice parser (return '())))
+
+(define (pacman parser input)
+  (println input)
+  (let ((attempt (parse parser input)))
+    (if (and (non-empty-string? input) (equal? attempt (Empty (Ok 'FAILURE))))
+        (pacman parser (substring input 1))
+        attempt)))
 
 (define unit-lookup (lookup-from-alists units-si units-extra))
 (define prefix-lookup (lookup-from-alists prefixes-si))
@@ -70,13 +78,14 @@
 (define colon (string ":"))
 (define plus-or-minus-symbol (string "±"))
 (define plus-or-minus-pair (string "+-"))
-(define plus-or-minus (>> (<or> plus-or-minus-symbol plus-or-minus-pair)
+(define plus-over-minus (string "+/-"))
+(define plus-or-minus (>> (try-choice plus-or-minus-symbol plus-or-minus-pair plus-over-minus)
                           (return 'plus-or-minus)))
 (define en-dash (string EN-DASH))
 (define hyphen-minus (string HYPHEN-MINUS))
-(define dash-thing (>> (<or> en-dash hyphen-minus) (return HYPHEN-MINUS)))
+(define dash-thing (>> (<or> en-dash hyphen-minus) (return '(#\-))))
 (define double-dash-thing (parser-compose dash-thing dash-thing))
-(define thing-accepted-as-a-dash (>> (<or> double-dash-thing dash-thing) (return HYPHEN-MINUS)))
+(define thing-accepted-as-a-dash (>> (<or> double-dash-thing dash-thing) (return '(#\-))))
 (define gt (string ">"))
 (define gte (string ">="))
 (define lt (string "<"))
@@ -100,23 +109,24 @@
     ("nine" . 9)))
 
 (define (return-char->string chars)
-  ;(println chars)
+  (println chars)
   (return (apply char->string chars)))
 (define num-word (apply try-choice (make-with-any-case-return number-word-lookup)))
 (define digits (many $digit))
 (define digits1 (many1 $digit))
 (define point (string "."))
-(define int-string (>>= (parser-compose (AT-MOST-ONE dash-thing) digits1)
-                        return-char->string))
-(define int (>>= int-string return-string->number))
+(define int-string (parser-seq (AT-MOST-ONE dash-thing) digits1))
+                        ;(lambda (asdf) (return-char->string (apply append asdf) ))))
+(define int int-string);(>>= int-string return-string->number))
 (define (join . rest)
   ;(println rest)
   (apply append rest))
-(define float-string (>>= (parser-seq (AT-MOST-ONE dash-thing)
-                                      (<or> (parser-seq digits1 point digits #:combine-with join)
-                                            (parser-seq digits point digits1 #:combine-with join)) #:combine-with append)
-                          return-char->string))
-(define float (>>= float-string return-string->number))
+(define float-string ;(>>=
+                      (parser-seq (AT-MOST-ONE dash-thing)
+                                      (<or> (parser-seq digits1 point digits); #:combine-with join)
+                                            (parser-seq digits point digits1)))); #:combine-with join)) #:combine-with append))
+                     ;     return-char->string))
+(define float float-string);(>>= float-string return-string->number))
 (define E (string "E"))
 (define scientific-notation (>>= (parser-compose (<or> float-string int-string) E int-string) return-string->number))
 (define num (try-choice scientific-notation
@@ -125,61 +135,74 @@
                         num-word))
 (define prefix-symbols (apply try-choice (make-with-string-return prefix-lookup)))
 (define unit-symbols (apply try-choice (make-with-string-return unit-lookup)))
-(define unit-atom (<or> (parser-seq prefix-symbols
-                                    unit-symbols
-                                    #:combine-with (lambda (a b) (cons b a)))
-                        unit-symbols))
+(define unit-atom (try-choice (parser-seq prefix-symbols
+                                          unit-symbols
+                                          #:combine-with (lambda (a b) (cons b a)))
+                              unit-symbols))
 (define unit-base (parser-seq
                    unit-atom
-                   (>> spaces
-                       (AT-MOST-ONE
-                        (parser-seq
-                         (AT-MOST-ONE exponent)
-                         (>> spaces int))))))
+                   (~ spaces)
+                   (AT-MOST-ONE
+                    (parser-seq
+                     (>> (AT-MOST-ONE exponent) (return 'exponent))
+                     (>> spaces int)))))
 (define unit (parser-seq  ; consider parser-compose
               unit-base
-              (>> spaces (AT-MOST-ONE unit-op))
-              (many (>> spaces unit))
+              (~ spaces)
+              (AT-MOST-ONE unit-op)
+              (~ spaces)
+              (many unit)
               #:combine-with join))
 (define to (string "to"))
 (define range-indicator (>> (<or> thing-accepted-as-a-dash to) (return 'range)))
+(define fold-prefix (>> (parser-seq by (lookAhead num)) (return (cons 'fold '()))))  ; don't use endBy here it is a many0 in parsack
 (define pH (string "pH"))
 (define P (string "P"))
 (define postnatal-day (>> P (return 'postnatal-day)))
-(define fold-prefix (>> (parser-seq by (lookAhead num)) (return 'fold)))  ; don't use endBy here it is a many0 in parsack
+(define fold-suffix (>> (parser-seq by (lookAhead (<or> $eof (<!> num)))) (return (cons 'fold '()))))  ; FIXME
+(define percent (>> (string "%") (return (cons 'percent '()))))
 (define prefix-unit-base (<or> pH postnatal-day fold-prefix))
 (define prefix-unit ((param 'prefix-unit) prefix-unit-base))
+(define suffix-unit-no-space ((param 'unit) fold-suffix))
+(define suffix-unit ((param 'unit)
+                     (try-choice percent unit)))
 (define prefix-quantity (parser-seq
                          prefix-unit
                          (>> spaces num) #:combine-with (lambda (pu n) (list n pu))))
-(define percent (string "%"))
-(define fold-suffix (>> (parser-seq by (lookAhead (<or> $eof (<!> num)))) (return 'fold)))  ; FIXME
-(define suffix-unit-no-space ((param 'unit) fold-suffix))
-(define suffix-unit ((param 'unit)
-                     (<or> percent unit)))
+(define suffix-quantity-no-by (parser-seq num
+                                          (~ spaces)
+                                          (AT-MOST-ONE suffix-unit)))
 (define suffix-quantity (parser-seq num
                                     (<any> suffix-unit-no-space
-                                           (>> spaces (AT-MOST-ONE suffix-unit)))))
+                                           (AT-MOST-ONE
+                                            (>> spaces
+                                                suffix-unit)))))
 (define quantity ((param 'quantity) (<or> prefix-quantity suffix-quantity)))
-(define dilution-factor ((param 'dilution) (parser-seq int (~ colon) int)))
+(define dilution-factor ((param 'dilution) (parser-seq int (~ colon) (>> spaces int))))
 ;(define dimensions ((param 'dimensions) (sepBy1 quantity (>> spaces (parser-seq by (lookAhead quantity))))))  ; not quite... since it will match 1x ...
 ;(define (skip p q) (>>= p (lambda (return-value) (>> q (return return-value)))))  ; maybe useful?
-(define dimensions ((param 'dimensions) (parser-seq quantity
-                                                    (~ (>> spaces by))
-                                                    (>> spaces quantity)
-                                                    (many (>> (>> spaces by) (>> spaces quantity)))
-                                                    ;#:combine-with 
-                                                    )))
+(define dimensions ((param 'dimensions) (parser-seq suffix-quantity-no-by
+                                                    (many1 (parser-seq
+                                                            (~ spaces)
+                                                            (~ by)
+                                                            (~ spaces)
+                                                            suffix-quantity-no-by)))))
 (define prefix-operator (<or> plus-or-minus comparison))
 (define infix-operator (<or> plus-or-minus range-indicator multiplication division exponent))
 (define prefix-expression (parser-seq prefix-operator (>> spaces quantity)))
-(define infix-expression (parser-seq
-                          quantity
-                          (>> spaces infix-operator)
-                          (<or> infix-expression quantity)))
+(define infix-suffix (parser-compose
+                      spaces
+                      (op <- infix-operator)
+                      spaces
+                      (q <- quantity)
+                      (return (list op q))))
+(define infix-expression (parser-compose (q <- quantity)
+                                         (m0 <- infix-suffix)
+                                         (m1 <- (many (try infix-suffix)))
+                                         (return (cons q (apply append (cons m0 m1))))))
 (define expression ((param 'expression) (<or> prefix-expression infix-expression)))  ; TODO prefixed infix...
-(define C-for-temp ((param 'unit) (>> (string "C") (return (cons 'degrees-celcius '())))))
-(define temp-for-biology (parser-seq num C-for-temp))
+(define C-for-temp ((param 'unit) (>> (<or> (string "ºC") (string "C")) (return (cons 'degrees-celcius '())))))
+(define temp-for-biology ((param 'quantity) (parser-seq num C-for-temp)))
 (define parameter-expression (parser-seq
                               (AT-MOST-ONE approx)
                               (>> spaces (try-choice ; indeed needed instead of <or>
@@ -200,7 +223,7 @@
                       "250 +- 70 um" "20±11 mm" "+- 20 degrees"
                       "0.1 mg kg–1" "75  mg / kg" "40x" "x100"
                       "200μm×200μm×200μm" "20--29 days" "4 °C" "10×10×10"
-                      "10 kg * mm^2 / s^2" "10 * 1.1 ^ 30 / 12"))
+                      "10 kg * mm^2 / s^2" "10 * 1.1 ^ 30 / 12" "2to 4"))
 
   (println (parse ((param 'butts)
                    (>>= (string "butts") return-char->string)) 
@@ -260,9 +283,57 @@
   (println (parse dimensions "200μm×200μm"))
   (println (parse dimensions "200μm×200μm×200μm"))
   (println (parse dimensions "200μm×200μm×200μm×200μm"))
-  ;(for/list ([t tests]) (begin (print t) (println (parse parameter-expression t))))
-  (for/list ([t param-test-strings]) (begin (print t) (println (parse parameter-expression t))))
-  ;(time (for/list ([t param-test-strings]) (parse parameter-expression t)))
+
+  (println (parse plus-or-minus "±0.02/lm"))
+  (println (parse prefix-expression "±0.02/lm"))
+  ;(println (parse infix-expression "0.33±0.02/lm")) ; /lm causing problems
+  (println (parse infix-expression "0.33±0.02"))
+
+  (println (parse unit "nm"))
+  (println (parse unit-base "mm "))
+  (println (parse unit "pm "))
+  (println (parse suffix-unit "dam "))
+  (println (parse suffix-unit "mm thick"))
+  (println (parse quantity "50 um thick"))
+  (println (parse parameter-expression "50 um thick"))
+  (println (pacman parameter-expression "lol 50 um thick"))
+  (println (pacman dimensions "10×10×10"))
+  (println (pacman quantity "2to 4 failes"))
+  (println (pacman (>> infix-operator (>> spaces quantity)) "to 4 failes"))
+  (println (pacman infix-expression "2 to 4 failes"))
+  (println (pacman infix-expression "2 to 4 to nine failes no more!"))
+  (println (pacman parameter-expression " 500mV"))
+  (println (pacman parameter-expression "than 500mV"))
+  (println (pacman parameter-expression "zz 500mV"))
+  (println (pacman quantity " z 500mV"))
+  (println (pacman parameter-expression " z 500mV"))
+  ;(println (pacman parameter-expression " than 500mV"))
+  ;(println (pacman parameter-expression "s than 500mV"))
+  ;(println (pacman parameter-expression "ss than 500mV"))
+  ;(println (pacman parameter-expression "ess than 500mV"))
+  ;(println (pacman parameter-expression "less than 500mV"))
+
+  (define (filter-failure alist)
+    (list (set->list (for/set ([pair alist])
+      (when ;(or (equal? (cdr pair) (Empty (Ok 'FAILURE)))
+                (equal? (cdr pair) (Consumed (Ok 'FAILURE)));)
+        (println pair))))))
+        ;(car pair))))))
+  ;(for ([t tests]) (begin (print t) (println (parse parameter-expression t))))
+  ;(for ([t param-test-strings]) (begin (print t) (println (pacman parameter-expression t))))
+  (define (time-with-return function)
+    (define collector '())
+    (define (to-time)
+      (set! collector (function)))
+    (time (to-time))
+    collector)
+  #|
+  (define data
+    (time-with-return
+     (lambda () (for/list ([t param-test-strings]) (cons t (pacman parameter-expression t))))))
+  (for ((d data)) (println d))
+  (filter-failure data)
+  |#
   'nop
   )
 
