@@ -9,6 +9,11 @@ __script_folder__ = os.path.dirname(os.path.realpath(__file__))
 
 # combinators
 
+def RETURN(v):
+    def return_(p):
+        return True, v, p
+    return return_
+
 def OR(*funcs):
     def or_(p):
         for f in funcs:
@@ -91,6 +96,17 @@ def COMPOSE(func1, func2):
                 return success, v, rest
         return success, None, p
     return compose
+
+def BIND(parser, func2):
+    def bind(p):
+        success, v , rest = parser(p)
+        if success:
+            parser2 = func2(v)
+            success, v, rest = parser2(rest)
+            if success:
+                return success, v, rest
+        return False, v, p
+    return bind
 
 def NOT(func):
     def not_(p):
@@ -260,7 +276,8 @@ spaces1 = MANY1(space)
 colon = COMP(':')
 plus_or_minus_symbol = COMP('±')  # NOTE range and +- are interconvertable...
 plus_or_minus_pair = COMP('+-')  # yes that is an b'\x2d'
-plus_or_minus = transform_value(OR(plus_or_minus_symbol, plus_or_minus_pair), lambda v: 'plus-or-minus')
+plus_over_minus = COMP('+/-')
+plus_or_minus = transform_value(OR(plus_or_minus_symbol, plus_or_minus_pair, plus_over_minus), lambda v: 'plus-or-minus')
 
 # I hate the people who felt the need to make different type blocks for this stuff in 1673
 EN_DASH = b'\xe2\x80\x93'.decode()
@@ -292,6 +309,7 @@ digits = [str(_) for _ in range(10)]
 def digit(p): return oper(p, lambda d: d in digits)
 point = COMP('.')
 def char(p): return oper(p, lambda c: c.isalpha())
+def jstring(v): return RETURN(''.join(v))
 _int_ = JOINT(TIMES(dash_thing, 0, 1), MANY1(digit), join=True)
 int_ = transform_value(_int_, lambda i: int(''.join(i)))
 _float_ = JOINT(TIMES(dash_thing, 0, 1),
@@ -305,9 +323,13 @@ exponental_notation = JOINT(OR(float_, int_),  # FIXME not including as a num fo
                             COMPOSE(spaces, OR(by, times)),
                             COMPOSE(spaces, COMP('10')),
                             exponent, int_)
-_scientific_notation = JOINT(OR(_float_, _int_), E, _int_)
-scientific_notation = transform_value(_scientific_notation, lambda v: float(v))
+_scientific_notation = BIND(JOINT(BIND(OR(_float_, _int_), jstring), E, BIND(_int_, jstring)), jstring)
+scientific_notation = _scientific_notation  # BIND(_scientific_notation, lambda v: RETURN(float(v)))
 num = OR(scientific_notation, float_, int_, num_word)  # float first so that int doesn't capture it
+
+_C_for_temp = COMP('C')
+C_for_temp = PVAL('unit')(transform_value(_C_for_temp, lambda v: BOX(_silookup['degrees-celcius'])))
+temp_for_biology = JOINT(num, C_for_temp, join=False)
 
 def unit_atom(p): 
     func = OR(JOINT(siprefix, siunit, join=False),
@@ -318,14 +340,24 @@ def unit_atom(p):
 maybe_exponent = transform_value(AT_MOST_ONE(exponent), lambda v: 'exponent')  # ICK not the best way...
 unit_dimension = JOINT(unit_atom, maybe_exponent, int_)
 unit_base = OR(unit_dimension, unit_atom)  # FIXME this is a hilariously inefficient way to get right associativity
-
 def unit(p):  # TODO cases like '5 mg mL–1' need to be carful with '5mg made to' since that would parse as mg m :/
-    func = OR(JOINT(unit_base,
-                    COMPOSE(spaces, unit_op),
-                    COMPOSE(spaces, unit),
-                    join=False),
-              unit_base)
-    return func(p)  # beware false order of operations
+    return unit_func(p)
+
+def cull_empty(return_value):
+    if return_value and not any(return_value[1:]):
+            return RETURN(return_value[0])
+    return RETURN(return_value)
+
+def flatten(return_value):
+    first, rest = return_value
+    return RETURN((first, *rest))
+
+unit_func = BIND(JOINT(unit_base,
+                 BIND(MANY(JOINT(COMPOSE(spaces, AT_MOST_ONE(unit_op)),
+                            BIND(COMPOSE(spaces, unit), cull_empty))), cull_empty)),
+                 flatten)# TODO flatten many
+
+unit_implicit_count_ratio = JOINT(division, unit, join=False)
 
 def plus_or_minus_thing(thing): return JOINT(plus_or_minus, COMPOSE(spaces, thing), join=False)
 
@@ -333,14 +365,13 @@ to = COMP('to')
 range_indicator = transform_value(OR(thing_accepted_as_a_dash, to), lambda v: 'range')
 def range_thing(func): return JOINT(func, COMPOSE(spaces, range_indicator), COMPOSE(spaces, func))
 
-_ph = COMP('pH')
-ph = transform_value(_ph, BOX)
+pH = COMPOSE(COMP('pH'), RETURN(BOX("'pH")))
 P = COMP('P')
-post_natal_day = transform_value(P, lambda v: BOX("'postnatal-day"))  # FIXME note that in our unit hierarchy this is a subclass of days
+post_natal_day = COMPOSE(P, RETURN(BOX("'postnatal-day")))  # FIXME note that in our unit hierarchy this is a subclass of days
 _fold_prefix = END(by, num)
 fold_prefix = transform_value(_fold_prefix, lambda v: BOX("'fold"))
 
-prefix_unit = PVAL('prefix-unit')(OR(ph, post_natal_day, fold_prefix))
+prefix_unit = PVAL('prefix-unit')(OR(pH, post_natal_day, fold_prefix))
 _prefix_quantity = JOINT(prefix_unit, COMPOSE(spaces, num))  # OR(JOINT(fold, num))
 prefix_quantity = transform_value(_prefix_quantity, FLOP)
 
@@ -348,11 +379,11 @@ _percent = COMP('%')
 percent = transform_value(_percent, lambda v: BOX("'percent"))
 #fold_suffix = transform_value(END(by, NOT(num)), lambda v: BOX("'fold"))  # NOT(num) required to prevent issue with dimensions
 fold_suffix = transform_value(END(by, noneof('0123456789')), lambda v: BOX("'fold"))  # NOT(num) required to prevent issue with dimensions
-suffix_unit = PVAL('unit')(OR(percent, unit))
-suffix_quantity_no_space = JOINT(num, PVAL('unit')(EXACTLY_ONE(fold_suffix)))  # FIXME this is really bad :/ and breaks dimensions...
-suffix_quantity = OR(suffix_quantity_no_space,
-                     JOINT(num,
-                           COMPOSE(spaces, AT_MOST_ONE(suffix_unit))))  # this catches the num by itself and leaves a blank unit
+#numerical_aperture = COMPOSE(COMP('NA'), RETURN(BOX("'numerical-aperture")))  # FIXME currently an aspect
+suffix_unit = PVAL('unit')(OR(percent, unit, unit_implicit_count_ratio))
+suffix_unit_no_space = PVAL('unit')(OR(EXACTLY_ONE(fold_suffix), C_for_temp))  # FIXME this is really bad :/ and breaks dimensions...
+suffix_quantity = JOINT(num, OR(suffix_unit_no_space,
+                                COMPOSE(spaces, AT_MOST_ONE(suffix_unit))))  # this catches the num by itself and leaves a blank unit
 #suffix_quantity1 = OR(suffix_quantity_no_space, JOINT(num, COMPOSE(spaces, EXACTLY_ONE(suffix_unit))))
 
 quantity = PVAL('quantity')(OR(prefix_quantity, suffix_quantity))
@@ -377,10 +408,6 @@ expression = PVAL('expression')(OR(prefix_expression, infix_expression))  # FIXM
 
 def approximate_thing(thing): return JOINT(EXACTLY_ONE(approx), COMPOSE(spaces, thing), join=False)
 
-_C_for_temp = COMP('C')
-
-C_for_temp = PVAL('unit')(transform_value(_C_for_temp, lambda v: BOX(_silookup['degrees-celcius'])))
-temp_for_biology = JOINT(num, C_for_temp, join=False)
 
 # TODO objective specifications...
 

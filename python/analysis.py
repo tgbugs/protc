@@ -219,6 +219,7 @@ class Hybrid:  # a better HypothesisAnnotation
         self.id = anno.id  # hardset this to prevent shenanigans
         self.objects[self.id] = self
         self._anno = anno
+        self.hasAstParent = False
         self.parent  # populate self._replies before the recursive call
         self.replies
         #if self.replies:
@@ -477,11 +478,13 @@ class Hybrid:  # a better HypothesisAnnotation
             child = self.getObjectById(id_)
             for reply in child.replies:
                 if 'protc:implied-aspect' in reply.tags:
+                    self.hasAstParent = True  # FIXME called every time :/
                     yield reply
                     child = None  # inject the implied aspect between the input and the parameter
                     break
 
             if child is not None: # sanity
+                child.hasAstParent = True  # FIXME called every time :/
                 yield child  # buildAst will have a much eaiser time operating on these single depth childs
 
     def __eq__(self, other):
@@ -556,7 +559,13 @@ class AstGeneric(Hybrid):
 
     @classmethod
     def topLevel(cls):
-        return ''.join(sorted(repr(o) for o in cls.objects.values() if o is not None and o.isAstNode and o.astType in cls._topLevel))
+        return ''.join(sorted(repr(o) for o in cls.objects.values()
+                              if o is not None and o.isAstNode and not o.hasAstParent and o.astType in cls._topLevel))
+
+    @classmethod
+    def parentless(cls):
+        return ''.join(sorted(repr(o) for o in cls.objects.values()
+                              if o is not None and o.isAstNode and not o.hasAstParent))
 
     @property
     def astType(self):
@@ -701,6 +710,8 @@ class protc(AstGeneric):
             success = v[0] != 'param:parse-failure'
             if not success:
                 cleaned = cleaned[1:]
+        if not success:
+            rest = cleaned_orig
 
         #return repr(v)  # calling this there adds 4 secons to the runtime...
         def format_unit_atom(param_unit, name, prefix=None):  # dealt with in parsing
@@ -778,6 +789,7 @@ class protc(AstGeneric):
 
     def invariant(self):
         return self.parameter()
+
     def input(self):
         value = self.value
         #data = sgv.findByTerm(value)  # TODO could try the annotate endpoint? FIXME _extremely_ slow so skipping
@@ -792,14 +804,31 @@ class protc(AstGeneric):
             value += f" ({id_}, {data['labels'][0]})"
         else:
             test_input.append(value)
+        def manual_corrections(v):
+            if v == 'PB':
+                v = 'phosphate buffer'
+            elif v == 'PBS':
+                v = 'phosphate buffered saline'
+            return v 
+        value = manual_corrections(value)
         return self._value_escape(value)
 
     def output(self):
         return self.input()
+
+    #def structured_data(self):
+
+    def structured_data_header(self):
+        return "'(\"" + '" "'.join(self.value.split('\n')) + '")'
+
+    def structured_data_record(self):
+        return "'(\"" + '" "'.join(self.value.split('\n')) + '")'
+
     #def implied_input(self): return value
     #def structured_data(self): return self.value
     #def measure(self): return self.value
     #def symbolic_measure(self): return self.value
+
 #
 # utility
 
@@ -809,7 +838,7 @@ class ParameterValue:
     def __repr__(self):
         success, v, rest, front = self.value
         if not success:
-            out = str((success, v, rest))
+            out = f'{v} "{rest}"'
         else:
             out = v + (f' (rest-front "{rest}" "{front}")' if rest or front else '')
         return out
@@ -854,15 +883,19 @@ def main():
     text()
     stop = time()
     print('BAD TIME', stop - start)
-    tl = protc.topLevel()
-    with open('/tmp/top-protcur.rkt', 'wt') as f: f.write(tl)
+    def more():
+        tl = protc.topLevel()
+        with open('/tmp/top-protcur.rkt', 'wt') as f: f.write(tl)
+        pl = protc.parentless()
+        with open('/tmp/pl-protcur.rkt', 'wt') as f: f.write(pl)
+    more()
+    stream_loop.start()  # need this to be here to catch deletes
     embed()
 
 def _more_main():
     input_text_args = [(basic_start(a).strip(),) for a in annos if 'protc:input' in a.tags or 'protc:output' in a.tags]
     async_getter(sgv.findByTerm, input_text_args)  # prime the cache FIXME issues with conflicting loops...
 
-    stream_loop.start()
 
     i = papers(annos)
 
