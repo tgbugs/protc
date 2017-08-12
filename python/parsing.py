@@ -114,7 +114,11 @@ def NOT(func):
         if success:
             return False, v, rest
         else:
-            return True, v, rest
+            if p:
+                return True, p[0], p[1:]
+            else:
+                print('WAT')
+                return True, None, p
     return not_
 
 def END(func1, func2):
@@ -184,6 +188,12 @@ def COMP(val):
             return comp(p, val, lv)
         return comp_
 
+def EOF(p):
+    if p == '':
+        return True, '', ''
+    else:
+        return False, None, p
+
 #
 # function to allow implementation of what the parser actually does/outputs
 
@@ -202,6 +212,17 @@ def transform_value(parser_func, func_to_apply):
             return success, value, rest
     return transformed
 
+def make_funcs(inpt, lookuptable):
+    for token in sorted(inpt, key=lambda a: -len(a)):  # sort to simulate right associativity (ie da recognized even if d a token)
+        def lookup_function(v):
+            return RETURN(lookuptable[v])
+        yield BIND(COMP(token), lookup_function)
+
+def jstring(v): return RETURN(''.join(v))
+
+def joinstr(func):
+    return BIND(func, jstring)
+
 def PVAL(prefix_name):
     def transformed_prefix(parser_func):
         return transform_value(parser_func, lambda v: ('param:' + prefix_name,) + v)
@@ -214,44 +235,36 @@ def AT_MOST_ONE(func): return transform_value(TIMES(func, 0, 1), lambda v: v[0] 
 
 def EXACTLY_ONE(func): return transform_value(TIMES(func, 1, 1), lambda v: v[0] if v else v)
 
-#
-# units
+# I hate the people who felt the need to make different type blocks for this stuff in 1673
+EN_DASH = b'\xe2\x80\x93'.decode()
+HYPHEN_MINUS = b'\x2d'.decode()  # yes, the thing that most keyboards have
+en_dash = COMP(EN_DASH)
+hyphen_minus = COMP(HYPHEN_MINUS)
+_dash_thing = OR(en_dash, hyphen_minus)  # THERE ARE TOO MANY AND THEY ALL LOOK THE SAME
+dash_thing = BIND(_dash_thing, lambda v: RETURN(HYPHEN_MINUS))
+double_dash_thing = TIMES(dash_thing, 2)
+thing_accepted_as_a_dash = transform_value(OR(double_dash_thing, dash_thing), lambda v: HYPHEN_MINUS)
 
-DEGREES_UNDERLINE = b'\xc2\xba'.decode()  # º sometimes pdfs misencode these
-DEGREES_FEAR = b'\xe2\x97\xa6' # this thing is scary and I have no id what it is or why it wont change color ◦
-def get_quoted_list(filename):
-    with open(os.path.expanduser('~/ni/protocols/rkt/units/' + filename), 'rt') as f:
-        lines = [_.split(';')[0].strip() for _ in f.readlines()]
-    return [line.strip("'").strip('(').rstrip(')').split(' . ') for line in lines if line and '.' in line]
-
-_SIPREFS, _SIEXPS, _SIUNITS, _EXTRAS = [get_quoted_list(_) for _ in ('si-prefixes-data.rkt', 'si-prefixes-exp-data.rkt', 'si-units-data.rkt', 'si-units-extras.rkt')]
-_silookup = {k: "'" + v for k, v in _SIUNITS + _EXTRAS + [[v, v] for k, v in _SIUNITS] + [[v, v] for k, v in _EXTRAS]}
-_siplookup = {k: "'" + v for k, v in _SIPREFS}
-
-def make_funcs(inpt, lookuptable):
-    args = []
-    for token in sorted(inpt, key=lambda a: -len(a)):  # sort to simulate right associativity (ie da recognized even if d a token)
-        #lv_ = len(token)
-        #def fn(p, tok=token, lv=lv_):  # late binding stupidity
-            #return comp(p, tok, lv)
-        tvfn =  transform_value(COMP(token), lambda v: lookuptable[v])
-        args.append(tvfn)
-    return args
-
-siprefix = OR(*make_funcs(coln(0, _SIPREFS), _siplookup))
-#siunit = OR(*make_funcs(coln(0, _SIUNITS) + coln(0, _EXTRAS)))
-siunit = OR(*make_funcs(list(coln(0, _SIUNITS + _EXTRAS)) + # need both here to avoid collisions in unit_atom slower but worth it?
-                        list(coln(1, _SIUNITS + _EXTRAS)), _silookup))
-
-
+# basic tokens
+space = COMP(' ')
+spaces = MANY(space)
+spaces1 = MANY1(space)
+colon = COMP(':')
+plus_or_minus_symbol = COMP('±')  # NOTE range and +- are interconvertable...
+plus_or_minus_pair = COMP('+-')  # yes that is an b'\x2d'
+plus_over_minus = COMP('+/-')
+plus_or_minus = transform_value(OR(plus_or_minus_symbol, plus_or_minus_pair, plus_over_minus), lambda v: 'plus-or-minus')
+CROSS = b'\xc3\x97'.decode()
+cross = COMP(CROSS)
+x = COMP('x')
+by = OR(cross, x)
 exponent = COMP('^')
+addition = COMP('+')
+subtraction = dash_thing
 division = COMP('/')
 multiplication = COMP('*')
+math_op = OR(addition, subtraction, division, multiplication, exponent)  # FIXME subtraction is going to be a pain
 unit_op = OR(division, multiplication)
-
-#siprefix = OR(*[lambda p, t=tok: comp(p, t) for tok, n in SIPREFS])  # that thing about late binding and lambdas..
-#siunit = OR(*[lambda p, t=tok: comp(p, t) for tok, n in SIUNITS])  # no real closures, wew lad >_<
-
 
 # number words
 _numlookup = {
@@ -269,47 +282,11 @@ num_word_lower = OR(*make_funcs(_numlookup, _numlookup))
 def num_word_cap(p): return num_word_lower(p.lower())
 num_word = OR(num_word_lower, num_word_cap)
 
-# basic tokens
-space = COMP(' ')
-spaces = MANY(space)
-spaces1 = MANY1(space)
-colon = COMP(':')
-plus_or_minus_symbol = COMP('±')  # NOTE range and +- are interconvertable...
-plus_or_minus_pair = COMP('+-')  # yes that is an b'\x2d'
-plus_over_minus = COMP('+/-')
-plus_or_minus = transform_value(OR(plus_or_minus_symbol, plus_or_minus_pair, plus_over_minus), lambda v: 'plus-or-minus')
-
-# I hate the people who felt the need to make different type blocks for this stuff in 1673
-EN_DASH = b'\xe2\x80\x93'.decode()
-HYPHEN_MINUS = b'\x2d'.decode()  # yes, the thing that most keyboards have
-en_dash = COMP(EN_DASH)
-hyphen_minus = COMP(HYPHEN_MINUS)
-_dash_thing = OR(en_dash, hyphen_minus)  # THERE ARE TOO MANY AND THEY ALL LOOK THE SAME
-dash_thing = transform_value(_dash_thing, lambda v: HYPHEN_MINUS)
-double_dash_thing = TIMES(dash_thing, 2)
-thing_accepted_as_a_dash = transform_value(OR(double_dash_thing, dash_thing), lambda v: HYPHEN_MINUS)
-
-#explicit_range_single =
-#explicit_range_pair = TIMES(explicit_range_single, 2)
-#explicit_range = OR(explicit_range_pair, explicit_range_single)  # order matters since '-' is in '--'
-
-lt = COMP('<')
-lte = COMP('<=')
-gt = COMP('>')
-gte = COMP('>=')
-comparison = OR(lte, gte, lt, gt)
-
-CROSS = b'\xc3\x97'.decode()
-cross = COMP(CROSS)
-x = COMP('x')
-by = OR(cross, x)
-_approx = COMP('~')
-approx = transform_value(_approx, lambda v: 'approximately')
+# numbers
 digits = [str(_) for _ in range(10)]
 def digit(p): return oper(p, lambda d: d in digits)
 point = COMP('.')
 def char(p): return oper(p, lambda c: c.isalpha())
-def jstring(v): return RETURN(''.join(v))
 _int_ = JOINT(TIMES(dash_thing, 0, 1), MANY1(digit), join=True)
 int_ = transform_value(_int_, lambda i: int(''.join(i)))
 _float_ = JOINT(TIMES(dash_thing, 0, 1),
@@ -323,10 +300,100 @@ exponental_notation = JOINT(OR(float_, int_),  # FIXME not including as a num fo
                             COMPOSE(spaces, OR(by, times)),
                             COMPOSE(spaces, COMP('10')),
                             exponent, int_)
-_scientific_notation = BIND(JOINT(BIND(OR(_float_, _int_), jstring), E, BIND(_int_, jstring)), jstring)
+_scientific_notation = joinstr(JOINT(joinstr(OR(_float_, _int_)), E, joinstr(_int_)))
 scientific_notation = _scientific_notation  # BIND(_scientific_notation, lambda v: RETURN(float(v)))
 num = OR(scientific_notation, float_, int_, num_word)  # float first so that int doesn't capture it
 
+# racket
+def exp(p):
+    return _exp(p)
+whitespace_atom = OR(COMP(' '), COMP('\t'), COMP('\n'))
+whitespace = MANY(whitespace_atom)
+whitespace1 = MANY1(whitespace_atom)  # FIXME this is broken to negation? (extremely slow)
+comment = COMPOSE(whitespace,
+                  COMPOSE(COMP(';'),
+                          SKIP(MANY(NOT(COMP('\n'))),
+                               COMP('\n'))))
+def LEXEME(func):
+    return COMPOSE(whitespace, SKIP(func, OR(comment, whitespace)))
+open_paren = LEXEME(COMP('('))
+close_paren = LEXEME(COMP(')'))
+quote_symbol = COMP("'")
+double_quote_symbol = COMP('"')
+_string = COMPOSE(double_quote_symbol,
+                  SKIP(MANY(NOT(double_quote_symbol)),
+                       double_quote_symbol))  # TODO escape
+string = LEXEME(joinstr(_string))
+DEGREES = b'\xc2\xb0'.decode()
+symbol = OR(char, digit, COMP('-'), COMP('_'), colon, COMP('*'),
+            #OR(*map(NOT, (COMP('('), COMP(')'), quote_symbol, double_quote_symbol, COMP(';'), whitespace1))))  # TODO more
+            NOT(OR(COMP('('), COMP(')'), quote_symbol, double_quote_symbol, COMP(';'), whitespace1, point, EOF)))  # TODO more
+NIL = COMP("'()")
+num_literal = OR(scientific_notation, float_, int_)
+cons_pair = COMPOSE(open_paren, JOINT(SKIP(exp, point), SKIP(exp, close_paren)))
+literal = OR(string, num_literal, cons_pair, NIL)
+atom = joinstr(MANY1(symbol))
+identifier = LEXEME(atom)
+def _quote(p):
+    return COMPOSE(quote_symbol, _exp)(p)
+quote = LEXEME(_quote)
+def sexp(p):
+    return sexp_inner(p)
+_exp = LEXEME(OR(identifier, quote, literal, sexp, NIL))
+sexp_inner = COMPOSE(open_paren, SKIP(MANY1(exp), close_paren))
+lang_line = JOINT(COMP('#lang'), SKIP(MANY(NOT(COMP('\n'))), COMP('\n')))
+racket_doc = COMPOSE(AT_MOST_ONE(lang_line), MANY(exp))
+tag_doc = SKIP(JOINT(COMPOSE(open_paren,
+                             COMP('tag-doc')),
+                     quote,
+                     string),
+               close_paren)
+tag_docs = MANY1(tag_doc)
+
+# units
+def get_quoted_list(filename):
+    with open(os.path.expanduser('~/ni/protocols/rkt/units/' + filename), 'rt') as f:
+        success, value, rest = racket_doc(f.read())
+    if not success:
+        raise SyntaxError(f'Something is wrong in {filename}. Parse output:\n{value}\n\n{rest}')
+    out = {}
+    for expression in value:
+        print(expression)
+        if expression[0] == 'define':
+            name = expression[1].replace('-','_')
+            out[name] = expression[2]
+    return out
+    #return [line.strip("'").strip('(').rstrip(')').split(' . ') for line in lines if line and '.' in line]
+
+#_SIPREFS, _SIEXPS, _SIUNITS, _EXTRAS = [get_quoted_list(_) for _ in ('si-prefixes-data.rkt', 'si-prefixes-exp-data.rkt', 'si-units-data.rkt', 'si-units-extras.rkt', 'units-dimensionless.rkt')]
+
+dicts = [get_quoted_list(_) for _ in ('si-prefixes-data.rkt', 'si-prefixes-exp-data.rkt', 'si-units-data.rkt', 'si-units-extras.rkt', 'units-dimensionless.rkt')]
+gs = globals()
+for dict_ in dicts:
+    gs.update(dict_)
+
+_silookup = {k: "'" + v for k, v in units_si + units_extra + tuple([v, v] for k, v in units_si) + tuple([v, v] for k, v in units_extra)}
+_siplookup = {k: "'" + v for k, v in prefixes_si}
+
+siprefix = OR(*make_funcs(coln(0, prefixes_si), _siplookup))
+#siunit = OR(*make_funcs(coln(0, _SIUNITS) + coln(0, _EXTRAS)))
+siunit = OR(*make_funcs(list(coln(0, units_si + units_extra)) + # need both here to avoid collisions in unit_atom slower but worth it?
+                        list(coln(1, units_si + units_extra)), _silookup))
+#siprefix = OR(*[lambda p, t=tok: comp(p, t) for tok, n in SIPREFS])  # that thing about late binding and lambdas..
+#siunit = OR(*[lambda p, t=tok: comp(p, t) for tok, n in SIUNITS])  # no real closures, wew lad >_<
+#explicit_range_single =
+#explicit_range_pair = TIMES(explicit_range_single, 2)
+#explicit_range = OR(explicit_range_pair, explicit_range_single)  # order matters since '-' is in '--'
+
+lt = COMP('<')
+lte = COMP('<=')
+gt = COMP('>')
+gte = COMP('>=')
+comparison = OR(lte, gte, lt, gt)
+_approx = COMP('~')
+approx = transform_value(_approx, lambda v: 'approximately')
+DEGREES_UNDERLINE = b'\xc2\xba'.decode()  # º sometimes pdfs misencode these
+DEGREES_FEAR = b'\xe2\x97\xa6' # this thing is scary and I have no id what it is or why it wont change color ◦
 _C_for_temp = COMP('C')
 C_for_temp = PVAL('unit')(transform_value(_C_for_temp, lambda v: BOX(_silookup['degrees-celcius'])))
 temp_for_biology = JOINT(num, C_for_temp, join=False)
@@ -399,7 +466,7 @@ dimensions = PVAL('dimensions')(OR(JOINT(quantity, COMPOSE(sby, sq), COMPOSE(sby
                           #JOINT(num, by, join=False))
 
 prefix_operator = OR(plus_or_minus, comparison)
-infix_operator = OR(plus_or_minus, range_indicator, multiplication, division, exponent)  # colon? doesn't really operate on quantities, note that * and / do not interfere with the unit parsing because that takes precedence
+infix_operator = OR(plus_or_minus, range_indicator, math_op)  # colon? doesn't really operate on quantities, note that * and / do not interfere with the unit parsing because that takes precedence
 prefix_expression = JOINT(prefix_operator, COMPOSE(spaces, quantity))
 def infix_expression(p): return JOINT(quantity,
                                       COMPOSE(spaces, infix_operator),
@@ -422,23 +489,6 @@ def parameter_expression(p): return OR(approximate_thing(parameter_expression),
                                        quantity,
                                        FAILURE)(p)  # now this is some stupid shit right here
 
-# tag docs
-whitespace_atom = OR(COMP(' '), COMP('\t'), COMP('\n'))
-whitespace = MANY(whitespace_atom)
-whitespace1 = MANY1(whitespace_atom)  # FIXME this is broken to negation? (extremely slow)
-quote_symbol = COMP('"')
-_string = COMPOSE(quote_symbol, SKIP(MANY(NOT(quote_symbol)), quote_symbol))  # TODO escape
-string = transform_value(_string, lambda v: ''.join(v))
-symbol = OR(char, digit, COMP('-'), COMP('_'), colon, COMP('*'))  # TODO more
-_quote = COMPOSE(COMP("'"), END(MANY1(symbol), whitespace_atom))
-quote = transform_value(_quote, lambda v: ''.join(v))
-tag_doc = SKIP(JOINT(COMPOSE(COMP('('),
-                             COMPOSE(whitespace, COMP('tag-doc'))),
-                     COMPOSE(whitespace1, quote),
-                     COMPOSE(whitespace1, string)),
-               COMP(')'))
-tag_docs = MANY1(SKIP(tag_doc, whitespace))
-
 # patterns:
 # num op num unit
 # num unit op num unit
@@ -455,6 +505,20 @@ tag_docs = MANY1(SKIP(tag_doc, whitespace))
 
 
 def main():
+    print(identifier('hello world!'))
+    print(quote('\'hello world!'))
+    print(quote('\'"hello" world!'))
+    print(string('"ARE YOU KIDDING ME \n NO???"'))
+    print(tag_doc('(tag-doc \'butts "wat wat wat")\n'))
+    with open(os.path.expanduser('~/git/protc/protc-tags.rkt'), 'rt') as f:
+        text = f.read()
+    with open(os.path.expanduser('~/ni/protocols/rkt/units/si-units-extras.rkt'), 'rt') as f:
+        text2 = f.read()
+    td = tag_docs(text)
+    e = racket_doc(text2)
+    #embed()
+    #return
+
     from desc.prof import profile_me
     from time import time
     tests = ('1 daL', "300 mOsm", "0.5 mM", "7 mM", "0.1 Hz.", "-50 pA",
