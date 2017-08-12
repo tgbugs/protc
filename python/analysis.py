@@ -655,6 +655,7 @@ class AstGeneric(Hybrid):
             childs = ')' * nparens + comment  
 
         start = '\n(' if top else '('
+        #print('|'.join(''.join(str(_) for _ in range(1,10)) for i in range(12)))
         return f'{start}{type_} {value}{childs}'
 
 
@@ -694,7 +695,7 @@ class protc(AstGeneric):
                                              'symbolic-measure',
                                              'black-black-component',
                                             ))
-
+    format_nl = '*', '/', 'range', 'plus-or-minus', 'param:dimensions'
     def parameter(self):
         #return repr(v)  # calling this there adds 4 secons to the runtime...
         def format_unit_atom(param_unit, name, prefix=None):  # dealt with in parsing
@@ -705,18 +706,20 @@ class protc(AstGeneric):
                 return f"({param_unit} '{name})"
                 return '(' + param_unit + " '" + name + ')'
 
-        format_nl = '*', '/', 'range', 'plus-or-minus', 'param:dimensions'
         def format_value(tuple_, localIndent=0, depth=0):
+            #print(depth, localIndent)
             out = ''
             if tuple_:
-                newline = tuple_[0] in format_nl
+                newline = tuple_[0] in self.format_nl
                 indent_for_this_loop = localIndent + len(tuple_[0]) + 1
                 indent_for_next_level = indent_for_this_loop
                 prior_lenv = 0
                 for i, v in enumerate(tuple_):
                     if newline and i > 1:
-                        out += '\n' + ' ' * (indent_for_this_loop + depth * 2)
-                        indent_for_next_level -= prior_lenv + 2
+                        out += '\n' + ' ' * (indent_for_this_loop + depth * 2 + (0 if depth else 1))
+                        if i == 2:  # only do this the first time, if there are 3 entries it will subtract twice
+                            indent_for_next_level -= prior_lenv + (2 if depth else 1)
+                            #indent_for_next_level = (indent_for_this_loop + depth * 2 + (0 if depth else 1))
                     if type(v) is tuple:
                         v = format_value(v, indent_for_next_level, depth + 1)
                     if v is not None:
@@ -875,6 +878,12 @@ def main():
 
     global annos  # this is too useful not to do
     annos = get_annos(mem_file)  # TODO memoize annos... and maybe start with a big offset?
+    annos.append(HypothesisAnnotation({'id':'deadbeef',
+                                       'user':'tgbugs',
+                                       'updated':'LOL',
+                                       'text':'10x10x10m/kg',
+                                       'tags':['protc:parameter*']}))
+    problem_child = 'KDEZFGzEEeepDO8xVvxZmw'
     stream_loop = start_loop(annos, mem_file)
     #hybrids = [Hybrid(a, annos) for a in annos]
     #printD('protcs')
@@ -909,7 +918,7 @@ def main():
         with open('/tmp/pl-protcur.rkt', 'wt') as f: f.write(pl)
     more()
     #stream_loop.start()  # need this to be here to catch deletes
-    #embed()
+    embed()
 
 def _more_main():
     input_text_args = [(basic_start(a).strip(),) for a in annos if 'protc:input' in a.tags or 'protc:output' in a.tags]
