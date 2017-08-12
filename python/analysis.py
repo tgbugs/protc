@@ -878,10 +878,21 @@ def main():
 
     global annos  # this is too useful not to do
     annos = get_annos(mem_file)  # TODO memoize annos... and maybe start with a big offset?
-    annos.append(HypothesisAnnotation({'id':'deadbeef',
+    annos.append(HypothesisAnnotation({'id':'deadbeef0',
                                        'user':'tgbugs',
                                        'updated':'LOL',
-                                       'text':'10x10x10m/kg',
+                                       'text':'MAGIC',
+                                       'target':[{'selector':[{'type':'TextQuoteSelector', 'prefix':'', 'exact':'MAGIC', 'suffix':''}]}],
+                                       #'exact':'MAGIC',
+                                       'text':'https://hyp.is/deadbeef1',
+                                       'tags':['protc:input']}))
+    annos.append(HypothesisAnnotation({'id':'deadbeef1',
+                                       'user':'tgbugs',
+                                       'updated':'LOL',
+                                       #'references':['deadbeef0'],
+                                       #'text':'10x10x10m/kg',
+                                       'text':'~ 3.5 - 6 MR',  # this has error
+                                       #'text':'3.5 - 6 MR',  # this does not... HRM
                                        'tags':['protc:parameter*']}))
     problem_child = 'KDEZFGzEEeepDO8xVvxZmw'
     stream_loop = start_loop(annos, mem_file)
@@ -898,6 +909,7 @@ def main():
         return protcs
     start = time()
     protcs = perftest()
+    pc = protc.byId(problem_child)
     stop = time()
     print('BAD TIME', stop - start)
     #@profile_me  # a note that trying ot get pref data when there are lots of function calls nearly doubles actual time...
