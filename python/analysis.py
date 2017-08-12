@@ -536,6 +536,7 @@ class AstGeneric(Hybrid):
     #objects = {}
     #_order = tuple()
     #_topLevel = tuple()
+    linePreLen = 0
     @staticmethod
     def _value_escape(value):
         return '"' + value.strip().replace('"', '\\"') + '"'
@@ -615,14 +616,19 @@ class AstGeneric(Hybrid):
             if cycle:
                 print('Circular link in', self.shareLink)
                 out = f"'(circular-link no-type {cycle.id})" + ')' * nparens
+                type_ = 'None'
             else:
                 return super().__repr__()
+
+        self.linePreLen = self.indentDepth * (depth - 1) + len('(') + len(type_) +  len(' ')
         value = self.astValue
+        self.linePreLen += self.indentDepth  # doing the children now we bump back up
         comment = f'  ; {self.shareLink}'
 
         children = list(self.children)  # better to run the generator once up here
         if children:
-            linestart = '\n' + ' ' * self.indentDepth * depth
+            indent = ' ' * self.indentDepth * depth
+            linestart = '\n' + indent
             nsibs = len(children)
             cs = []
             for i, c in enumerate(children):
@@ -690,29 +696,6 @@ class protc(AstGeneric):
                                             ))
 
     def parameter(self):
-        out = getattr(self, '_parameter', None)
-        if out is not None:
-            return repr(out)
-        value = self.value
-        #print(value)
-        if value == '':  # breaks the parser :/
-            return ''
-        #cleaned = value.replace(' mL–1', ' * mL–1').replace(' kg–1', ' * kg–1')  # FIXME temporary (and bad) fix for superscript issues
-        #cleaned = cleaned.strip()
-        cleaned = value.strip()
-        cleaned_orig = cleaned
-
-        # ignore gargabe at the start
-        success = False
-        front = ''
-        while cleaned and not success:
-            _, v, rest = parsing.parameter_expression(cleaned)
-            success = v[0] != 'param:parse-failure'
-            if not success:
-                cleaned = cleaned[1:]
-        if not success:
-            rest = cleaned_orig
-
         #return repr(v)  # calling this there adds 4 secons to the runtime...
         def format_unit_atom(param_unit, name, prefix=None):  # dealt with in parsing
             if prefix is not None:
@@ -722,23 +705,58 @@ class protc(AstGeneric):
                 return f"({param_unit} '{name})"
                 return '(' + param_unit + " '" + name + ')'
 
-        def format_value(tuple_):
-            out = []
+        format_nl = '*', '/', 'range', 'plus-or-minus', 'param:dimensions'
+        def format_value(tuple_, localIndent=0, depth=0):
+            out = ''
             if tuple_:
-                for v in tuple_:
+                newline = tuple_[0] in format_nl
+                indent_for_this_loop = localIndent + len(tuple_[0]) + 1
+                indent_for_next_level = indent_for_this_loop
+                prior_lenv = 0
+                for i, v in enumerate(tuple_):
+                    if newline and i > 1:
+                        out += '\n' + ' ' * (indent_for_this_loop + depth * 2)
+                        indent_for_next_level -= prior_lenv + 2
                     if type(v) is tuple:
-                        v = format_value(v)
+                        v = format_value(v, indent_for_next_level, depth + 1)
                     if v is not None:
-                        #out.append(f'{v}')
-                        out.append(str(v))
+                        v = str(v)
+                        if out and out[-1] != ' ':
+                            out += ' ' + v
+                            if i > 0:
+                                prior_lenv = len(v)
+                                indent_for_next_level += len(v)
+                        else:  # we are adding indents
+                            out += v
             if out:
-                return '(' + ' '.join(out) + ')'
+                return '(' + out + ')'
 
-        if v is not None:
-            v = format_value(v)
-        test_params.append((value, (success, v, rest)))
-        self._parameter = ParameterValue(success, v, rest, front)
-        return repr(self._parameter)  # TODO implement as part of processing the children?
+        success, v, rest = getattr(self, '_parameter', (None, None, None))
+        if v is None:
+            value = self.value
+            #print(value)
+            if value == '':  # breaks the parser :/
+                return ''
+            #cleaned = value.replace(' mL–1', ' * mL–1').replace(' kg–1', ' * kg–1')  # FIXME temporary (and bad) fix for superscript issues
+            #cleaned = cleaned.strip()
+            cleaned = value.strip()
+            cleaned_orig = cleaned
+
+            # ignore gargabe at the start
+            success = False
+            front = ''
+            while cleaned and not success:
+                _, v, rest = parsing.parameter_expression(cleaned)
+                success = v[0] != 'param:parse-failure'
+                if not success:
+                    cleaned = cleaned[1:]
+            if not success:
+                rest = cleaned_orig
+            self._parameter = success, v, rest
+            test_params.append((value, (success, v, rest)))
+        if v:
+            v = format_value(v, self.linePreLen)
+        return repr(ParameterValue(success, v, rest, indent=self.linePreLen))  # TODO implement as part of processing the children?
 
 
     def _parameter_parsec(self):  # more than 2x slower than my version >_<
@@ -833,14 +851,15 @@ class protc(AstGeneric):
 # utility
 
 class ParameterValue:
-    def __init__(self, success, v, rest, front):
-        self.value = success, v, rest, front
+    def __init__(self, success, v, rest, indent=1):
+        self.value = success, v, rest
+        self.indent = ' ' * indent
     def __repr__(self):
-        success, v, rest, front = self.value
+        success, v, rest = self.value
         if not success:
-            out = f'{v} "{rest}"'
+            out = f'{v}\n{self.indent}"{rest}"'
         else:
-            out = v + (f' (rest-front "{rest}" "{front}")' if rest or front else '')
+            out = v + (f'\n{self.indent}(rest "{rest}")' if rest else '')
         return out
 
 test_params = []
@@ -889,8 +908,8 @@ def main():
         pl = protc.parentless()
         with open('/tmp/pl-protcur.rkt', 'wt') as f: f.write(pl)
     more()
-    stream_loop.start()  # need this to be here to catch deletes
-    embed()
+    #stream_loop.start()  # need this to be here to catch deletes
+    #embed()
 
 def _more_main():
     input_text_args = [(basic_start(a).strip(),) for a in annos if 'protc:input' in a.tags or 'protc:output' in a.tags]

@@ -491,11 +491,11 @@ quantity = param('quantity')(OR(prefix_quantity, suffix_quantity))
 dilution_factor = param('dilution')(JOINT(SKIP(int_, colon), int_, join=False))
 sq = COMPOSE(spaces, quantity)
 sby = COMPOSE(spaces, by)
-dimensions = param('dimensions')(JOINT(quantity,
+dimensions = param('dimensions')(BIND(JOINT(quantity,
                                        MANY1(COMPOSE(COMPOSE(spaces,
                                                              SKIP(by,
                                                                   spaces)),
-                                                     quantity))))
+                                                     quantity))), flatten))
     #OR(JOINT(quantity, COMPOSE(sby, sq), COMPOSE(sby, sq)), JOINT(quantity, COMPOSE(sby, sq))))  # ick
 prefix_operator = OR(plus_or_minus, comparison)
 infix_operator = OR(plus_or_minus, range_indicator, math_op)  # colon? doesn't really operate on quantities, note that * and / do not interfere with the unit parsing because that takes precedence
