@@ -4,7 +4,7 @@ import os
 from pyontutils.utils import coln
 from IPython import embed
 
-infinity = 9999999  # you know it baby, if we go this deep we will get recursion errors
+infinity = 99999  # you know it baby, if we go this deep we will get recursion errors
 __script_folder__ = os.path.dirname(os.path.realpath(__file__))
 
 # combinators
@@ -200,8 +200,14 @@ def EOF(p):
 def BOX(v):
     return v,
 
-def FLOP(v):
-    return tuple(v[::-1])
+def FLOP(return_value):
+    return RETURN(tuple(return_value[::-1]))
+
+def RETVAL(func, val):
+    #def return_bound_val(v):
+        #return RETURN(val)
+    #return BIND(func, return_bound_val)
+    return COMPOSE(func, RETURN(val))
 
 def transform_value(parser_func, func_to_apply):
     def transformed(p):
@@ -223,10 +229,13 @@ def jstring(v): return RETURN(''.join(v))
 def joinstr(func):
     return BIND(func, jstring)
 
-def PVAL(prefix_name):
-    def transformed_prefix(parser_func):
-        return transform_value(parser_func, lambda v: ('param:' + prefix_name,) + v)
-    return transformed_prefix
+def param(prefix_name):
+    name = 'param:' + prefix_name
+    def add_function_type(v):
+        return RETURN((name, *v))
+    def paramed(parser_func):
+        return BIND(parser_func, add_function_type)
+    return paramed
 
 def STRINGIFY(func):
     return transform_value(func, lambda v: '"' + str(v).replace('"', '\\"') + '"')
@@ -241,11 +250,11 @@ HYPHEN_MINUS = b'\x2d'.decode()  # yes, the thing that most keyboards have
 en_dash = COMP(EN_DASH)
 hyphen_minus = COMP(HYPHEN_MINUS)
 _dash_thing = OR(en_dash, hyphen_minus)  # THERE ARE TOO MANY AND THEY ALL LOOK THE SAME
-dash_thing = BIND(_dash_thing, lambda v: RETURN(HYPHEN_MINUS))
+dash_thing = RETVAL(_dash_thing, HYPHEN_MINUS)
 double_dash_thing = TIMES(dash_thing, 2)
 thing_accepted_as_a_dash = transform_value(OR(double_dash_thing, dash_thing), lambda v: HYPHEN_MINUS)
 
-# basic tokens
+# basic tokens and operators
 space = COMP(' ')
 spaces = MANY(space)
 spaces1 = MANY1(space)
@@ -265,6 +274,12 @@ division = COMP('/')
 multiplication = COMP('*')
 math_op = OR(addition, subtraction, division, multiplication, exponent)  # FIXME subtraction is going to be a pain
 unit_op = OR(division, multiplication)
+lt = COMP('<')
+lte = COMP('<=')
+gt = COMP('>')
+gte = COMP('>=')
+comparison = OR(lte, gte, lt, gt)
+approx = RETVAL(COMP('~'), 'approximately')
 
 # number words
 _numlookup = {
@@ -326,7 +341,6 @@ _string = COMPOSE(double_quote_symbol,
 string = LEXEME(joinstr(_string))
 DEGREES = b'\xc2\xb0'.decode()
 symbol = OR(char, digit, COMP('-'), COMP('_'), colon, COMP('*'),
-            #OR(*map(NOT, (COMP('('), COMP(')'), quote_symbol, double_quote_symbol, COMP(';'), whitespace1))))  # TODO more
             NOT(OR(COMP('('), COMP(')'), quote_symbol, double_quote_symbol, COMP(';'), whitespace1, point, EOF)))  # TODO more
 NIL = COMP("'()")
 num_literal = OR(scientific_notation, float_, int_)
@@ -363,9 +377,6 @@ def get_quoted_list(filename):
             name = expression[1].replace('-','_')
             out[name] = expression[2]
     return out
-    #return [line.strip("'").strip('(').rstrip(')').split(' . ') for line in lines if line and '.' in line]
-
-#_SIPREFS, _SIEXPS, _SIUNITS, _EXTRAS = [get_quoted_list(_) for _ in ('si-prefixes-data.rkt', 'si-prefixes-exp-data.rkt', 'si-units-data.rkt', 'si-units-extras.rkt', 'units-dimensionless.rkt')]
 
 dicts = [get_quoted_list(_) for _ in ('si-prefixes-data.rkt', 'si-prefixes-exp-data.rkt', 'si-units-data.rkt', 'si-units-extras.rkt', 'units-dimensionless.rkt')]
 gs = globals()
@@ -376,39 +387,24 @@ _silookup = {k: "'" + v for k, v in units_si + units_extra + tuple([v, v] for k,
 _siplookup = {k: "'" + v for k, v in prefixes_si}
 
 siprefix = OR(*make_funcs(coln(0, prefixes_si), _siplookup))
-#siunit = OR(*make_funcs(coln(0, _SIUNITS) + coln(0, _EXTRAS)))
 siunit = OR(*make_funcs(list(coln(0, units_si + units_extra)) + # need both here to avoid collisions in unit_atom slower but worth it?
                         list(coln(1, units_si + units_extra)), _silookup))
-#siprefix = OR(*[lambda p, t=tok: comp(p, t) for tok, n in SIPREFS])  # that thing about late binding and lambdas..
-#siunit = OR(*[lambda p, t=tok: comp(p, t) for tok, n in SIUNITS])  # no real closures, wew lad >_<
-#explicit_range_single =
-#explicit_range_pair = TIMES(explicit_range_single, 2)
-#explicit_range = OR(explicit_range_pair, explicit_range_single)  # order matters since '-' is in '--'
 
-lt = COMP('<')
-lte = COMP('<=')
-gt = COMP('>')
-gte = COMP('>=')
-comparison = OR(lte, gte, lt, gt)
-_approx = COMP('~')
-approx = transform_value(_approx, lambda v: 'approximately')
 DEGREES_UNDERLINE = b'\xc2\xba'.decode()  # º sometimes pdfs misencode these
 DEGREES_FEAR = b'\xe2\x97\xa6' # this thing is scary and I have no id what it is or why it wont change color ◦
 _C_for_temp = COMP('C')
-C_for_temp = PVAL('unit')(transform_value(_C_for_temp, lambda v: BOX(_silookup['degrees-celcius'])))
+C_for_temp = param('unit')(transform_value(_C_for_temp, lambda v: BOX(_silookup['degrees-celcius'])))
 temp_for_biology = JOINT(num, C_for_temp, join=False)
 
-def unit_atom(p): 
-    func = OR(JOINT(siprefix, siunit, join=False),
-              JOINT(siunit, join=False))  # have to use OR cannot use TIMES  FIXME siunit by itself needs to not be followed by another char? so NOT(siunit)  (different than kgm/s example I used before...)
-    func = transform_value(func, FLOP)
-    return func(p)
+unit_atom = param('unit')(BIND(OR(JOINT(siprefix, siunit, join=False),
+                                  JOINT(siunit, join=False)),
+                               FLOP)) # have to use OR cannot use TIMES  FIXME siunit by itself needs to not be followed by another char? so NOT(siunit)  (different than kgm/s example I used before...)
 
-maybe_exponent = transform_value(AT_MOST_ONE(exponent), lambda v: 'exponent')  # ICK not the best way...
-unit_dimension = JOINT(unit_atom, maybe_exponent, int_)
-unit_base = OR(unit_dimension, unit_atom)  # FIXME this is a hilariously inefficient way to get right associativity
-def unit(p):  # TODO cases like '5 mg mL–1' need to be carful with '5mg made to' since that would parse as mg m :/
-    return unit_func(p)
+maybe_exponent = AT_MOST_ONE(exponent)
+#unit_dimension = JOINT(unit_atom, maybe_exponent, int_)
+#unit_base = OR(unit_dimension, unit_atom)  # FIXME this is a hilariously inefficient way to get right associativity
+#def unit(p):  # TODO cases like '5 mg mL–1' need to be carful with '5mg made to' since that would parse as mg m :/
+    #return unit_func(p)
 
 def cull_empty(return_value):
     if return_value and not any(return_value[1:]):
@@ -419,11 +415,50 @@ def flatten(return_value):
     first, rest = return_value
     return RETURN((first, *rest))
 
-unit_func = BIND(JOINT(unit_base,
-                 BIND(MANY(JOINT(COMPOSE(spaces, AT_MOST_ONE(unit_op)),
-                            BIND(COMPOSE(spaces, unit), cull_empty))), cull_empty)),
-                 flatten)# TODO flatten many
+def flatten1(return_value):
+    return RETURN(tuple(t for r in return_value for t in r))
 
+def op_order(return_value):
+    order = 'plus-or-minus', 'range', '^', '/', '*', '+', '-'
+    associative = '*', '+'
+    commutative = '*', '+'
+    def inner(subtree):
+        for op in order[::-1]:
+            try:
+                i = subtree.index(op)
+                front = subtree[:i]
+                rest = subtree[i + 1:]
+                f = inner(front)
+                r = inner(rest)
+                if op in commutative and len(front) >= len(rest):
+                    f, r = r, f
+                if op in associative:
+                    if f[0] == op and r[0] == op:
+                        return (op, f[1:], r[1:])
+                    elif f[0] == op:
+                        return (op, f[1:], r)
+                    elif r[0] == op:
+                        return (op, f, r[1:])
+                return (op, f, r)
+            except ValueError:
+                continue
+        return subtree[0]
+    lisped = inner(return_value)
+    if lisped != return_value:
+        return RETURN((lisped,))
+    else:
+        return RETURN(return_value)
+
+unit_suffix = OR(JOINT(COMPOSE(spaces, unit_op),
+                    COMPOSE(spaces, unit_atom)),
+                 JOINT(COMPOSE(spaces, maybe_exponent),
+                       int_))
+unit_expression = param('unit-expression')(BIND(BIND(JOINT(unit_atom,
+                                                           BIND(MANY1(unit_suffix),
+                                                                flatten1)),
+                                                     flatten),
+                                                op_order))
+unit = OR(unit_expression, unit_atom)
 unit_implicit_count_ratio = JOINT(division, unit, join=False)
 
 def plus_or_minus_thing(thing): return JOINT(plus_or_minus, COMPOSE(spaces, thing), join=False)
@@ -432,79 +467,67 @@ to = COMP('to')
 range_indicator = transform_value(OR(thing_accepted_as_a_dash, to), lambda v: 'range')
 def range_thing(func): return JOINT(func, COMPOSE(spaces, range_indicator), COMPOSE(spaces, func))
 
-pH = COMPOSE(COMP('pH'), RETURN(BOX("'pH")))
+pH = RETVAL(COMP('pH'), BOX("'pH"))
 P = COMP('P')
-post_natal_day = COMPOSE(P, RETURN(BOX("'postnatal-day")))  # FIXME note that in our unit hierarchy this is a subclass of days
+post_natal_day = RETVAL(P, BOX("'postnatal-day"))  # FIXME note that in our unit hierarchy this is a subclass of days
 _fold_prefix = END(by, num)
-fold_prefix = transform_value(_fold_prefix, lambda v: BOX("'fold"))
+fold_prefix = RETVAL(_fold_prefix, BOX("'fold"))
 
-prefix_unit = PVAL('prefix-unit')(OR(pH, post_natal_day, fold_prefix))
+prefix_unit = param('prefix-unit')(OR(pH, post_natal_day, fold_prefix))
 _prefix_quantity = JOINT(prefix_unit, COMPOSE(spaces, num))  # OR(JOINT(fold, num))
-prefix_quantity = transform_value(_prefix_quantity, FLOP)
+prefix_quantity = BIND(_prefix_quantity, FLOP)
 
 _percent = COMP('%')
-percent = transform_value(_percent, lambda v: BOX("'percent"))
+percent = RETVAL(_percent, BOX("'percent"))
 #fold_suffix = transform_value(END(by, NOT(num)), lambda v: BOX("'fold"))  # NOT(num) required to prevent issue with dimensions
-fold_suffix = transform_value(END(by, noneof('0123456789')), lambda v: BOX("'fold"))  # NOT(num) required to prevent issue with dimensions
-#numerical_aperture = COMPOSE(COMP('NA'), RETURN(BOX("'numerical-aperture")))  # FIXME currently an aspect
-suffix_unit = PVAL('unit')(OR(percent, unit, unit_implicit_count_ratio))
-suffix_unit_no_space = PVAL('unit')(OR(EXACTLY_ONE(fold_suffix), C_for_temp))  # FIXME this is really bad :/ and breaks dimensions...
+fold_suffix = RETVAL(END(by, noneof('0123456789')), BOX("'fold"))  # NOT(num) required to prevent issue with dimensions
+_suffix_unit = param('unit')(OR(percent, unit_implicit_count_ratio))
+suffix_unit = OR(_suffix_unit, unit)
+suffix_unit_no_space = param('unit')(OR(EXACTLY_ONE(fold_suffix), C_for_temp))  # FIXME this is really bad :/ and breaks dimensions...
 suffix_quantity = JOINT(num, OR(suffix_unit_no_space,
                                 COMPOSE(spaces, AT_MOST_ONE(suffix_unit))))  # this catches the num by itself and leaves a blank unit
-#suffix_quantity1 = OR(suffix_quantity_no_space, JOINT(num, COMPOSE(spaces, EXACTLY_ONE(suffix_unit))))
+quantity = param('quantity')(OR(prefix_quantity, suffix_quantity))
 
-quantity = PVAL('quantity')(OR(prefix_quantity, suffix_quantity))
-#quantity_require_unit = OR(prefix_quantity, suffix_quantity1)
-#quantity_with_uncertainty = JOINT(quantity, COMPOSE(spaces, plus_or_minus_thing(quantity)))  # could be error or could be a range spec, also 2nd quantity needs to require unit?? is there some way to do 'if not a then b?' or 'a unit must be in here somwhere?'
-
-dilution_factor = PVAL('dilution')(JOINT(SKIP(int_, colon), int_, join=False))
+dilution_factor = param('dilution')(JOINT(SKIP(int_, colon), int_, join=False))
 sq = COMPOSE(spaces, quantity)
 sby = COMPOSE(spaces, by)
-dimensions = PVAL('dimensions')(OR(JOINT(quantity, COMPOSE(sby, sq), COMPOSE(sby, sq)), JOINT(quantity, COMPOSE(sby, sq))))  # ick
-
-#fold = OR(transform_value(JOINT(by, num, join=False), lambda v: [v[1], v[0]]),  # if we have 'force no space' in suffix/prefix can replace
-                          #JOINT(num, by, join=False))
-
+dimensions = param('dimensions')(JOINT(quantity,
+                                       MANY1(COMPOSE(COMPOSE(spaces,
+                                                             SKIP(by,
+                                                                  spaces)),
+                                                     quantity))))
+    #OR(JOINT(quantity, COMPOSE(sby, sq), COMPOSE(sby, sq)), JOINT(quantity, COMPOSE(sby, sq))))  # ick
 prefix_operator = OR(plus_or_minus, comparison)
 infix_operator = OR(plus_or_minus, range_indicator, math_op)  # colon? doesn't really operate on quantities, note that * and / do not interfere with the unit parsing because that takes precedence
 prefix_expression = JOINT(prefix_operator, COMPOSE(spaces, quantity))
-def infix_expression(p): return JOINT(quantity,
-                                      COMPOSE(spaces, infix_operator),
-                                      COMPOSE(spaces, OR(infix_expression, quantity)))(p)  # sigh, not being able to start with yourself
-expression = PVAL('expression')(OR(prefix_expression, infix_expression))  # FIXME this doesn't work if you have prefix -> infix are there cases that can happen?
+infix_suffix = JOINT(COMPOSE(spaces, infix_operator),
+                     COMPOSE(spaces, quantity))
+infix_expression = BIND(BIND(JOINT(quantity,
+                              BIND(MANY1(infix_suffix),
+                                   flatten1)),
+                             flatten),
+                        op_order)
+expression = param('expression')(OR(prefix_expression, infix_expression))  # FIXME this doesn't work if you have prefix -> infix are there cases that can happen?
 
 def approximate_thing(thing): return JOINT(EXACTLY_ONE(approx), COMPOSE(spaces, thing), join=False)
 
+def FAILURE(p):
+    return param('parse-failure')(lambda null: (True, tuple(), p))(p)
 
 # TODO objective specifications...
+components = OR(dimensions,
+                dilution_factor,
+                expression,
+                quantity,
+                FAILURE)
+approx_comp = approximate_thing(components)
 
-def FAILURE(p):
-    return PVAL('parse-failure')(lambda null: (True, tuple(), p))(p)
-
-def parameter_expression(p): return OR(approximate_thing(parameter_expression),
-                                       dimensions,
-                                       dilution_factor,
-                                       temp_for_biology,
-                                       expression,
-                                       quantity,
-                                       FAILURE)(p)  # now this is some stupid shit right here
-
-# patterns:
-# num op num unit
-# num unit op num unit
-# unit num
-# op num
-# opnum
-# numunit
-
-#pat1 = JOINT(num, spaces, op, spaces, num, join=False)
-
-#degree = '°'
-#degree_c = degree + 'C'
-
-
+parameter_expression = OR(approx_comp, components)
 
 def main():
+    from desc.prof import profile_me
+    from time import time
+
     print(identifier('hello world!'))
     print(quote('\'hello world!'))
     print(quote('\'"hello" world!'))
@@ -516,11 +539,7 @@ def main():
         text2 = f.read()
     td = tag_docs(text)
     e = racket_doc(text2)
-    #embed()
-    #return
 
-    from desc.prof import profile_me
-    from time import time
     tests = ('1 daL', "300 mOsm", "0.5 mM", "7 mM", "0.1 Hz.", "-50 pA",
              "200–500mm", "0.3%–0.5%", "1:500", "4%", "10 U/ml",
              "–20°C", "<10 mV", "–70 ± 1 mV", "30 to 150 pA",
@@ -529,7 +548,9 @@ def main():
              "250 +- 70 um", "20±11 mm", "+- 20 degrees",
              '0.1 mg kg–1', '75  mg / kg', '40x', 'x100',
              '200μm×200μm×200μm', '20--29 days', '4 °C', '10×10×10',
-             '10 kg * mm^2 / s^2', '10 * 1.1 ^ 30 / 12'
+             '10 kg * mm^2 / s^2', '10 * 1.1 ^ 30 / 12',
+             '120 +- 8 * 10 ^ 6 MR / kg * s2 * 20',
+             '1 * 2 * 3 * 4 * 5', '1 + 2 + 3 + 4 + 5',
             )
     weirds = ("One to 5", "100-Hz", "25 ng/ul)", "34–36°C.",
               '3*10^6 infectious particles/mL',
@@ -540,10 +561,10 @@ def main():
                    "(pH 7.3",
                   )
     with open(os.path.expanduser('~/ni/protocols/rkt/test-params.rkt'), 'rt') as f:
-        param_test_strings = [l.strip().strip('"') for l in f.readlines()][3:-1]
+        success, v, rest = racket_doc(f.read())#[l.strip().strip('"') for l in f.readlines()][3:-1]
+    param_test_strings = [s for e in v  if e[0] == 'define' and e[1] == 'param-test-strings' for s in e[2]]
     test_all = []
 
-    #@profile_me  # THIS IS WHAT MAKES IT SLOW!
     def timeit():
         for t in param_test_strings:
             success = False
@@ -567,8 +588,8 @@ def main():
     test_unit = [unit(f) for f in fun]
     test_quantity = [quantity(t) for t in tests]
     test_expression = [parameter_expression(t) for t in tests + weirds]
-    test_expression = '\n'.join(f"'{t+q:<25} -> {parameter_expression(t)[1]}" for t in tests + weirds)
-    #print(test_expression)
+    test_expression = '\n'.join(sorted((f"'{t+q:<25} -> {parameter_expression(t)[1]}" for t in tests + weirds), key=lambda v: v[25:]))
+    print(test_expression)
     test_fails = [parameter_expression(t) for t in tests]
     embed()
 
