@@ -200,6 +200,9 @@ def EOF(p):
 def BOX(v):
     return v,
 
+def RETBOX(v):
+    return RETURN((v,))
+
 def FLOP(return_value):
     return RETURN(tuple(return_value[::-1]))
 
@@ -393,7 +396,7 @@ siunit = OR(*make_funcs(list(coln(0, units_si + units_extra)) + # need both here
 DEGREES_UNDERLINE = b'\xc2\xba'.decode()  # º sometimes pdfs misencode these
 DEGREES_FEAR = b'\xe2\x97\xa6' # this thing is scary and I have no id what it is or why it wont change color ◦
 _C_for_temp = COMP('C')
-C_for_temp = param('unit')(transform_value(_C_for_temp, lambda v: BOX(_silookup['degrees-celcius'])))
+C_for_temp = RETVAL(_C_for_temp, BOX(_silookup['degrees-celcius']))
 temp_for_biology = JOINT(num, C_for_temp, join=False)
 
 unit_atom = param('unit')(BIND(OR(JOINT(siprefix, siunit, join=False),
@@ -453,7 +456,7 @@ unit_suffix = OR(JOINT(COMPOSE(spaces, unit_op),
                     COMPOSE(spaces, unit_atom)),
                  JOINT(COMPOSE(spaces, maybe_exponent),
                        int_))
-unit_expression = param('unit-expression')(BIND(BIND(JOINT(unit_atom,
+unit_expression = param('unit-expr')(BIND(BIND(JOINT(unit_atom,
                                                            BIND(MANY1(unit_suffix),
                                                                 flatten1)),
                                                      flatten),
@@ -497,9 +500,8 @@ dimensions = param('dimensions')(BIND(JOINT(quantity,
                                                                   spaces)),
                                                      quantity))), flatten))
     #OR(JOINT(quantity, COMPOSE(sby, sq), COMPOSE(sby, sq)), JOINT(quantity, COMPOSE(sby, sq))))  # ick
-prefix_operator = OR(plus_or_minus, comparison)
+prefix_operator = OR(approx, plus_or_minus, comparison)
 infix_operator = OR(plus_or_minus, range_indicator, math_op)  # colon? doesn't really operate on quantities, note that * and / do not interfere with the unit parsing because that takes precedence
-prefix_expression = JOINT(prefix_operator, COMPOSE(spaces, quantity))
 infix_suffix = JOINT(COMPOSE(spaces, infix_operator),
                      COMPOSE(spaces, quantity))
 infix_expression = BIND(BIND(JOINT(quantity,
@@ -507,9 +509,14 @@ infix_expression = BIND(BIND(JOINT(quantity,
                                    flatten1)),
                              flatten),
                         op_order)
+prefix_expression = BIND(BIND(JOINT(prefix_operator,
+                               COMPOSE(spaces,
+                                       OR(infix_expression,
+                                          quantity))),
+                         flatten), RETBOX)
 expression = param('expression')(OR(prefix_expression, infix_expression))  # FIXME this doesn't work if you have prefix -> infix are there cases that can happen?
 
-def approximate_thing(thing): return JOINT(EXACTLY_ONE(approx), COMPOSE(spaces, thing), join=False)
+#def approximate_thing(thing): return JOINT(EXACTLY_ONE(approx), COMPOSE(spaces, thing), join=False)
 
 def FAILURE(p):
     return param('parse-failure')(lambda null: (True, tuple(), p))(p)
@@ -520,9 +527,9 @@ components = OR(dimensions,
                 expression,
                 quantity,
                 FAILURE)
-approx_comp = approximate_thing(components)
+#approx_comp = approximate_thing(components)
 
-parameter_expression = OR(approx_comp, components)
+parameter_expression = components#OR(approx_comp, components)
 
 def main():
     from desc.prof import profile_me

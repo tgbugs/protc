@@ -707,28 +707,26 @@ class protc(AstGeneric):
                 return '(' + param_unit + " '" + name + ')'
 
         def format_value(tuple_, localIndent=0, depth=0):
-            #print(depth, localIndent)
             out = ''
             if tuple_:
                 newline = tuple_[0] in self.format_nl
-                indent_for_this_loop = localIndent + len(tuple_[0]) + 1
+                indent_for_this_loop = localIndent + len('(') + len(tuple_[0]) + len(' ')
                 indent_for_next_level = indent_for_this_loop
-                prior_lenv = 0
                 for i, v in enumerate(tuple_):
                     if newline and i > 1:
-                        out += '\n' + ' ' * (indent_for_this_loop + depth * 2 + (0 if depth else 1))
-                        if i == 2:  # only do this the first time, if there are 3 entries it will subtract twice
-                            indent_for_next_level -= prior_lenv + (2 if depth else 1)
-                            #indent_for_next_level = (indent_for_this_loop + depth * 2 + (0 if depth else 1))
+                        out += '\n' + ' ' * indent_for_this_loop
                     if type(v) is tuple:
                         v = format_value(v, indent_for_next_level, depth + 1)
+                        indent_prefix = '('
+                    else:
+                        indent_prefix = ''
+
                     if v is not None:
                         v = str(v)
                         if out and out[-1] != ' ':
                             out += ' ' + v
-                            if i > 0:
-                                prior_lenv = len(v)
-                                indent_for_next_level += len(v)
+                            if i > 1 or not newline:
+                                indent_for_next_level += len(indent_prefix) + len(v) + len(' ')
                         else:  # we are adding indents
                             out += v
             if out:
@@ -876,7 +874,7 @@ def main():
 
     mem_file = '/tmp/protocol-annotations.pickle'
 
-    global annos  # this is too useful not to do
+    #global annos  # this is too useful not to do
     annos = get_annos(mem_file)  # TODO memoize annos... and maybe start with a big offset?
     annos.append(HypothesisAnnotation({'id':'deadbeef0',
                                        'user':'tgbugs',
@@ -884,14 +882,45 @@ def main():
                                        'text':'MAGIC',
                                        'target':[{'selector':[{'type':'TextQuoteSelector', 'prefix':'', 'exact':'MAGIC', 'suffix':''}]}],
                                        #'exact':'MAGIC',
-                                       'text':'https://hyp.is/deadbeef1',
+                                       'text':(
+                                           'https://hyp.is/deadbeef1\n'
+                                           'https://hyp.is/deadbeef3\n'
+                                           'https://hyp.is/deadbeef4\n'
+                                              ),
                                        'tags':['protc:input']}))
     annos.append(HypothesisAnnotation({'id':'deadbeef1',
                                        'user':'tgbugs',
                                        'updated':'LOL',
-                                       #'references':['deadbeef0'],
+                                       'text':'https://hyp.is/deadbeef2',
+                                       'tags':['protc:aspect']}))
+    annos.append(HypothesisAnnotation({'id':'deadbeef1.5',
+                                       'user':'tgbugs',
+                                       'updated':'LOL',
+                                       'references':['deadbeef1'],
+                                       'text':'cookies m8',
+                                       'tags':['annotation-text:value']}))
+    annos.append(HypothesisAnnotation({'id':'deadbeef2',
+                                       'user':'tgbugs',
+                                       'updated':'LOL',
+                                       'text':'10x10x10m/kg',
+                                       #'text':'+- 3.5 - 6 MR',  # this has error
+                                       #'text':'~ 3.5 - 6 MR',  # this has error
+                                       #'text':'3.5 - 6 MR',  # this does not... HRM
+                                       'tags':['protc:parameter*']}))
+    annos.append(HypothesisAnnotation({'id':'deadbeef3',
+                                       'user':'tgbugs',
+                                       'updated':'LOL',
                                        #'text':'10x10x10m/kg',
-                                       'text':'~ 3.5 - 6 MR',  # this has error
+                                       'text':'10 +- 3.5 - 6 MR/kg',  # this has error
+                                       #'text':'~ 3.5 - 6 MR',  # this has error
+                                       #'text':'3.5 - 6 MR',  # this does not... HRM
+                                       'tags':['protc:parameter*']}))
+    annos.append(HypothesisAnnotation({'id':'deadbeef4',
+                                       'user':'tgbugs',
+                                       'updated':'LOL',
+                                       #'text':'10x10x10m/kg',
+                                       #'text':'+- 3.5 - 6 MR',  # this has error
+                                       'text':'~ 3.5 - 6 MR/kg/s^2',  # this has error
                                        #'text':'3.5 - 6 MR',  # this does not... HRM
                                        'tags':['protc:parameter*']}))
     problem_child = 'KDEZFGzEEeepDO8xVvxZmw'
