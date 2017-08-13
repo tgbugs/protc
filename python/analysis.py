@@ -695,51 +695,53 @@ class protc(AstGeneric):
                                              'symbolic-measure',
                                              'black-black-component',
                                             ))
-    format_nl = '*', '/', 'range', 'plus-or-minus', 'param:dimensions'
+    format_nl =  '*', '/', 'range', 'plus-or-minus', 'param:dimensions'
+    format_nl_long =  '^'
     def parameter(self):
-        #return repr(v)  # calling this there adds 4 secons to the runtime...
-        def format_unit_atom(param_unit, name, prefix=None):  # dealt with in parsing
-            if prefix is not None:
-                return f"({param_unit} '{name} '{prefix})"  # perf is a tossup...
-                return '(' + param_unit + " '" + name + " '" + prefix + ')'
-            else:
-                return f"({param_unit} '{name})"
-                return '(' + param_unit + " '" + name + ')'
+        def isLongNL(tuple_):
+            if tuple_[0] in self.format_nl_long:
+                t1 = type(tuple_[1]) is tuple
+                t2 = type(tuple_[2]) is tuple
+                if t1 and t2: 
+                    if len(tuple_[1]) > 2 or len(tuple_[2]) > 2:
+                        return True
+                elif t1 and len(tuple_[1]) > 3:
+                    return true
+                elif t2 and len(tuple_[2]) > 3:
+                    return true
+            return False
 
-        def format_value(tuple_, localIndent=0, depth=0):
+        def format_value(tuple_, localIndent=0, depth=0):#, LID=''):
             out = ''
             if tuple_:
-                newline = tuple_[0] in self.format_nl
-                indent_for_this_loop = localIndent + len('(') + len(tuple_[0]) + len(' ')
+                newline = tuple_[0] in self.format_nl or isLongNL(tuple_)
+                indent_for_this_loop = localIndent + len('(') + len(tuple_[0]) + len(' ')  # vim fail )
                 indent_for_next_level = indent_for_this_loop
+                #indent_this = LID + '(' + tuple_[0] + ' '  # vim fail )
+                #indent_next = indent_this
                 for i, v in enumerate(tuple_):
                     if newline and i > 1:
                         out += '\n' + ' ' * indent_for_this_loop
+                        #out += '\n' + indent_this
                     if type(v) is tuple:
-                        v = format_value(v, indent_for_next_level, depth + 1)
-                        indent_prefix = '('
-                    else:
-                        indent_prefix = ''
-
+                        v = format_value(v, indent_for_next_level, depth + 1)#, LID=indent_next)
                     if v is not None:
                         v = str(v)
                         if out and out[-1] != ' ':
                             out += ' ' + v
                             if i > 1 or not newline:
-                                indent_for_next_level += len(indent_prefix) + len(v) + len(' ')
+                                indent_for_next_level += len(' ') + len(v) # unlike at the top v already has ( prepended if it exists
+                                #indent_next += ' ' + v
                         else:  # we are adding indents
                             out += v
             if out:
                 return '(' + out + ')'
 
-        success, v, rest = getattr(self, '_parameter', (None, None, None))
+        success, v, rest = getattr(self, '_parameter', (None, None, None))  # memoization of the parsed form
         if v is None:
             value = self.value
-            #print(value)
             if value == '':  # breaks the parser :/
                 return ''
-            #cleaned = value.replace(' mL–1', ' * mL–1').replace(' kg–1', ' * kg–1')  # FIXME temporary (and bad) fix for superscript issues
-            #cleaned = cleaned.strip()
             cleaned = value.strip()
             cleaned_orig = cleaned
 
@@ -756,7 +758,7 @@ class protc(AstGeneric):
             self._parameter = success, v, rest
             test_params.append((value, (success, v, rest)))
         if v:
-            v = format_value(v, self.linePreLen)
+            v = format_value(v, self.linePreLen)#, LID=' ' * self.linePreLen)
         return repr(ParameterValue(success, v, rest, indent=self.linePreLen))  # TODO implement as part of processing the children?
 
 
@@ -886,6 +888,7 @@ def main():
                                            'https://hyp.is/deadbeef1\n'
                                            'https://hyp.is/deadbeef3\n'
                                            'https://hyp.is/deadbeef4\n'
+                                           'https://hyp.is/deadbeef5\n'
                                               ),
                                        'tags':['protc:input']}))
     annos.append(HypothesisAnnotation({'id':'deadbeef1',
@@ -923,6 +926,16 @@ def main():
                                        'text':'~ 3.5 - 6 MR/kg/s^2',  # this has error
                                        #'text':'3.5 - 6 MR',  # this does not... HRM
                                        'tags':['protc:parameter*']}))
+    annos.append(HypothesisAnnotation({'id':'deadbeef5',
+                                       'user':'tgbugs',
+                                       'updated':'LOL',
+                                       #'text':'10x10x10m/kg',
+                                       #'text':'+- 3.5 - 6 MR',  # this has error
+                                       #'text':'~ 3.5 - 6 MR/kg/s^2',  # this has error
+                                       #'text':'3.5 - 6 MR',  # this does not... HRM
+                                       'text':'4.7 +- 0.6 x 10^7 / mm^3',  # TODO without long newline this has a formatting error
+                                       #'text':'0.6 x 10^7 / mm^3',
+                                       'tags':['protc:parameter*']}))
     problem_child = 'KDEZFGzEEeepDO8xVvxZmw'
     stream_loop = start_loop(annos, mem_file)
     #hybrids = [Hybrid(a, annos) for a in annos]
@@ -958,7 +971,7 @@ def main():
         pl = protc.parentless()
         with open('/tmp/pl-protcur.rkt', 'wt') as f: f.write(pl)
     more()
-    #stream_loop.start()  # need this to be here to catch deletes
+    stream_loop.start()  # need this to be here to catch deletes
     embed()
 
 def _more_main():
