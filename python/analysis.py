@@ -62,7 +62,7 @@ def url_doi(doi):
     return 'https://doi.org/' + doi
 
 def url_pmid(pmid):
-    return 'https://www.ncbi.nlm.nih.gov/pubmed/' + pmid
+    return 'https://www.ncbi.nlm.nih.gov/pubmed/' + pmid.split(':')[-1]
 
 def addReplies(annos):
     for anno in annos:
@@ -979,7 +979,7 @@ def main():
 
     mem_file = '/tmp/protocol-annotations.pickle'
 
-    #global annos  # this is too useful not to do
+    global annos  # this is now only used for making embed sane to use
     annos = get_annos(mem_file)  # TODO memoize annos... and maybe start with a big offset?
     problem_child = 'KDEZFGzEEeepDO8xVvxZmw'
     stream_loop = start_loop(annos, mem_file)
