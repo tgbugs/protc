@@ -35,8 +35,28 @@ def get_hypothesis_local(uri):
     if 'hypothesis-local' in uri:
         return os.path.splitext(os.path.basename(uri))[0]
 
+HLPREFIX = 'http://hypothesis-local.olympiangods.org/' 
 def hypothesis_local(hln):
-    return 'http://hypothesis-local.olympiangods.org/' + hln + '.pdf'
+    return HLPREFIX + hln + '.pdf'
+
+def extract_links_from_markdown(text):
+    def doline(line):
+        if line:
+            if '](' in line:  # )
+                return line.split('](', 1)[-1][:-1] # )
+            elif 'http' in line:
+                return line
+            else:
+                error_output.append(f'Bad line:{line}')
+
+    if ' ' in text:
+        text = text.replace(' ', '\n')
+    if '\n' not in text:
+        text += '\n'
+    for line in text.split('\n'):
+        url = doline(line)
+        if url:
+            yield url.rstrip().rstrip(')')
 
 def url_doi(doi):
     return 'https://doi.org/' + doi
@@ -83,22 +103,40 @@ def addDocLinks(base_url, doc):
 
 # stats
 
-def citation_tree(annos):
+def citation_triples(annos):
     p = RFU
-    trips = []
     for anno in annos:
         hl = get_hypothesis_local(anno.uri)
         if hl:
             s = hl
-            if p in anno.tags and 'TODO' not in anno.tags:
-                if 'no access' in anno.text:
-                    continue  # there are some cases where TODO is missing
-                t = anno.text.strip()
-                o = get_hypothesis_local(t)
-                o = o if o else t
-                trips.append((p, s, o))
+            if p in anno.tags:
+                urls = extract_links_from_markdown(anno.text)
+                for url in urls:
+                    o = get_hypothesis_local(url)
+                    o = o if o else url
+                    yield p, s, o
 
-    return trips
+def citation_tree(annos):
+    t = citation_triples(annos)
+    PREFIXES = {'protc':'http://protc.olympiangods.org/curation/tags/',
+                'hl':'http://hypothesis-local.olympiangods.org/'}
+    PREFIXES.update(makePrefixes('rdfs'))
+    g = makeGraph('', prefixes=PREFIXES)
+    for p, s, o in t:
+        if 'http' in s:
+            su = s
+        else:
+            su = hypothesis_local(s)
+        if 'http' in o:
+            ou = o
+        else:
+            ou = hypothesis_local(o)
+        g.add_node(su, p, ou)
+        g.add_node(su, 'rdfs:label', s)  # redundant
+        g.add_node(ou, 'rdfs:label', o)  # redundant
+    ref_graph = g.make_scigraph_json(RFU, direct=True)
+    tree, extra = creatTree('hl:ma2015.pdf', RFU, 'OUTGOING', 10, json=ref_graph, prefixes=PREFIXES)
+    return tree, extra
 
 def papers(annos):
     idents = {}
@@ -654,7 +692,7 @@ class AstGeneric(Hybrid):
         else:
             childs = ')' * nparens + comment  
 
-        start = '\n(' if top else '('
+        start = '\n(' if top else '('  # ))
         #print('|'.join(''.join(str(_) for _ in range(1,10)) for i in range(12)))
         return f'{start}{type_} {value}{childs}'
 
@@ -696,6 +734,7 @@ class protc(AstGeneric):
                                              'black-black-component',
                                             ))
     format_nl =  '*', '/', 'range', 'plus-or-minus', 'param:dimensions'
+
     format_nl_long =  '^'
     def parameter(self):
         def isLongNL(tuple_):
@@ -845,6 +884,10 @@ class protc(AstGeneric):
     def structured_data_record(self):
         return "'(\"" + '" "'.join(self.value.split('\n')) + '")'
 
+    def references_for_use(self):
+        esc = r'\;'
+        return '\n'.join(f'''{" " * self.linePreLen if i else ""}{"'" + link.replace(";", esc) if HLPREFIX in link else "(TODO '" + link.replace(";", esc) + ")"}'''
+                         for i, link in enumerate(sorted(extract_links_from_markdown(self.value))))
     #def implied_input(self): return value
     #def structured_data(self): return self.value
     #def measure(self): return self.value
@@ -868,16 +911,7 @@ class ParameterValue:
 test_params = []
 test_input = []
 
-def main():
-    from pprint import pformat
-    from protcur import get_annos, get_annos_from_api, start_loop
-    from time import sleep, time
-    import requests
-
-    mem_file = '/tmp/protocol-annotations.pickle'
-
-    #global annos  # this is too useful not to do
-    annos = get_annos(mem_file)  # TODO memoize annos... and maybe start with a big offset?
+def test_annos(annos):
     annos.append(HypothesisAnnotation({'id':'deadbeef0',
                                        'user':'tgbugs',
                                        'updated':'LOL',
@@ -936,8 +970,23 @@ def main():
                                        'text':'4.7 +- 0.6 x 10^7 / mm^3',  # TODO without long newline this has a formatting error
                                        #'text':'0.6 x 10^7 / mm^3',
                                        'tags':['protc:parameter*']}))
+
+def main():
+    from pprint import pformat
+    from protcur import get_annos, get_annos_from_api, start_loop
+    from time import sleep, time
+    import requests
+
+    mem_file = '/tmp/protocol-annotations.pickle'
+
+    #global annos  # this is too useful not to do
+    annos = get_annos(mem_file)  # TODO memoize annos... and maybe start with a big offset?
     problem_child = 'KDEZFGzEEeepDO8xVvxZmw'
     stream_loop = start_loop(annos, mem_file)
+    test_annos(annos)
+    tree, extra = citation_tree(annos)
+    i = papers(annos)
+
     #hybrids = [Hybrid(a, annos) for a in annos]
     #printD('protcs')
     #@profile_me
@@ -971,29 +1020,17 @@ def main():
         pl = protc.parentless()
         with open('/tmp/pl-protcur.rkt', 'wt') as f: f.write(pl)
     more()
+    def update():
+        protc.objects = {}
+        perftest()
+        text()
+        more()
     stream_loop.start()  # need this to be here to catch deletes
     embed()
 
 def _more_main():
     input_text_args = [(basic_start(a).strip(),) for a in annos if 'protc:input' in a.tags or 'protc:output' in a.tags]
     async_getter(sgv.findByTerm, input_text_args)  # prime the cache FIXME issues with conflicting loops...
-
-
-    i = papers(annos)
-
-    t = citation_tree(annos)
-    PREFIXES = {'protc':'http://protc.olympiangods.org/curation/tags/',
-                'hl':'http://hypothesis-local.olympiangods.org/'}
-    PREFIXES.update(makePrefixes('rdfs'))
-    g = makeGraph('', prefixes=PREFIXES)
-    for p, s, o in t:
-        su = hypothesis_local(s)
-        ou = hypothesis_local(o)
-        g.add_node(su, p, ou)
-        g.add_node(su, 'rdfs:label', s)  # redundant
-        g.add_node(ou, 'rdfs:label', o)  # redundant
-    ref_graph = g.make_scigraph_json(RFU, direct=True)
-    tree, extra = creatTree('hl:ma2015.pdf', RFU, 'OUTGOING', 10, json=ref_graph)
 
     irs = sorted(inputRefs(annos))
 

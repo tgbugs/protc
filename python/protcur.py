@@ -9,7 +9,7 @@ from markdown import markdown
 from scibot.hypothesis import HypothesisUtils, HypothesisAnnotation
 import analysis
 from analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid
-from analysis import papers, statistics, tagdefs, readTagDocs, addDocLinks, addReplies, _addParent, protc
+from analysis import citation_tree, papers, statistics, tagdefs, readTagDocs, addDocLinks, addReplies, _addParent, protc
 from hypush.subscribe import preFilter, setup_websocket
 from hypush.handlers import filterHandler
 from IPython import embed
@@ -156,7 +156,6 @@ table_style = ('<style>'
                'a:visited { color: grey; }'
                '</style>')
 
-
 def render_idents(idents):
     #print(idents)
     HLN, DOI, PMID, PDOI = 'HLN', 'DOI:', 'PMID:', 'protc:parent-doi'
@@ -208,9 +207,14 @@ def main():
 
     # routes
 
-    @app.route('/curation/tree', methods=['GET'])
-    def route_tree():
-        return '<pre>' + protc.topLevel() + '</pre>'
+    @app.route('/curation/citations', methods=['GET'])
+    def route_citations():
+        tree, extra = citation_tree(annos)
+        return extra.html
+
+    @app.route('/curation/ast', methods=['GET'])
+    def route_ast():
+        return '<pre>' + protc.parentless() + '</pre>'
 
     @app.route('/curation/papers', methods=['GET'])
     def route_papers():
@@ -246,7 +250,7 @@ def main():
     @app.route('/curation/', methods=['GET'])
     def route_curation():
         out = ''
-        for route in 'papers', 'annotations', 'tags', 'tree':
+        for route in 'papers', 'annotations', 'tags', 'ast', 'citations':
             url = request.base_url + route
             out += f'<a href={url}>{route}</a> <br>'
         return out

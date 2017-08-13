@@ -260,10 +260,12 @@ def EXACTLY_ONE(func, fail=True): return BIND(TIMES(func, 1, 1, fail), RETUNBOX)
 
 # I hate the people who felt the need to make different type blocks for this stuff in 1673
 EN_DASH = b'\xe2\x80\x93'.decode()
+MINUS_SIGN = b'\xe2\x88\x92'.decode()  # HAH CAUGHT YOU
 HYPHEN_MINUS = b'\x2d'.decode()  # yes, the thing that most keyboards have
+minus_sign = COMP(MINUS_SIGN)
 en_dash = COMP(EN_DASH)
 hyphen_minus = COMP(HYPHEN_MINUS)
-_dash_thing = OR(en_dash, hyphen_minus)  # THERE ARE TOO MANY AND THEY ALL LOOK THE SAME
+_dash_thing = OR(hyphen_minus, en_dash, minus_sign)  # THERE ARE TOO MANY AND THEY ALL LOOK THE SAME
 dash_thing = RETVAL(_dash_thing, HYPHEN_MINUS)
 double_dash_thing = TIMES(dash_thing, 2)
 thing_accepted_as_a_dash = transform_value(OR(double_dash_thing, dash_thing), lambda v: HYPHEN_MINUS)
@@ -480,9 +482,10 @@ unit_shorthand = param('unit-expr')(BIND(JOINT(unit_atom,
                                                             lambda v: RETURN(('^', *v))))),
                                          lambda v: RETBOX(('*', *v))))
 unit = OR(unit_expression, unit_shorthand, unit_atom)
+unit_starts_with_dash = COMPOSE(dash_thing, unit)  # derp
 unit_implicit_count_ratio = BIND(JOINT(LEXEME(division),
-                                  unit,
-                                  join=False),
+                                       unit,
+                                       join=False),
                                  lambda v: RETBOX((v[0], unit("count")[1], *v[1:])))
 
 def plus_or_minus_thing(thing): return JOINT(plus_or_minus, COMPOSE(spaces, thing), join=False)
@@ -506,7 +509,7 @@ percent = RETVAL(_percent, BOX("'percent"))
 fold_suffix = RETVAL(END(by, noneof('0123456789')), BOX("'fold"))  # NOT(num) required to prevent issue with dimensions
 _suffix_unit = param('unit')(OR(percent, unit_implicit_count_ratio))
 suffix_unit = OR(_suffix_unit, unit)
-suffix_unit_no_space = param('unit')(OR(EXACTLY_ONE(fold_suffix), C_for_temp))  # FIXME this is really bad :/ and breaks dimensions...
+suffix_unit_no_space = param('unit')(OR(EXACTLY_ONE(fold_suffix), C_for_temp, unit_starts_with_dash))  # FIXME this is really bad :/ and breaks dimensions...
 suffix_quantity = JOINT(num, OR(suffix_unit_no_space,
                                 COMPOSE(spaces,
                                         AT_MOST_ONE(suffix_unit, fail=False))))  # this catches the num by itself and leaves a blank unit
