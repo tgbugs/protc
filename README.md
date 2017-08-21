@@ -783,6 +783,16 @@ a possibility.
 ## Notes
 `raco exe -l run.rkt` to create a bash launcher
 
+## NI2017 thoughts
+We want certain types of actionable identifiers, such as phone numbers and email addresses.
+Yes these are slower than a url, but sometimes you want to be able to record them as the
+most reliable way to get the data/thing you are looking for.
+Simulang, DSL for specifying stimuli parameters, initially worked out for visual stimuli,
+but could also be used to spec other stimuli param sets. We will need this in protc.
+For specifying interactive behavioral paradims, use pushdown automata, they are extremely
+usefuly ways to combine a stack with a fininte state machine and make for an excellent
+declarative language for specifying how experiments should progress.
+
 ## License
 Obviously the language specification cannot be copyrighted and will be released
 under some completely open license just to make sure.
