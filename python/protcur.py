@@ -9,7 +9,7 @@ from markdown import markdown
 from hyputils.hypothesis import HypothesisUtils, HypothesisAnnotation
 import analysis
 from analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid
-from analysis import citation_tree, papers, statistics, tagdefs, readTagDocs, addDocLinks, addReplies, _addParent, protc
+from analysis import citation_tree, papers, statistics, tagdefs, readTagDocs, addDocLinks, protc
 from hyputils.subscribe import preFilter, setup_websocket
 from hyputils.handlers import filterHandler
 from IPython import embed
@@ -58,8 +58,6 @@ def get_annos_from_api(offset=0, limit=None):
         if 'replies' in obj:
             rows += obj['replies']
     annos = [HypothesisAnnotation(row) for row in rows]
-    if limit is None:
-        addReplies(annos)
     return annos
 
 def get_annos_from_file(memoization_file):
@@ -88,7 +86,6 @@ def add_missing_annos(annos):
             else:
                 done = True
                 break  # assume that annotations return newest first
-    addReplies(annos)
 
 def get_annos(memoization_file='/tmp/annotations.pickle'):
     annos = get_annos_from_file(memoization_file)
@@ -124,7 +121,6 @@ class protcurHandler(filterHandler):
                 self.annos.remove(gone)
             if act != 'delete':  # create update
                 anno = HypothesisAnnotation(message['payload'][0])
-                _addParent(anno, self.annos)  # this is safe because time exists!
                 self.annos.append(anno)
             #print(len(self.annos), 'annotations.')
             memoize_annos(self.annos, self.memoization_file)

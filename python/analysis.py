@@ -64,29 +64,6 @@ def url_doi(doi):
 def url_pmid(pmid):
     return 'https://www.ncbi.nlm.nih.gov/pubmed/' + pmid.split(':')[-1]
 
-def addReplies(annos):
-    for anno in annos:
-        _addParent(anno, annos)
-
-def addParent(anno):
-    _addParent(anno, annos)
-
-def _addParent(anno, annos):
-    return  # short circuit
-    if anno.type == 'reply':
-        #print(anno.references)
-        for parent_id in anno.references:
-            parent = _getAnnoById(parent_id, annos)
-            if parent is None:
-                continue
-            anno.parent = parent
-            if not hasattr(parent, 'replies'):
-                parent.replies = []
-            elif anno not in parent.replies:
-                parent.replies.append(anno)
-        if not hasattr(anno, 'parent'):
-            print(f'Parent deleted for {anno.id} {anno.text} {sorted(anno.tags)} {anno.references}')
-
 #
 # docs
 
@@ -197,16 +174,6 @@ def inputRefs(annos):
                     id_ = idFromShareLink(line)
                     if id_:
                         yield id_
-
-def getAnnoById(id_):
-    return _getAnnoById(id_, annos)
-
-def _getAnnoById(id_, annos):  # ah the taint of global
-    try:
-        return [a for a in annos if a.id == id_][0]
-    except IndexError as e:
-        print('could not find', id_, shareLinkFromId(id_))
-        return None
 
 
 # HypothesisAnnotation class customized to deal with replacing
