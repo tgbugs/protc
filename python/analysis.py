@@ -842,7 +842,7 @@ def main():
     mem_file = '/tmp/protocol-annotations.pickle'
 
     global annos  # this is now only used for making embed sane to use
-    get_annos = Memoizer(api_token, username, group, mem_file)
+    get_annos = Memoizer(memoization_file=mem_file)
     annos = get_annos()
     problem_child = 'KDEZFGzEEeepDO8xVvxZmw'
     stream_loop = start_loop(annos, mem_file)
