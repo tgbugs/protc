@@ -183,9 +183,9 @@ def inputRefs(annos):
 #  eg annotation-text:children to say exactly what the fields are when there needs to be more than one
 #  it is possible to figure most of them out from their content but not always
 
-class Hypothesis:  # a better HypothesisAnnotation
-    """ A wrapper around hypothes.is annotations the builds the
-        referential structure an pretty prints. """
+class HypothesisHelper:  # a better HypothesisAnnotation
+    """ A wrapper around sets of hypothes.is annotations 
+        with referential structure an pretty printing. """
     objects = {}  # TODO updates # NOTE: all child classes need their own copy of objects
     _replies = {}
     reprReplies = True
@@ -338,7 +338,7 @@ class Hypothesis:  # a better HypothesisAnnotation
                 f'\n{t}____________________')
 
 
-class Hybrid(Hypothesis):
+class Hybrid(HypothesisHelper):
     """ Base class for building abstract syntax trees
         from hypothes.is annotations. """
     control_tags = tuple()  # tags controlling how tags from a reply affect the parent's tags
