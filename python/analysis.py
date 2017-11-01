@@ -183,17 +183,10 @@ def inputRefs(annos):
 #  eg annotation-text:children to say exactly what the fields are when there needs to be more than one
 #  it is possible to figure most of them out from their content but not always
 
-class Hybrid:  # a better HypothesisAnnotation
-    control_tags = 'annotation-correction', 'annotation-tags:replace', 'annotation-tags:add', 'annotation-tags:delete' 
-    prefix_skip_tags = 'PROTCUR:', 'annotation-'
-    text_tags = ('annotation-text:exact',
-                 'annotation-text:text',
-                 'annotation-text:value',
-                 'annotation-text:children',
-                 'annotation-correction')
-    children_tags = 'annotation-children:delete',
-    prefix_ast = 'protc:',
-    objects = {}  # TODO updates
+class Hypothesis:  # a better HypothesisAnnotation
+    """ A wrapper around hypothes.is annotations the builds the
+        referential structure an pretty prints. """
+    objects = {}  # TODO updates # NOTE: all child classes need their own copy of objects
     _replies = {}
     reprReplies = True
     _embedded = False
@@ -218,7 +211,7 @@ class Hybrid:  # a better HypothesisAnnotation
         except KeyError:
             #printD(f'{anno.id} doesnt exist')
             return super().__new__(cls)
-            
+
     def __init__(self, anno, annos):
         self.annos = annos
         self.id = anno.id  # hardset this to prevent shenanigans
@@ -229,10 +222,10 @@ class Hybrid:  # a better HypothesisAnnotation
         self.replies
         #if self.replies:
             #print(self.replies)
-        list(self.children)  # populate annotation links from the text field to catch issues early
         #if self.id not in self._replies:
             #self._replies[self.id] = set()  # This is bad becuase it means we don't trigger a search
 
+    # protect the original annotation from modification
     @property
     def _type(self): return self._anno.type
     @property
@@ -244,6 +237,13 @@ class Hybrid:  # a better HypothesisAnnotation
     @property
     def references(self): return self._anno.references
 
+    # we don't have any rules for how to modify these yet
+    @property
+    def exact(self): return self._exact
+    @property
+    def text(self): return self._text
+    @property
+    def tags(self): return self._tags
 
     def getAnnoById(self, id_):
         try:
@@ -265,20 +265,6 @@ class Hybrid:  # a better HypothesisAnnotation
             else:
                 h = self.__class__(anno, self.annos)
                 return h
-
-    def _fix_implied_input(self):
-        if ': ' in self.text and 'hyp.is' in self.text:
-            value_children_text = self.text.split(':', 1)[1]
-            value, children_text = value_children_text.split('\n', 1)
-            return value.strip(), children_text.strip()
-        else:
-            return '', ''
-
-    @property
-    def isAstNode(self):
-        return (noneMembers(self._tags, *self.control_tags)
-                and all(noneMembers(tag, *self.prefix_skip_tags) for tag in self.tags)
-                and any(anyMembers(tag, *self.prefix_ast) for tag in self.tags))
 
     @property
     def shareLink(self):
@@ -315,6 +301,71 @@ class Hybrid:  # a better HypothesisAnnotation
                 # and induce all sorts of hair raising recursion issues :/
                 self.__class__(anno, self.annos)
             return self._replies[self.id]
+
+    def __eq__(self, other):
+        return (self.id == other.id
+                and self.text == other.text
+                and set(self.tags) == set(other.tags))
+
+    def __hash__(self):
+        return hash(self.__class__.__name__ + self.id)
+
+    def __repr__(self, depth=0):
+        start = '|' if depth else ''
+        t = ' ' * 4 * depth + start
+
+        parent_id =  f"\n{t}parent_id:    {self.parent.id} {self.__class__.__name__}.byId('{self.parent.id}')" if self.parent else ''
+        exact_text = f'\n{t}exact:        {self.exact}' if self.exact else ''
+
+        text_align = 'text:         '
+        lp = f'\n{t}'
+        text_line = lp + ' ' * len(text_align)
+        text_text = lp + text_align + self.text.replace('\n', text_line) if self.text else ''
+        tag_text =   f'\n{t}tags:         {self.tags}' if self.tags else ''
+
+        replies = ''.join(r.__repr__(depth + 1) for r in self.replies)
+        rep_ids = f'\n{t}replies:      ' + ' '.join(f"{self.__class__.__name__}.byId('{r.id}')"
+                                                    for r in self.replies)
+        replies_text = (f'\n{t}replies:{replies}' if self.reprReplies else rep_ids) if replies else ''
+        return (f'\n{t.replace("|","")}*--------------------'
+                f"\n{t}{self.__class__.__name__ + ':':<14}{self.shareLink} {self.__class__.__name__}.byId('{self.id}')"
+                f'\n{t}user:         {self._anno.user}'
+                f'{parent_id}'
+                f'{exact_text}'
+                f'{text_text}'
+                f'{tag_text}'
+                f'{replies_text}'
+                f'\n{t}____________________')
+
+
+class Hybrid(Hypothesis):
+    """ Base class for building abstract syntax trees
+        from hypothes.is annotations. """
+    control_tags = tuple()  # tags controlling how tags from a reply affect the parent's tags
+    prefix_skip_tags = tuple()  # pattern for tags that should not be exported to the ast
+    text_tags = tuple()  # tags controlling how the text of the current affects the parent's text
+    children_tags = tuple()  # tags controlling how links in the text of the parent annotation are affected
+    prefix_ast = tuple()  # the tag prefix(es) that are part of the ast
+    objects = {}  # TODO updates
+    _replies = {}
+
+    def __init__(self, anno, annos):
+        super().__init__(anno, annos)
+        list(self.children)  # populate annotation links from the text field to catch issues early
+
+    def _fix_implied_input(self):
+        if ': ' in self.text and 'hyp.is' in self.text:
+            value_children_text = self.text.split(':', 1)[1]
+            value, children_text = value_children_text.split('\n', 1)
+            return value.strip(), children_text.strip()
+        else:
+            return '', ''
+
+    @property
+    def isAstNode(self):
+        return (noneMembers(self._tags, *self.control_tags)
+                and all(noneMembers(tag, *self.prefix_skip_tags) for tag in self.tags)
+                and any(anyMembers(tag, *self.prefix_ast) for tag in self.tags))
 
     @property
     def exact(self):
@@ -434,7 +485,7 @@ class Hybrid:  # a better HypothesisAnnotation
 
         if 'hyp.is' not in self.text:
             children_text = ''
-        elif anyMembers(self.tags, *self.children_tags):
+        elif anyMembers(self.tags, *self.children_tags):  # FIXME this assumes all tags are :delete
             children_text = ''
         elif any(tag.startswith('PROTCUR:') for tag in self.tags) and noneMembers(self.tags, *self.text_tags):
             # accidental inclusion of feedback that doesn't start with SKIP eg https://hyp.is/HLv_5G43EeemJDuFu3a5hA
@@ -492,27 +543,31 @@ class Hybrid:  # a better HypothesisAnnotation
                 child.hasAstParent = True  # FIXME called every time :/
                 yield child  # buildAst will have a much eaiser time operating on these single depth childs
 
-    def __eq__(self, other):
-        return (self.id == other.id
-                and self.text == other.text
-                and set(self.tags) == set(other.tags))
-    
-    def __hash__(self):
-        return hash(self.__class__.__name__ + self.id)
-
     def __repr__(self, depth=0):
         start = '|' if depth else ''
         t = ' ' * 4 * depth + start
 
-        parent_id = f"\n{t}parent_id:    {self.parent.id} {self.__class__.__name__}.byId('{self.parent.id}')" if self.parent else ''
-        tag_text = f'\n{t}tags:         {self.tags}' if self.tags else ''
+        parent_id =  f"\n{t}parent_id:    {self.parent.id} {self.__class__.__name__}.byId('{self.parent.id}')" if self.parent else ''
+        exact_text = f'\n{t}exact:        {self.exact}' if self.exact else ''
+
+        text_align = 'text:         '
+        lp = f'\n{t}'
+        text_line = lp + ' ' * len(text_align)
+        text_text = lp + text_align + self.text.replace('\n', text_line) if self.text else ''
+
+
+        value_text = f'\n{t}value:        {self.value}'
+        tag_text =   f'\n{t}tags:         {self.tags}' if self.tags else ''
+
         lct = list(self._cleaned_tags)
         ct = f'\n{t}cleaned tags: {lct}' if self.references and lct and lct != self.tags else ''
         tc = f'\n{t}tag_corrs:    {self.tag_corrections}' if self.tag_corrections else ''
 
         replies = ''.join(r.__repr__(depth + 1) for r in self.replies)
-        rep_ids = f'\n{t}replies:      ' + ' '.join(f"{self.__class__.__name__}.byId('{r.id}')" for r in self.replies)
-        replies_text = f'\n{t}replies:{replies}' if self.reprReplies else rep_ids if replies else ''
+        rep_ids = f'\n{t}replies:      ' + ' '.join(f"{self.__class__.__name__}.byId('{r.id}')"
+                                                    for r in self.replies)
+        replies_text = (f'\n{t}replies:{replies}' if self.reprReplies else rep_ids) if replies else ''
+
         childs = ''.join(c.__repr__(depth + 1)
                          if self not in c.children
                          else f'\n{" " * 4 * (depth + 1)}* {c.id} has a circular reference with this node {self.id}'  # avoid recursion
@@ -520,13 +575,14 @@ class Hybrid:  # a better HypothesisAnnotation
                          if c is not self.parent  # avoid accidental recursion with replies of depth 1 TODO WE NEED TO GO DEEPER
                         )
         childs_text = f'\n{t}children:{childs}' if childs else ''
+
         return (f'\n{t.replace("|","")}*--------------------'
                 f"\n{t}{self.__class__.__name__ + ':':<14}{self.shareLink} {self.__class__.__name__}.byId('{self.id}')"
                 f'\n{t}isAstNode:    {self.isAstNode}'
                 f'{parent_id}'
-                f'\n{t}exact:        {self.exact}'
-                f'\n{t}text:         {self.text}'
-                f'\n{t}value:        {self.value}'
+                f'{exact_text}'
+                f'{text_text}'
+                f'{value_text}'
                 f'{tag_text}'
                 f'{ct}'
                 f'{tc}'
@@ -537,6 +593,14 @@ class Hybrid:  # a better HypothesisAnnotation
 
 class AstGeneric(Hybrid):
     """ Base class that implements the core methods needed for parsing various namespaces """
+    control_tags = 'annotation-correction', 'annotation-tags:replace', 'annotation-tags:add', 'annotation-tags:delete' 
+    prefix_skip_tags = 'PROTCUR:', 'annotation-'
+    text_tags = ('annotation-text:exact',
+                 'annotation-text:text',
+                 'annotation-text:value',
+                 'annotation-text:children',
+                 'annotation-correction')
+    children_tags = 'annotation-children:delete',
     #indentDepth = 2
     #objects = {}
     #_order = tuple()
@@ -665,6 +729,7 @@ class AstGeneric(Hybrid):
 
 
 class protc(AstGeneric):
+    prefix_ast = 'protc:',
     indentDepth = 2
     objects = {}  # TODO updates
     _order = (  # ordered based on dependence and then by frequency of occurence for performance (TODO tagdefs stats automatically)
