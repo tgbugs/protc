@@ -1,26 +1,19 @@
 #!/usr/bin/env python3.6
 import os
-import pickle
 import asyncio
-from os import environ
 from datetime import date
 from threading import Thread
 from markdown import markdown
-from hyputils.hypothesis import HypothesisUtils, HypothesisAnnotation
-import analysis
+from hyputils.hypothesis import HypothesisUtils, HypothesisAnnotation, Memoizer
+from hyputils.hypothesis import api_token, username, group
 from analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid
 from analysis import citation_tree, papers, statistics, tagdefs, readTagDocs, addDocLinks, protc
 from hyputils.subscribe import preFilter, setup_websocket
 from hyputils.handlers import filterHandler
 from IPython import embed
-
 from flask import Flask, url_for, redirect, request, render_template, render_template_string, make_response, abort 
 
-api_token = environ.get('HYP_API_TOKEN', 'TOKEN')  # Hypothesis API token
-username = environ.get('HYP_USERNAME', 'USERNAME') # Hypothesis username
-group = environ.get('HYP_GROUP', '__world__')
-
-print(api_token, username, group)  # sanity check
+get_annos = Memoizer()
 
 def get_proper_citation(xml):
     root = etree.fromstring(xml)
@@ -44,63 +37,6 @@ def fix_trailing_slash(annotated_urls):
 
 # hypothesis API
 
-def get_annos_from_api(offset=0, limit=None):
-    print('yes we have to start from here')
-    h = HypothesisUtils(username=username, token=api_token, group=group, max_results=100000)
-    params = {'offset':offset,
-              'group':h.group}
-    if limit is None:
-        rows = h.search_all(params)
-    else:
-        params['limit'] = limit
-        obj = h.search(params)
-        rows = obj['rows']
-        if 'replies' in obj:
-            rows += obj['replies']
-    annos = [HypothesisAnnotation(row) for row in rows]
-    return annos
-
-def get_annos_from_file(memoization_file):
-    try:
-        with open(memoization_file, 'rb') as f:
-            annos = pickle.load(f)
-        if annos is None:
-            return []
-        else:
-            return annos
-    except FileNotFoundError:
-        return []
-
-def add_missing_annos(annos):
-    offset = 0
-    limit = 200
-    done = False
-    while not done:
-        new_annos = get_annos_from_api(offset, limit)
-        offset += limit
-        if not new_annos:
-            break
-        for anno in new_annos:
-            if anno not in annos:  # this will catch edits
-                annos.append(anno)
-            else:
-                done = True
-                break  # assume that annotations return newest first
-
-def get_annos(memoization_file='/tmp/annotations.pickle'):
-    annos = get_annos_from_file(memoization_file)
-    if not annos:
-        new_annos = get_annos_from_api()
-        annos.extend(new_annos)
-    add_missing_annos(annos)
-    memoize_annos(annos, memoization_file)
-    return annos
-
-def memoize_annos(annos, memoization_file):  # FIXME if there are multiple ws listeners we will have race conditions?
-    print(f'annos updated, memoizing new version with, {len(annos)} members')
-    with open(memoization_file, 'wb') as f:
-        pickle.dump(annos, f)
-
 def export_json_impl(annos):
     output_json = [anno.__dict__ for anno in annos]
     DATE = date.today().strftime('%Y-%m-%d')
@@ -123,7 +59,7 @@ class protcurHandler(filterHandler):
                 anno = HypothesisAnnotation(message['payload'][0])
                 self.annos.append(anno)
             #print(len(self.annos), 'annotations.')
-            memoize_annos(self.annos, self.memoization_file)
+            get_annos.memoize_annos(self.annos)
         except KeyError as e:
             embed()
 

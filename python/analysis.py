@@ -10,7 +10,7 @@ from pyontutils.utils import makeGraph, makePrefixes, async_getter, noneMembers,
 from pyontutils.scigraph_client import Vocabulary
 import parsing
 import parsing_parsec
-from hyputils.hypothesis import HypothesisAnnotation, HypothesisHelper, idFromShareLink, shareLinkFromId
+from hyputils.hypothesis import HypothesisAnnotation, HypothesisHelper, idFromShareLink, shareLinkFromId, Memoizer
 from desc.prof import profile_me
 
 try:
@@ -835,14 +835,15 @@ def test_annos(annos):
 
 def main():
     from pprint import pformat
-    from protcur import get_annos, get_annos_from_api, start_loop
+    from protcur import start_loop
     from time import sleep, time
     import requests
 
     mem_file = '/tmp/protocol-annotations.pickle'
 
     global annos  # this is now only used for making embed sane to use
-    annos = get_annos(mem_file)  # TODO memoize annos... and maybe start with a big offset?
+    get_annos = Memoizer(api_token, username, group, mem_file)
+    annos = get_annos()
     problem_child = 'KDEZFGzEEeepDO8xVvxZmw'
     stream_loop = start_loop(annos, mem_file)
     test_annos(annos)
