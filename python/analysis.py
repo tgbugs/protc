@@ -10,7 +10,7 @@ from pyontutils.utils import makeGraph, makePrefixes, async_getter, noneMembers,
 from pyontutils.scigraph_client import Vocabulary
 import parsing
 import parsing_parsec
-from scibot.hypothesis import HypothesisAnnotation
+from hyputils.hypothesis import HypothesisAnnotation
 from desc.prof import profile_me
 
 try:
@@ -131,9 +131,9 @@ def citation_tree(annos):
             ou = o
         else:
             ou = hypothesis_local(o)
-        g.add_node(su, p, ou)
-        g.add_node(su, 'rdfs:label', s)  # redundant
-        g.add_node(ou, 'rdfs:label', o)  # redundant
+        g.add_trip(su, p, ou)
+        g.add_trip(su, 'rdfs:label', s)  # redundant
+        g.add_trip(ou, 'rdfs:label', o)  # redundant
     ref_graph = g.make_scigraph_json(RFU, direct=True)
     tree, extra = creatTree('hl:ma2015.pdf', RFU, 'OUTGOING', 10, json=ref_graph, prefixes=PREFIXES)
     return tree, extra

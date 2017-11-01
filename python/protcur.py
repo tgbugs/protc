@@ -6,12 +6,12 @@ from os import environ
 from datetime import date
 from threading import Thread
 from markdown import markdown
-from scibot.hypothesis import HypothesisUtils, HypothesisAnnotation
+from hyputils.hypothesis import HypothesisUtils, HypothesisAnnotation
 import analysis
 from analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid
 from analysis import citation_tree, papers, statistics, tagdefs, readTagDocs, addDocLinks, addReplies, _addParent, protc
-from hypush.subscribe import preFilter, setup_websocket
-from hypush.handlers import filterHandler
+from hyputils.subscribe import preFilter, setup_websocket
+from hyputils.handlers import filterHandler
 from IPython import embed
 
 from flask import Flask, url_for, redirect, request, render_template, render_template_string, make_response, abort 
