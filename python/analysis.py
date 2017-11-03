@@ -181,7 +181,10 @@ class Hybrid(HypothesisHelper):
 
     def __init__(self, anno, annos):
         super().__init__(anno, annos)
-        list(self.children)  # populate annotation links from the text field to catch issues early
+        if len(self.objects) == len(self._annos):  # all loaded
+            # populate annotation links from the text field to catch issues early
+            printD('populating children')
+            [c for p in self.objects.values() for c in p.children]
 
     def _fix_implied_input(self):
         if ': ' in self.text and 'hyp.is' in self.text:
