@@ -13,7 +13,7 @@ from hyputils.handlers import filterHandler
 from IPython import embed
 from flask import Flask, url_for, redirect, request, render_template, render_template_string, make_response, abort 
 
-get_annos = Memoizer()
+get_annos = Memoizer('/tmp/protcur-annos.pickle')
 
 def get_proper_citation(xml):
     root = etree.fromstring(xml)
@@ -45,9 +45,8 @@ def export_json_impl(annos):
 # hypothesis websocket
 
 class protcurHandler(filterHandler):
-    def __init__(self, annos, memoization_file):
+    def __init__(self, annos):
         self.annos = annos
-        self.memoization_file = memoization_file
     def handler(self, message):
         try:
             act = message['options']['action'] 
@@ -63,9 +62,9 @@ class protcurHandler(filterHandler):
         except KeyError as e:
             embed()
 
-def streaming(annos, memoization_file):
+def streaming(annos):
     filters = preFilter(groups=[group]).export()
-    filter_handlers = [protcurHandler(annos, memoization_file)]
+    filter_handlers = [protcurHandler(annos)]
     ws_loop = setup_websocket(api_token, filters, filter_handlers)
     return ws_loop 
 
@@ -73,9 +72,9 @@ def loop_target(loop, ws_loop):
     asyncio.set_event_loop(loop)
     loop.run_until_complete(ws_loop())
 
-def start_loop(annos, memoization_file):
+def start_loop(annos):
     loop = asyncio.get_event_loop()
-    ws_loop = streaming(annos, memoization_file)
+    ws_loop = streaming(annos)
     stream_loop = Thread(target=loop_target, args=(loop, ws_loop))
     return stream_loop 
 
@@ -133,7 +132,7 @@ def render_2col_table(dict_, h1, h2, uriconv=lambda a:a):  # FIXME this sucks an
 def main():
     app = Flask('protc curation id service')
     annos = get_annos()
-    stream_loop = start_loop(annos, '/tmp/protcur-annos.pickle')
+    stream_loop = start_loop(annos)
     stream_loop.start()
     protcs = [protc(a, annos) for a in annos]
 
