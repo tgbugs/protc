@@ -8,8 +8,8 @@ from IPython import embed
 from pyontutils.hierarchies import creatTree
 from pyontutils.utils import makeGraph, makePrefixes, async_getter, noneMembers, allMembers, anyMembers
 from pyontutils.scigraph_client import Vocabulary
-import parsing
-import parsing_parsec
+from pysercomb import parsing
+from pysercomb import parsing_parsec
 from hyputils.hypothesis import HypothesisAnnotation, HypothesisHelper, idFromShareLink, shareLinkFromId, Memoizer
 from desc.prof import profile_me
 
@@ -779,6 +779,7 @@ test_input = []
 def test_annos(annos):
     annos.append(HypothesisAnnotation({'id':'deadbeef0',
                                        'user':'tgbugs',
+                                       'created':'NOW',
                                        'updated':'LOL',
                                        'text':'MAGIC',
                                        'target':[{'selector':[{'type':'TextQuoteSelector', 'prefix':'', 'exact':'MAGIC', 'suffix':''}]}],
@@ -792,17 +793,20 @@ def test_annos(annos):
                                        'tags':['protc:input']}))
     annos.append(HypothesisAnnotation({'id':'deadbeef1',
                                        'user':'tgbugs',
+                                       'created':'NOW',
                                        'updated':'LOL',
                                        'text':'https://hyp.is/deadbeef2',
                                        'tags':['protc:aspect']}))
     annos.append(HypothesisAnnotation({'id':'deadbeef1.5',
                                        'user':'tgbugs',
+                                       'created':'NOW',
                                        'updated':'LOL',
                                        'references':['deadbeef1'],
                                        'text':'cookies m8',
                                        'tags':['annotation-text:value']}))
     annos.append(HypothesisAnnotation({'id':'deadbeef2',
                                        'user':'tgbugs',
+                                       'created':'NOW',
                                        'updated':'LOL',
                                        'text':'10x10x10m/kg',
                                        #'text':'+- 3.5 - 6 MR',  # this has error
@@ -811,6 +815,7 @@ def test_annos(annos):
                                        'tags':['protc:parameter*']}))
     annos.append(HypothesisAnnotation({'id':'deadbeef3',
                                        'user':'tgbugs',
+                                       'created':'NOW',
                                        'updated':'LOL',
                                        #'text':'10x10x10m/kg',
                                        'text':'10 +- 3.5 - 6 MR/kg',  # this has error
@@ -819,6 +824,7 @@ def test_annos(annos):
                                        'tags':['protc:parameter*']}))
     annos.append(HypothesisAnnotation({'id':'deadbeef4',
                                        'user':'tgbugs',
+                                       'created':'NOW',
                                        'updated':'LOL',
                                        #'text':'10x10x10m/kg',
                                        #'text':'+- 3.5 - 6 MR',  # this has error
@@ -827,6 +833,7 @@ def test_annos(annos):
                                        'tags':['protc:parameter*']}))
     annos.append(HypothesisAnnotation({'id':'deadbeef5',
                                        'user':'tgbugs',
+                                       'created':'NOW',
                                        'updated':'LOL',
                                        #'text':'10x10x10m/kg',
                                        #'text':'+- 3.5 - 6 MR',  # this has error
@@ -838,17 +845,17 @@ def test_annos(annos):
 
 def main():
     from pprint import pformat
-    from protcur import start_loop
+    from protcur import start_loop, get_annos
     from time import sleep, time
     import requests
 
     mem_file = '/tmp/protocol-annotations.pickle'
+    get_annos.memoization_file = mem_file  # FIXME hackish
 
     global annos  # this is now only used for making embed sane to use
-    get_annos = Memoizer(memoization_file=mem_file)
     annos = get_annos()
     problem_child = 'KDEZFGzEEeepDO8xVvxZmw'
-    stream_loop = start_loop(annos, mem_file)
+    stream_loop = start_loop(annos)
     test_annos(annos)
     tree, extra = citation_tree(annos)
     i = papers(annos)
