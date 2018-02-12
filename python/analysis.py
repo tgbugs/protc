@@ -6,7 +6,8 @@ import ast
 from collections import Counter
 from IPython import embed
 from pyontutils.hierarchies import creatTree
-from pyontutils.utils import makeGraph, makePrefixes, async_getter, noneMembers, allMembers, anyMembers
+from pyontutils.utils import async_getter, noneMembers, allMembers, anyMembers
+from pyontutils.core import makeGraph, makePrefixes
 from pyontutils.scigraph_client import Vocabulary
 from pysercomb import parsing
 from pysercomb import parsing_parsec
