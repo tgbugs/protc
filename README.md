@@ -13,6 +13,11 @@ To see all that was not measured is to know.
 (unfortunately this part has to be left to the information system)
 
 
+## Development installation
+`cd protc && raco pkg install && cd ..`
+`cd protc-lib && raco pkg install`
+
+
 ## Description
 Protc (prot see, pro tik, who cares) is a formal language for specifying protocols,
 scientific or otherwise. Specifically it is intended to provide a formal way to
