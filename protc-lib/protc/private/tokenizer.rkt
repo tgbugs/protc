@@ -1,11 +1,8 @@
 #lang racket/base
-(require
- brag/support
- (rename-in
-  br-parser-tools/lex-sre
-  (- :-))
 
- )
+(require brag/support
+         (rename-in br-parser-tools/lex-sre (- :-)))
+
 (define-lex-abbrev digits (:+ (char-set "0123456789")))
 (define-lex-abbrev number (:: digits
                               (? (:: (? (:: "." digits))
@@ -35,22 +32,23 @@
                                    (substring lexeme 1
                                               (sub1 (string-length lexeme))))]
        [(: "." symbol-chars) (token 'MESSAGE (substring lexeme 1))]
-       [(: "*" symbol-chars "*") (token 'BEING (substring lexeme 1
-                                                          (sub1 (string-length lexeme))))]
-       [(: ":*" symbol-chars) (token 'ASPECT-PARAM (substring lexeme 2))]
-       [(: ":" symbol-chars "*") (token 'ASPECT-MEASURE
+       [(: "*" symbol-chars "*") (token 'BEING (string->symbol (substring lexeme 1
+                                                                          (sub1 (string-length lexeme)))))]
+       [(: ":" symbol-chars "*") (token 'ASPECT-PARAM
                                         (substring lexeme 1
                                                    (sub1 (string-length lexeme))))]
+       [(: ":*" symbol-chars) (token 'ASPECT-MEASURE (substring lexeme 2))]
        [(: ":" symbol-chars) (token 'ASPECT (substring lexeme 1))]
        ; TODO symbolizable vs non-symbolizable eg mouse :brain is not a proper aspect but rather a nested black box or something ... so we may need mouse <brain <cortex *mouse* <*brain* <*cortex* seems pretty darned verbose....
        ["." (token 'END-SECTION)]
        ["..." (token 'ELIPSIS)]
        [symbol-chars (token 'SYMBOL (string->symbol lexeme))] ; FIXME too greedy
        [sections (token 'SECTION lexeme)]  ; this allows definition of new section types
+       ["#(" (token 'OPEN-ESEXP)]
        ["(" (token 'OPEN)]
        [")" (token 'CLOSE)]
        ;["@(" (token 'OPEN-AEXP)]
-       [(from/to "@(" ")@") (token 'AEXP lexeme)]  ; FIXME
+       ;[(from/to "@(" ")@") (token 'AEXP lexeme)]  ; FIXME
        ;[(from/to "(" ")") (token 'SEXP lexeme)]
        ["'" (token 'QUOTE)]
        ["," (token 'COMMA)]

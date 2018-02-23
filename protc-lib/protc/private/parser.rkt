@@ -4,7 +4,8 @@
 ; @ -> a splice
 ; / -> a cut
 
-expression : (section | section-lisp | atom | code-block)*
+protc-file : (expression)*
+expression : section | section-lisp | atom | code-block
 ;comment : COMMENT  ; not exactly clear what to do with comments in a documentation language...
 
 ;code-open : CODE-OPEN
@@ -14,8 +15,8 @@ testing : code-block ;code-open code-block code-close | code-open | code-close
 
 @atom : literal | quote | identifier
 @symbol : SYMBOL
-@literal : number | string | aexp
-number : NUMBER
+@literal : number | string | esexp
+@number : NUMBER  ; FIXME may need to not splice this
 @string : STRING
 
 identifier : bound-aspect | bound-being | <being> | symbol-or-modified  ; something that actually resolves to a thing
@@ -24,11 +25,15 @@ bound-being : symbol <being>  ; for doing USES spec *my-being*
 @symbol-or-modified : symbol | modified
 modified : @symbol QUOTE
 
-quote : /QUOTE (symbol | literal | section | quote)
-aexp : AEXP ; OPEN-AEXP (sexp | symbol | literal) CLOSE
+quote : /QUOTE (symbol | literal | section | esexp | sexp | quote)
+racket-quote : /QUOTE (symbol | literal | sexp | racket-quote)
+;aexp : AEXP ; OPEN-AEXP (sexp | symbol | literal) CLOSE
+esexp : /OPEN-ESEXP (symbol | bound-aspect | literal | sexp | racket-quote)* /CLOSE  ; FIXME issues with greedyness...
+;esexp : /OPEN-ESEXP symbol /CLOSE  ; FIXME issues with greedyness...
+/sexp : /OPEN (symbol | bound-aspect | literal | sexp | racket-quote)* /CLOSE
 
-section : section-type (aspect | <being>) [section-name] (class-message)* /section-divider section-body  /END-SECTION
-section-lisp : /OPEN section-type (aspect | <being>) [section-name] (class-message)* /section-divider section-body /CLOSE
+section : section-type (aspect | <being>) [section-name] (class-message)* [/section-divider section-body] /END-SECTION
+section-lisp : /OPEN section-type (aspect | <being>) [section-name] (class-message)* [/section-divider section-body] /CLOSE
 
 section-type : symbol
 class-message : @message
