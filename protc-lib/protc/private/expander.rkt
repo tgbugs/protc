@@ -72,20 +72,21 @@
 (define (process-section type a-or-b [name null] [class-message null] . body)
   'section-TODO)
 
-(define-syntax (section stx)
+(define-for-syntax (do-section stx)
   ; massive TODO here
   ; need to figure out how to pass this to the section handling logic
   (syntax-case stx (section-type
                     spec
-                    <being>
-                    )
+                    <being>)
     [(_ (section-type spec) (<being> name) . more)
      #'(define name (string-append "<being name=" (symbol->string 'name) ">"))]
-    [(_ other ...) #''TODO-not-imlemented-yet-section]
-    ))
-  ;(syntax-parse stx
-    ;[(_ inner ...)
-     ;#'(quote (inner ...))]))
+    [(_ other ...) #''(TODO-not-imlemented-yet-section other ...)]))
+
+(define-syntax (section stx)
+  (do-section stx))
+
+(define-syntax (section-lisp stx)
+  (do-section stx))
 
 (define (lookup-aspect thing-name aspect-type aspect-name)
   ; hash table vs just constructing an identifier...
@@ -100,8 +101,11 @@
     [(_ thing (aspect-param> aspect-name))
      #'(lookup-aspect thing 'param aspect-name)]
     [(_ thing (aspect-symbolic aspect-name))
-     #'(lookup-aspect thing 'symbolic aspect-name)]
-    ))
+     #'(lookup-aspect thing 'symbolic aspect-name)]))
+
+(define-syntax (<being> stx)
+  (syntax-parse stx
+    [(_ name) #'name]))
 
 (skip-nodes
  protc-file
