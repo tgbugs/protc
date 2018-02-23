@@ -35,9 +35,8 @@
        [(: "." symbol-chars) (token 'MESSAGE (substring lexeme 1))]
        [(: "*" symbol-chars "*") (token 'BEING (string->symbol (substring lexeme 1
                                                                           (sub1 (string-length lexeme)))))]
-       [(: ":" symbol-chars "*") (token 'ASPECT-PARAM
-                                        (substring lexeme 1
-                                                   (sub1 (string-length lexeme))))]
+       [(: ":" symbol-chars "*") (token 'ASPECT-PARAM (substring lexeme 1
+                                                                                 (sub1 (string-length lexeme))))]
        [(: ":*" symbol-chars) (token 'ASPECT-MEASURE (substring lexeme 2))]
        [(: ":" symbol-chars) (token 'ASPECT (substring lexeme 1))]
        ; TODO symbolizable vs non-symbolizable eg mouse :brain is not a proper aspect but rather a nested black box or something ... so we may need mouse <brain <cortex *mouse* <*brain* <*cortex* seems pretty darned verbose....

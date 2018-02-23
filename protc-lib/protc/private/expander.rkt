@@ -72,14 +72,41 @@
 (define (process-section type a-or-b [name null] [class-message null] . body)
   'section-TODO)
 
+(define (make-section #:type type #:name name #:aspect-name aspect-name #:aspect-type aspect-type)
+  `(,type ,name ,aspect-type ,aspect-name))
+
 (define-for-syntax (do-section stx)
   ; massive TODO here
   ; need to figure out how to pass this to the section handling logic
+  ; TODO FIXME for sections shouldn't we be considering making the
+  ; specification of sections themselves extensible in protc?
   (syntax-case stx (section-type
                     spec
+                    impl
+                    section-name
                     <being>)
     [(_ (section-type spec) (<being> name) . more)
-     #'(define name (string-append "<being name=" (symbol->string 'name) ">"))]
+     #'(define name (string-append "(<being> #:name " (symbol->string 'name) ")"))]
+    [(_ (section-type spec) (<aspect-measure aspect-name) (section-name name) . more)
+     ;#'(make-section #:type (symbol->string spec)
+                     ; makes no sense to do this i think...
+                     ;#:aspect-type 'measure
+                     ;#:aspect-name aspect-name
+                     ;#:name name)]
+     #'(define name (string-append "(<aspect-measure #:aspect "
+                                   'aspect-name
+                                   " #:name " (symbol->string 'name ) ")"))]
+    [(_ (section-type spec) (aspec-param> aspect-name) (section-name name) . more)
+     #'(define name (string-append "(aspect-param> #:aspect "
+                                   'aspect-name
+                                   " #:name " (symbol->string 'name ) ")"))]
+    [(_ (section-type spec) (aspec-symbolic aspect-name) (section-name name) . more)
+     #'(define name (string-append "(aspect-symbolic #:aspect "
+                                   'aspect-name
+                                   " #:name " (symbol->string 'name ) ")"))]
+    [(_ (section-type impl) (<being> name) . more)
+     ; check if behing has been speced
+     #''(TODO-impl-being name more)]
     [(_ other ...) #''(TODO-not-imlemented-yet-section other ...)]))
 
 (define-syntax (section stx)
@@ -107,9 +134,14 @@
   (syntax-parse stx
     [(_ name) #'name]))
 
+; TODO make these real things?
+;(define spec "section keyword for specifying a thing")
+;(define impl "section keyword for implementing a thing")
+
 (skip-nodes
  protc-file
- expression
+ ;expression
  identifier
  code-block
- number)
+ ;number)
+ )

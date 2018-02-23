@@ -4,8 +4,8 @@
 ; @ -> a splice
 ; / -> a cut
 
-protc-file : (expression)*
-expression : section | section-lisp | atom | code-block
+protc-file : (expression)*  ; TODO at some point we may want to make use of protc-file for macro transformation... and thus not cut here...
+@expression : section | section-lisp | atom | code-block  ; TODO no splice in future?
 ;comment : COMMENT  ; not exactly clear what to do with comments in a documentation language...
 
 ;code-open : CODE-OPEN
