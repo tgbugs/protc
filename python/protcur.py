@@ -154,7 +154,7 @@ def main():
     @app.route('/curation/annotations', methods=['GET'])
     def route_annotations():
         stats = statistics(annos)
-        return render_2col_table(stats, 'HLN', 'Annotation count', hypothesis_local)
+        return render_2col_table(stats, f'HLN n={len(stats)}', f'Annotation count n={sum(stats.values())}', hypothesis_local)
 
     @app.route('/curation/tags', methods=['GET'])
     def route_tags():
@@ -167,7 +167,7 @@ def main():
         def uriconv(v):
             uri = request.base_url + '/' + v
             return uri
-        return render_2col_table(tags, 'Tag', 'Count', uriconv=uriconv)
+        return render_2col_table(tags, f'Tags n={len(tags)}', f'Count n={sum(int(_.split(">",1)[1].split("<")[0]) for _ in tags.values())}', uriconv=uriconv)
 
     @app.route('/curation/tags/<tagname>', methods=['GET'])
     def route_tags_star(tagname):
