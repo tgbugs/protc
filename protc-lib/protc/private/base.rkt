@@ -195,28 +195,20 @@
 (define-syntax-class section-header
   (pattern (_?-or-aspect-name ) ))
 
-(struct step (name [spec #:mutable] [impl #:mutable]) #:inspector #f); #:mutable #t)
-
-(define-syntax (#%measure stx)
-  (syntax-parse stx
-    [(_ aspect name)
-     #'(#%measure aspect name)]))  ; doesn't actually do anything because spec and impl will override I think?
-
-(define-syntax (#%actualize stx)
-  (syntax-parse stx
-    [(_ aspect name)
-     #'(#%actualize aspect name)]))  ; doesn't actually do anything because spec and impl will override I think?
-
-(define-syntax (#%make stx)
-  (syntax-parse stx
-    [(_ name)
-     #'(#%make name)]))  ; doesn't actually do anything because spec and impl will override I think?
-
 (define-syntax (if-defined stx)
   (syntax-case stx ()
     [(_ id iftrue iffalse)
      (let ([where (identifier-binding #'id)])
        (if where #'iftrue #'iffalse))]))
+
+(struct step (name [spec #:mutable] [impl #:mutable]) #:inspector #f); #:mutable #t)
+
+; placeholders to keep syntax-parse happy
+(define-syntax (#%measure stx) #'(void))  ; aspect name
+
+(define-syntax (#%actualize stx) #'(void))  ; aspect name 
+
+(define-syntax (#%make stx) #'(void))  ; name
 
 (define-syntax (spec stx)
     ; (spec (measure (aspect g) weigh) ...)
@@ -244,10 +236,20 @@
                  #'(define name (list 'aspect 'actualize body ...))]
                 [(_ (#%make name:id) body:expr ...)
                  #'(if-defined name
-                               ; TODO this is an improvement, but we really need to enforce spec first...
-                               ; because the impl has to look up all the terms from the spec...
+                               ; TODO this is an improvement, but we really need to enforce spec first
+                               ; because the impl has to look up all the terms from the spec
+                               ; could look into using namespaces?
                                (set-step-impl! name (list 'being body ...))
                                (define name (step 'name '() (list 'being body ...))))]))
+
+; the thing is that this doesn't work because we don't know ahead of time
+; how many bound or unbound identifiers there are...
+'(let-values ([() ()])
+  (let ([spec-id-1]
+        [spec-id-2])
+    (let ([impl-id-1]
+          [impl-id-2])
+      (let))))
 
 ;#'(let ([rec (list 'being body ...)])
 ;(if-defined name
