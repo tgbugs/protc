@@ -1,7 +1,8 @@
 #lang racket/base
 
 (require (for-syntax racket/base
-                     syntax/parse))
+                     syntax/parse)
+         protc/private/base)
 
 (provide ;#%top
          ;#%app
