@@ -195,31 +195,73 @@
 (define-syntax-class section-header
   (pattern (_?-or-aspect-name ) ))
 
+(struct step (name [spec #:mutable] [impl #:mutable]) #:inspector #f); #:mutable #t)
+
+(define-syntax (#%measure stx)
+  (syntax-parse stx
+    [(_ aspect name)
+     #'(#%measure aspect name)]))  ; doesn't actually do anything because spec and impl will override I think?
+
+(define-syntax (#%actualize stx)
+  (syntax-parse stx
+    [(_ aspect name)
+     #'(#%actualize aspect name)]))  ; doesn't actually do anything because spec and impl will override I think?
+
+(define-syntax (#%make stx)
+  (syntax-parse stx
+    [(_ name)
+     #'(#%make name)]))  ; doesn't actually do anything because spec and impl will override I think?
+
+(define-syntax (if-defined stx)
+  (syntax-case stx ()
+    [(_ id iftrue iffalse)
+     (let ([where (identifier-binding #'id)])
+       (if where #'iftrue #'iffalse))]))
+
 (define-syntax (spec stx)
     ; (spec (measure (aspect g) weigh) ...)
-  (syntax-case stx (spec  ; note that syntax-case doesn't work with syntax classes :( so body:expr fails :/
-                    measure
-                    actualize
-                    make)
-    [(_ (measure aspect name) body)  ; TODO aspect-name:aspect
-     #'(define name (list 'aspect 'measure body))]
-    [(_ (actualize aspect name) body)  ; TODO body:messages
-     #'(define name (list 'aspect 'actualize body))]
-    [(_ (make name) body)
-     #'(define name (list 'being body))]))
+  (syntax-parse stx #:literals (spec  ; note that syntax-case doesn't work with syntax classes :( so body:expr fails :/
+                                #%measure
+                                #%actualize
+                                #%make)
+                [(_ (#%measure aspect:id name:id) body:expr ...)  ; TODO aspect-name:aspect
+                 #'(define name (list 'aspect 'measure body ...))]
+                [(_ (#%actualize aspect:id name:id) body:expr ...)  ; TODO body:messages
+                 #'(define name (list 'aspect 'actualize body ...))]
+                [(_ (#%make name:id) body:expr ...)
+                 #'(if-defined name
+                               (set-step-spec! name (list 'being body ...))
+                               (define name (step 'name (list 'being body ...) '())))]))
 
 (define-syntax (impl stx)
-  (syntax-case stx (impl
-                    measure
-                    actualize
-                    make)
-    [(_ (measure aspect name) body)
-     #'(define name (list 'aspect 'measure body))]
-    [(_ (actualize aspect name) body)
-     #'(define name (list 'aspect 'actualize body))]
-    [(_ (make name) body)
-     #'(define name (list 'being body))]
-    ))
+  (syntax-parse stx #:literals (impl
+                                #%measure
+                                #%actualize
+                                #%make)
+                [(_ (#%measure aspect:id name:id) body:expr ...)
+                 #'(define name (list 'aspect 'measure body ...))]
+                [(_ (#%actualize aspect:id name:id) body:expr ...)
+                 #'(define name (list 'aspect 'actualize body ...))]
+                [(_ (#%make name:id) body:expr ...)
+                 #'(if-defined name
+                               ; TODO this is an improvement, but we really need to enforce spec first...
+                               ; because the impl has to look up all the terms from the spec...
+                               (set-step-impl! name (list 'being body ...))
+                               (define name (step 'name '() (list 'being body ...))))]))
+
+;#'(let ([rec (list 'being body ...)])
+;(if-defined name
+;(set-step-spec! rec)
+;(step 'name rec '())))]))
+
+;#'(define name (let ([rec (list 'being body ...)])
+;(with-handlers ([exn? (λ (exn) (set-step-impl! rec))])
+;(step 'name '() rec))))]))
+
+(define-syntax (lexically-bound? stx)
+  (define expanded (local-expand stx (syntax-local-context) #f))
+  (and (identifier? expanded)
+       (not (eq? #f (identifier-binding expanded)))))
 
 (struct aspect (shortname name def parent)  ; note that #:auto is global...
   ; aka measurable
@@ -245,89 +287,106 @@
 (define :area (aspect 'area 'area '(expt :length 2) :dq))
 (define :volume (aspect 'vol 'volume '(expt :length 3) :dq))
 
+(define :mol (aspect 'mol 'mole "HRM" :count))
 (define :l (aspect 'l 'liters "SI unit of weight" :volume))
 (define :g (aspect 'g 'grams "SI unit of weight" :mass))
 
 ;(define :g '(aspect grams))  ; TODO
 ;(define :g ':g)
 
-(spec (measure :g weigh)
+(spec (#%measure :g weigh)
       '(step one))
-(spec (actualize :mass cut-down-to-size)
+(spec (#%actualize :mass cut-down-to-size)
       '(.vars final-weight))
+(spec (#%make solution)
+      '(.vars final-volume)
+      '(.inputs [solute (= solute :volume final-volume)]
+                ;(with-invariants [(> :volume final-volume)] beaker)
+                [beaker (> :volume final-volume)]  ; this is super nice for lisp; beaker :volume > final-volume possible
+                [beaker (> beaker :volume final-volume)])
+      )
+(impl (#%make solution)
+      'test
+      'test2)
+
 (displayln weigh)
+(displayln cut-down-to-size)
+(displayln solution)
 
-(define (specf #:type type
-               #:name name
-               #:aspect [aspect null]  ; again a reason to want a language...
-               #:uses [uses '()]
-               #:vars [vars '()]
-               #:inputs [inputs '()] 
-               #:invariants [invariants '()]  ; this is where this approach is annoying, we want to be able to have .invariant .invariant
-               #:prov [prov '()])
-  (filter (λ (v) (not (null? v)))
-          (list name type aspect
-                vars
-                inputs  ; here we have no fancy .inputs name :kg/m 'value
-                invariants  ; TODO when not using syntax we have to resolve inputs and vars manually :/
-                prov
-                ))
+(module+ other
+
+  (define (specf #:type type
+                 #:name name
+                 #:aspect [aspect null]  ; again a reason to want a language...
+                 #:uses [uses '()]
+                 #:vars [vars '()]
+                 #:inputs [inputs '()] 
+                 #:invariants [invariants '()]  ; this is where this approach is annoying, we want to be able to have .invariant .invariant
+                 #:prov [prov '()])
+    (filter (λ (v) (not (null? v)))
+            (list name type aspect
+                  vars
+                  inputs  ; here we have no fancy .inputs name :kg/m 'value
+                  invariants  ; TODO when not using syntax we have to resolve inputs and vars manually :/
+                  prov
+                  ))
+    )
+
+  ; observe the drawbacks :/
+  (specf #:type 'actualize  ; this should be bound
+         #:name 'cut-down-to-size  ; this is a name we are doefining
+         #:aspect :mass
+         #:uses weigh
+         #:vars '(initial-weight final-weight)  ; and here we see another problem these need to be variables
+         #:inputs '(knife)
+         #:invariants '((< final-weight initial-weight))
+         )
+
+
+
+  ;; database setup
+  (define (setup-counter)
+    (define ic 0)
+    (λ () (let ([current-value ic])
+            (set! ic (add1 ic)) current-value)))
+
+  (define (setup-db)
+
+    ; tables, indexes, and sequences
+    (define being-index '((being . data)))
+    (define aspect-index '((aspect . data)))
+    ;(define messages '((aspect . data)))
+
+    (define being-counter (setup-counter))
+    (define aspect-counter (setup-counter))
+
+    (define being-records '((-1 . ())))
+    (define aspect-records '((-1 . ())))
+
+    (define (add-being name record)
+      (add-rec name record #:type 'being))
+
+    (define (add-aspect name record)
+      (add-rec name record #:type 'aspect))
+
+    (define (add-rec name record #:type type)
+      (let-values ([(index counter records)
+                    (cond ((eq? type 'being) (values being-index being-counter being-records))
+                          ((eq? type 'aspect) (values aspect-index aspect-counter aspect-records))
+                          (#t (error "type unkown")))])
+        (if (dict-ref name index)
+            (error "that being is already defined...")
+            (let ([current-index (counter)])
+              (set! index (cons (cons name current-index) index))
+              (set! records (cons `(,current-index . ,record) records))
+              (void)))))
+
+    (define (dump-recs) (list being-index aspect-index being-records aspect-records))
+
+    (values add-being add-aspect dump-recs))
+
+  (define-values (add-being add-aspect dump-recs) (setup-db))
   )
-
-; observe the drawbacks :/
-(specf #:type 'actualize  ; this should be bound
-       #:name 'cut-down-to-size  ; this is a name we are doefining
-       #:aspect :mass
-       #:uses weigh
-       #:vars '(initial-weight final-weight)  ; and here we see another problem these need to be variables
-       #:inputs '(knife)
-       #:invariants '((< final-weight initial-weight))
-       )
-
-
-
-;; database setup
-(define (setup-counter)
-  (define ic 0)
-  (λ () (let ([current-value ic])
-          (set! ic (add1 ic)) current-value)))
-
-(define (setup-db)
-
-  ; tables, indexes, and sequences
-  (define being-index '((being . data)))
-  (define aspect-index '((aspect . data)))
-  ;(define messages '((aspect . data)))
-
-  (define being-counter (setup-counter))
-  (define aspect-counter (setup-counter))
-
-  (define being-records '((-1 . ())))
-  (define aspect-records '((-1 . ())))
-
-  (define (add-being name record)
-    (add-rec name record #:type 'being))
-
-  (define (add-aspect name record)
-    (add-rec name record #:type 'aspect))
-
-  (define (add-rec name record #:type type)
-    (let-values ([(index counter records)
-                  (cond ((eq? type 'being) (values being-index being-counter being-records))
-                        ((eq? type 'aspect) (values aspect-index aspect-counter aspect-records))
-                        (#t (error "type unkown")))])
-      (if (dict-ref name index)
-          (error "that being is already defined...")
-          (let ([current-index (counter)])
-            (set! index (cons (cons name current-index) index))
-            (set! records (cons `(,current-index . ,record) records))
-            (void)))))
-
-  (define (dump-recs) (list being-index aspect-index being-records aspect-records))
-
-  (values add-being add-aspect dump-recs))
-
-(define-values (add-being add-aspect dump-recs) (setup-db))
 
 
 (module+ test
