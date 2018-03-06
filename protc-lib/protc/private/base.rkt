@@ -13,10 +13,10 @@
 
 (require (for-meta 0 racket/base)
          (for-meta 1 racket/base)
-         (for-meta 2 racket/base)
-         (for-meta 3 racket/base)
-         (for-meta 4 racket/base)
-         (for-meta 5 racket/base)) 
+         (for-meta 2 racket/base)  ; needed for if-defined to work...
+         ;(for-meta 3 racket/base)
+         ;(for-meta 4 racket/base)
+         )
 
 ;;; implementation of protc forms using only racket syntax tools
 
@@ -210,11 +210,19 @@
 (define-syntax-class section-header
   (pattern (_?-or-aspect-name ) ))
 
-(define-syntax (if-defined stx)
-  (syntax-case stx ()
-    [(_ id iftrue iffalse)
-     (let ([where (identifier-binding #'id)])
-       (if where #'iftrue #'iffalse))]))
+(module utils racket/base
+  (require (for-syntax racket/base))
+  (provide (all-defined-out))
+  (define-syntax (if-defined stx)
+    (syntax-case stx ()
+      [(_ id iftrue iffalse)
+       (let ([where (identifier-binding #'id)])
+         (if where #'iftrue #'iffalse))]))
+)
+(require 'utils
+         ;(for-meta 1 'utils)
+         ;(for-meta 2 'utils)
+         )
 
 (struct step (name [spec #:mutable] [impl #:mutable]) #:inspector #f); #:mutable #t)
 
@@ -229,16 +237,27 @@
     (define -parameters '())
     (define -outputs '())
     (define/public (.name) -name)
-    (define/public (.identifier id) id)
+    (define/public (.identifier id) id)  ; TODO make it possible to add these dynamically, probably by spinning up a child class...
     ;(define/public (.input name [aspect null] [value null]) -name)  ; atomic structure of the message? ick
-    (define/public (.input input-struct) (void))  ; atomic structure of the message? ick
+    (define/public (.vars . things) (void))  ; atomic structure of the message? ick
+    (define/public (.inputs input-struct) (void))  ; atomic structure of the message? ick
+    (define/public (.invariant . things) (void))  ; copy me to make more!
+    (define/public (.parameter . things) (void))  ; not clear if we actually need this?
+    (define/public (.order . things)  ; order on making inputs and/or on individual actions, practical deps should resolve automatically
+      (void))
+    (define/public (.order+ . things)  ; link input/output of generic procedures
+      (void))
+    (define/public (practical-order . things) (void))  ; how to actually achieve things not what is known to matter scientifically
+    ; TODO how to do temporal restrictions on in place steps... are there in place steps??!
+    (define/public (func) (void))  ; copy me to make more!
+    (define/public (.echo message) `(echoing: ,message))
     (define/public (.ping) 'pong)
-    (define/public (.echo message) `(echoing ,message))
-    (define/public (.add-spec spec)
-      spec)
-    (define/public (add-impl impl)
+
+    ;(define/public (.add-spec spec) spec)
+    ;(define/public (.add-impl impl)
       ; validate in the context of the existing spec ??
-      impl)))
+    ;impl)
+  ))
 
 (define new-step (new step% [name 'new-step]))
 
@@ -249,8 +268,6 @@
 
 (define-syntax (#%make stx) #'(void))  ; name
 
-;(define-syntax (#%quote stx) #'ping)
-
 (define-for-syntax (pw stx)
   (display "syntax: ") (pretty-write (syntax->datum stx)))
 
@@ -258,17 +275,8 @@
 (module message-proc racket/base
   (require (for-syntax racket/pretty racket/base syntax/parse))
   (provide (all-defined-out))
-  ;(provide #%.vars
-           ;#%.inputs
-           ;#%.invariant
-           ;(for-meta 1 #%.vars
-                       ;#%.inputs
-                       ;#%.invariant
-           ;)
-  ;)
   (define-for-syntax (pw stx)
     (display "syntax: ") (pretty-write (syntax->datum stx)))
-
   (define-syntax (#%.vars stx)
     (pw stx)
     #''vars
@@ -277,52 +285,19 @@
        #'(quote (v ...))]))
   (define-syntax (#%.inputs stx) (pw stx) #''inputs)
   (define-syntax (#%.invariant stx) (pw stx) #''invariants)
+  (define-syntax (#%.order stx) (pw stx) #''invariants)  ; should be used to specify the order in which to make named inputs
+  (define-syntax (#%.order+ stx) (pw stx) #''invariants)
 )
-;(require (for-syntax 'message-proc) 'message-proc)
-(require 'message-proc 
-         ;(for-syntax 'message-proc)
-         ;(for-meta 0 'message-proc)
-         (for-meta 1 'message-proc)  ; needed for the syntax level to work
-         (for-meta 2 'message-proc)  ; needed for the second level...
-         (for-meta 3 'message-proc)
-         (for-meta 4 'message-proc)
-         (for-meta 5 'message-proc))
-(println (#%.vars in begin-for-syntax))
-(begin-for-syntax
-  (println (#%.vars in begin-for-syntax)))
-(begin-for-syntax
-  (begin-for-syntax
-    (println (#%.vars in lol wut))))
-(begin-for-syntax
-  (begin-for-syntax
-    (begin-for-syntax
-      (println (#%.vars in lol wut)))))
-(begin-for-syntax
-  (begin-for-syntax
-    (begin-for-syntax
-      (begin-for-syntax
-        (println (#%.vars in lol wut))))))
-(begin-for-syntax
-  (begin-for-syntax
-    (begin-for-syntax
-      (begin-for-syntax
-        (begin-for-syntax
-          (println (#%.vars in lol wut)))))))
+(require 'message-proc)
 
 (define ms% (new step% [name 'ms]))
-(#%.vars wtf)
-(displayln "HELP ME I HAVE GONE INSANE")
-(displayln (#%.vars a b c d))
-(send ms% echo (#%.vars hello))
-;(send* (is) (fun))
-;send+ is fun too...
-(let ([evaled (#%.vars a b c d)])
-  (send ms% echo evaled))
+(#%.vars a b c d e)
+(send ms% .echo (#%.vars hello))
 
 (define-syntax (#%message stx)
   (pw stx)
   (syntax-parse stx  #:literals (quote)
-    [(_ target (quote (dead ...))) #'(void)]  ; skip quoted stuff
+    [(_ target (quote thing)) #'(send target .echo (quote thing))]  ; send quoted stuff directly as a literal
     [(_ target (message-name:id message-body:expr ...))
      ; this will throw weird errors if a quoted expression is in the body... probably need to fix
      (let ([output
@@ -345,24 +320,42 @@
 
 (define-syntax (spec stx)
     ; (spec (measure (aspect g) weigh) ...)
+  (let ([output 
   (syntax-parse stx #:literals (spec  ; note that syntax-case doesn't work with syntax classes :( so body:expr fails :/
                                 #%measure
                                 #%actualize
                                 #%make)
-                [(_ (#%measure aspect:id name:id) body:expr ...)  ; TODO aspect-name:aspect
-                 #'(define name (list 'aspect 'measure body ...))]
-                [(_ (#%actualize aspect:id name:id) body:expr ...)  ; TODO body:messages
-                 #'(define name (list 'aspect 'actualize body ...))]
-                [(_ (#%make name:id) message:expr ...)
-                 #'(if-defined name
+                [(_ (#%measure aspect:id -name:id) message:expr ...)  ; TODO aspect-name:aspect
+                 ;#'(define name (list 'aspect 'measure body ...))]
+                 ; TODO check whether the aspect exists and file the resulting
+                 ;  spec as part of it... or similar
+                 (displayln "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+                 #'(if-defined -name
+                               (begin (#%message -name message) ...)
+                               (begin
+                                 (define -name (new step% [name '-name]))  ; TODO append % to name -> name% automatically...
+                                 (#%message -name message) ...))]
+                [(_ (#%actualize aspect:id -name:id) message:expr ...)  ; TODO body:messages
+                 ;#'(define name (list 'aspect 'actualize body ...))]
+                 #'(if-defined -name
+                               (begin (#%message -name message) ...)
+                               (begin
+                                 (define -name (new step% [name '-name]))  ; TODO append % to name -> name% automatically...
+                                 (#%message -name message) ...))]
+
+                [(_ (#%make -name:id) message:expr ...)
+                 #'(if-defined -name
                                ;(set-step-spec! name% (list 'being (#%message name% message) ...))
-                               (begin (#%message name% message) ...)
+                               (begin (#%message -name message) ...)
                                ;(define name (step 'name (list 'being body ...) '())))]))
                                (begin
-                                 (define name (step% name))  ; TODO append % to name -> name% automatically...
-                                 (#%message name message) ...))]))
+                                 (define -name (new step% [name '-name]))  ; TODO append % to name -> name% automatically...
+                                 (#%message -name message) ...))])])
+    (pw output)
+    output))
 
 (define-syntax (impl stx)
+  (let ([output 
   (syntax-parse stx #:literals (impl
                                 #%measure
                                 #%actualize
@@ -371,13 +364,19 @@
                  #'(define name (list 'aspect 'measure body ...))]
                 [(_ (#%actualize aspect:id name:id) body:expr ...)
                  #'(define name (list 'aspect 'actualize body ...))]
-                [(_ (#%make name:id) body:expr ...)
-                 #'(if-defined name
+                [(_ (#%make -name:id impl-name:id) message:expr ...)
+                 ; TODO something with impl-name...
+                 #'(if-defined -name
+                               (begin (#%message -name message) ...)
+                               (raise-syntax-error 'impl-before-spec (format "No specifiction exists for ~s. Please create that first." '-name)))])])
+                 ;#'(if-defined name
                                ; TODO this is an improvement, but we really need to enforce spec first
                                ; because the impl has to look up all the terms from the spec
                                ; could look into using namespaces? how about modules... :D
-                               (set-step-impl! name (list 'being body ...))
-                               (define name (step 'name '() (list 'being body ...))))]))
+                               ;(set-step-impl! name (list 'being body ...))
+                               ;(define name (step 'name '() (list 'being body ...))))]))
+    (pw output)
+    output))
 
 (define-syntax (delegate stx)
   "delegate this particular term/block to the current executor"
@@ -437,21 +436,40 @@
 ;(define :g '(aspect grams))  ; TODO
 ;(define :g ':g)
 
+;(debug-repl)
+
 (spec (#%measure :g weigh)
-      '(step one))
+      (.invariant (< 0.01 (error :g))))
 (spec (#%actualize :mass cut-down-to-size)
-      '(.vars final-weight))
+      (.vars final-weight))
 (spec (#%make solution)
       (.vars final-volume)
-      (.inputs [solute (= solute :volume final-volume)]
+      (.inputs [solvent (= solute :volume final-volume)]
                ;(with-invariants [(> :volume final-volume)] beaker)
                [beaker (> :volume final-volume)]  ; this is super nice for lisp; beaker :volume > final-volume possible
-               [beaker (> beaker :volume final-volume)])
+               [beaker (> beaker :volume final-volume)]
+               solute ...)
       )
-(impl (#%make solution)
-      'test
-      'test2)
+(impl (#%make solution way1)
+      ;implicit order
+      'step-0
+      'step-1
+      'step-2
+      )
+(impl (#%make solution way2)
+      ; no dependencies
+      (.order
+       'another-thing-without-obvious-order
+       'thing-without-obvious-order
+       ))
+(impl (#%make solution way3)
+      ; with input/output dependencies (may not need)
+      (.order+
+       'another-thing-without-obvious-order
+       'thing-without-obvious-order
+       ))
 
+; not at all clear why these fail before the impl sections fail...
 (displayln weigh)
 (displayln cut-down-to-size)
 (displayln solution)
