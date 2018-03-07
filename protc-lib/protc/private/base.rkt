@@ -8,6 +8,7 @@
                      syntax/parse)
          racket/class
          racket/syntax
+         racket/string
          syntax/parse
          racket/dict)
 
@@ -318,6 +319,7 @@
 
 (define step%
   (class object%
+    "Step objects. Probably will be broken into impl and spec since there are slightly different needs."
     (init name)
     (define -name name)
     (super-new)
@@ -326,7 +328,13 @@
     (define -invariants '())
     (define -parameters '())
     (define -outputs '())
+    (define docstring "")
     (define/public (.name) -name)
+    (define/public (.docstring [doc null])
+      (if (null? doc)
+          docstring
+          (begin (set! docstring (string-join docstring doc "\n")) docstring)))
+    (define/public (.delegate . things) (void))  ; TODO! local to global lifting for this is probably appropriate
     (define/public (.identifier id) id)  ; TODO make it possible to add these dynamically, probably by spinning up a child class...
     ;(define/public (.input name [aspect null] [value null]) -name)  ; atomic structure of the message? ick
     (define/public (.vars . things) (void))  ; atomic structure of the message? ick
@@ -359,16 +367,21 @@
 (define-syntax (#%make stx) #'(void))  ; name
 
 (define-for-syntax (pw stx)
-  (display "syntax: ") (pretty-write (syntax->datum stx)))
+  (when #t (display "syntax: ") (pretty-write (syntax->datum stx))))
 
 ; message preprocessing boom extensiblity
 (module message-proc racket/base
   (require (for-syntax racket/pretty racket/base syntax/parse))
   (provide (all-defined-out))
   (define-for-syntax (pw stx)
-    (display "syntax: ") (pretty-write (syntax->datum stx)))
+    (when #t (display "syntax: ") (pretty-write (syntax->datum stx))))
 
   ;; begin defining message syntaxes
+  (define-syntax (#%.delegate stx) (pw stx)
+    (syntax-parse stx
+      [(#%.delegate v:expr ...)
+       #'(quote (v ...))]))
+
   (define-syntax (#%.identifier stx) (pw stx)
     (syntax-parse stx
       [(#%.identifier v)  ; TODO #:type [type 'iri] etc..  ; ideally v:str but also str:literal for quotes...
@@ -392,6 +405,134 @@
 (define ms% (new step% [name 'ms]))
 (#%.vars a b c d e)
 (send ms% .echo (#%.vars hello))
+
+(define-syntax (#%message stx)
+  (pw stx)
+  (displayln "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+  (let ([output
+         (syntax-parse stx
+           #:literals (quote
+                       delegate)
+           ; not actual messages TODO handled before we get here??
+           ;[(_ target (delegate body:expr ...))  ; FIXME should catch earlier to lift terms?
+            ;'#(delegate body ...)]
+           [(_ target doc:str) #'(send target .docstring doc)]
+           [(_ target (quote thing)) #'(send target .echo (quote thing))]  ; send quoted stuff directly as a literal
+
+           ; messages
+           [(_ target (message-name:id message-body:expr ...))
+            ; this will throw weird errors if a quoted expression is in the body... probably need to fix
+            (with-syntax ([process-message (name-join "#%" #'message-name stx)])
+              #'(send target message-name (process-message message-body ...)))])])
+        (pw output)
+        output))
+
+(define-for-syntax (name-join prefix suffix stx)
+  (datum->syntax stx  ; if this is false then everything becomes unrooted and I go looking through 5 phase levels to find the problem
+   (string->symbol
+    (string-append prefix (symbol->string
+                           (syntax->datum suffix))))))
+
+(define-syntax (def stx)
+  "Define a local identifier using a single expression.
+For example use @(def solution (a+b solute solvent))."
+  (syntax-parse stx
+    [(_ name:id body:expr)
+     #'(define name (quote body))]))
+
+(define-syntax (spec stx)
+    ; (spec (measure (aspect g) weigh) ...)
+  (let ([output 
+  (syntax-parse stx #:literals (spec  ; note that syntax-case doesn't work with syntax classes :( so body:expr fails :/
+                                #%measure
+                                #%actualize
+                                #%make
+                                ; delegate
+                                def)
+                [(_ ((~or* #%measure #%actualize) aspect:id -name:id) (~or* (def local-name:id body:expr) message:expr) ...)  ; TODO aspect-name:aspect
+                 ; TODO check whether the aspect exists and file the resulting
+                 ;  spec as part of it or similar
+                 #'(if-defined -name
+                               (begin aspect  ; check to make sure the aspect has been defined
+                                      (def local-name body) ...
+                                      (#%message -name message) ...)
+                               (begin aspect
+                                 (define -name (new step% [name '-name]))  ; TODO append % to name -> name% automatically...
+                                 (def local-name body) ...
+                                 (#%message -name message) ...))]
+                ;[(_ (#%actualize aspect:id -name:id) message:expr ...)  ; TODO body:messages
+                 ;#'(if-defined -name
+                               ;(begin (#%message -name message) ...)
+                               ;(begin
+                                 ;(define -name (new step% [name '-name]))  ; TODO append % to name -> name% automatically...
+                                 ;(#%message -name message) ...))]
+
+                [(_ (#%make -name:id) (~or* (def local-name:id body:expr) message:expr) ...)
+                 #'(if-defined -name
+                               ;(set-step-spec! name% (list 'being (#%message name% message) ...))
+                               (begin
+                                 (def local-name body) ...
+                                 (#%message -name message) ...)
+                               ;(define name (step 'name (list 'being body ...) '())))]))
+                               (begin
+                                 (define -name (new step% [name '-name]))  ; TODO append % to name -> name% automatically...
+                                 (def local-name body.) ...
+                                 (#%message -name message) ...))])])
+    (pw output)
+    output))
+
+(define-syntax (impl stx)
+  (let ([output 
+  (syntax-parse stx #:literals (impl
+                                #%measure
+                                #%actualize
+                                #%make)
+                ;[(_ (#%measure aspect:id name:id) body:expr ...)
+                 ;#'(define name (list 'aspect 'measure body ...))]
+                ;[(_ (#%actualize aspect:id name:id) body:expr ...)
+                 ;#'(define name (list 'aspect 'actualize body ...))]
+
+                [(_ ((~or* #%measure #%actualize) aspect:id name:id) message:expr ...) 
+                 #'(if-defined -name
+                               (begin aspect  ; make sure aspect is defined
+                                 (#%message -name message) ...)
+                               (raise-syntax-error 'impl-before-spec
+                                                   (format "No specifiction exists for ~s. Please create that first." '-name)))
+                 ]
+;
+                [(_ (#%make -name:id impl-name:id) message:expr ...)
+                 ; TODO something with impl-name...
+                 ; TODO
+                 #'(if-defined -name
+                               (begin (#%message -name message) ...)
+                               (raise-syntax-error 'impl-before-spec
+                                                   (format "No specifiction exists for ~s. Please create that first." '-name)))])])
+                 ;#'(if-defined name
+                               ; TODO this is an improvement, but we really need to enforce spec first
+                               ; because the impl has to look up all the terms from the spec
+                               ; could look into using namespaces? how about modules... :D
+                               ;(set-step-impl! name (list 'being body ...))
+                               ;(define name (step 'name '() (list 'being body ...))))]))
+    (pw output)
+    output))
+
+(define-syntax (delegate stx)
+  ; TODO have defined the local .delegate version maybe use this for global?
+  "delegate this particular term/block to the current executor"
+  (syntax-parse stx
+    [(_ name:id body:expr ...)
+     #'(if-defined name
+                   (set! name (append name (list body ...)))
+                   (define name (list body ...)))]))
+
+;#'(let ([rec (list 'being body ...)])
+;(if-defined name
+;(set-step-spec! rec)
+;(step 'name rec '())))]))
+
+;#'(define name (let ([rec (list 'being body ...)])
+;(with-handlers ([exn? (λ (exn) (set-step-impl! rec))])
+;(step 'name '() rec))))]))
 
 ;; inline results desired behavior... because one use case is definitly in a closed loop where prov is not rigorous
 ; (result 'self-evaluating-value 'self-evaluating-reference-to-protocol prov-identifier)
@@ -447,138 +588,52 @@
     )
   )
 
-(define-syntax (#%message stx)
-  (pw stx)
-  (syntax-parse stx  #:literals (quote)
-    [(_ target (quote thing)) #'(send target .echo (quote thing))]  ; send quoted stuff directly as a literal
-    [(_ target (message-name:id message-body:expr ...))
-     ; this will throw weird errors if a quoted expression is in the body... probably need to fix
-     (let ([output
-            (with-syntax ([process-message (name-join "#%" #'message-name stx)])
-              #`(send target message-name (process-message message-body ...)))])
-       (pw output)
-       output)
-     ;#'(void)
-     ;#'(send target (message-name message-body))
-     ]))
 
-;(debug-repl)
-;(begin-for-syntax (debug-repl))
+(module aspects racket/base
+  ; TODO these need to be reworked to support si prefix notation etc...
+  ; they also need to implemented in such a way that it is natural for define-aspect to add addiational aspects
+  ; finally in the interim they probably need to support (: thing aspect ([aspect value])) syntax...
+  ; it also seems like there aren't that many cases where having programatic access the actual unit names is going to be needed?
+  ; so inside of (: could default to not needing to quote, and have another special form (-: (lol) or something that
+  ; allowed programic access
+  ; (aspect vs (aspect-variable or something
+  (provide (all-defined-out))
+  (struct aspect (shortname name def parent)  ; note that #:auto is global...
+    ; aka measurable
+    #:inspector #f)
 
-(define-for-syntax (name-join prefix suffix stx)
-  (datum->syntax stx  ; if this is false then everything becomes unrooted and I go looking through 5 phase levels to find the problem
-   (string->symbol
-    (string-append prefix (symbol->string
-                           (syntax->datum suffix))))))
+  ;(define unit (aspect 'unit 'unit "Units are not aspects but they can be used as aspects"))  ; units are not aspects their names can be...
+  ; TODO define all these using (define-aspect)
+  (define :fq (aspect 'fq 'fundamental-quantity "The root for all fundamental quantities" 'root))
 
-(define-syntax (spec stx)
-    ; (spec (measure (aspect g) weigh) ...)
-  (let ([output 
-  (syntax-parse stx #:literals (spec  ; note that syntax-case doesn't work with syntax classes :( so body:expr fails :/
-                                #%measure
-                                #%actualize
-                                #%make)
-                [(_ (#%measure aspect:id -name:id) message:expr ...)  ; TODO aspect-name:aspect
-                 ;#'(define name (list 'aspect 'measure body ...))]
-                 ; TODO check whether the aspect exists and file the resulting
-                 ;  spec as part of it... or similar
-                 (displayln "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-                 #'(if-defined -name
-                               (begin (#%message -name message) ...)
-                               (begin
-                                 (define -name (new step% [name '-name]))  ; TODO append % to name -> name% automatically...
-                                 (#%message -name message) ...))]
-                [(_ (#%actualize aspect:id -name:id) message:expr ...)  ; TODO body:messages
-                 ;#'(define name (list 'aspect 'actualize body ...))]
-                 #'(if-defined -name
-                               (begin (#%message -name message) ...)
-                               (begin
-                                 (define -name (new step% [name '-name]))  ; TODO append % to name -> name% automatically...
-                                 (#%message -name message) ...))]
+  ;(define :scalar () ()) ??
+  (define :count (aspect 'count 'count "How many?" :fq))  ; discrete continuous
+  (define :mass (aspect 'mass 'mass "The m in e = mc^2" :fq))
+  (define :energy (aspect 'energy 'energy "hoh boy" :fq))  ; TODO synonyms... distance...
+  (define :length (aspect 'length 'length "hoh boy" :fq))
+  (define :time (aspect 'time 'time "tick tock" :fq))
+  (define :temperature (aspect 'temp 'temperature "hot cold" :fq))
+  (define :charge (aspect 'Q 'charge "hoh boy" :fq))  ; why is it current??? http://amasci.com/miscon/fund.html
 
-                [(_ (#%make -name:id) message:expr ...)
-                 #'(if-defined -name
-                               ;(set-step-spec! name% (list 'being (#%message name% message) ...))
-                               (begin (#%message -name message) ...)
-                               ;(define name (step 'name (list 'being body ...) '())))]))
-                               (begin
-                                 (define -name (new step% [name '-name]))  ; TODO append % to name -> name% automatically...
-                                 (#%message -name message) ...))])])
-    (pw output)
-    output))
+  (define :dq (aspect 'dq 'derived-quantity "A quantity derived from some other quantity" 'root))
+  (define :current (aspect 'I 'current '(/ :charge :time) :dq))  ; TODO expand quoted definitions
+  (define :weight (aspect 'weight 'weight "hrm..." :mass))
+  (define :distance (aspect 'distance 'distance "hrm..." :length))
 
-(define-syntax (impl stx)
-  (let ([output 
-  (syntax-parse stx #:literals (impl
-                                #%measure
-                                #%actualize
-                                #%make)
-                [(_ (#%measure aspect:id name:id) body:expr ...)
-                 #'(define name (list 'aspect 'measure body ...))]
-                [(_ (#%actualize aspect:id name:id) body:expr ...)
-                 #'(define name (list 'aspect 'actualize body ...))]
-                [(_ (#%make -name:id impl-name:id) message:expr ...)
-                 ; TODO something with impl-name...
-                 #'(if-defined -name
-                               (begin (#%message -name message) ...)
-                               (raise-syntax-error 'impl-before-spec (format "No specifiction exists for ~s. Please create that first." '-name)))])])
-                 ;#'(if-defined name
-                               ; TODO this is an improvement, but we really need to enforce spec first
-                               ; because the impl has to look up all the terms from the spec
-                               ; could look into using namespaces? how about modules... :D
-                               ;(set-step-impl! name (list 'being body ...))
-                               ;(define name (step 'name '() (list 'being body ...))))]))
-    (pw output)
-    output))
+  (define :area (aspect 'area 'area '(expt :length 2) :dq))
+  (define :volume (aspect 'vol 'volume '(expt :length 3) :dq))
 
-(define-syntax (delegate stx)
-  "delegate this particular term/block to the current executor"
-  #'(void))
+  (define :duration (aspect 'dt 'duration '(- :time :time) :dq))
 
-;#'(let ([rec (list 'being body ...)])
-;(if-defined name
-;(set-step-spec! rec)
-;(step 'name rec '())))]))
+  (define :mol (aspect 'mol 'mole "HRM" :count))
+  (define :l (aspect 'l 'liters "SI unit of weight" :volume))
+  (define :L :l)  ; TODO alternate forms that also have 'L as the short name (for example)
+  (define :g (aspect 'g 'grams "SI unit of weight" :mass))
 
-;#'(define name (let ([rec (list 'being body ...)])
-;(with-handlers ([exn? (λ (exn) (set-step-impl! rec))])
-;(step 'name '() rec))))]))
-
-(define-syntax (lexically-bound? stx)
-  (define expanded (local-expand stx (syntax-local-context) #f))
-  (and (identifier? expanded)
-       (not (eq? #f (identifier-binding expanded)))))
-
-(struct aspect (shortname name def parent)  ; note that #:auto is global...
-  ; aka measurable
-  #:inspector #f)
-
-;(define unit (aspect 'unit 'unit "Units are not aspects but they can be used as aspects"))  ; units are not aspects their names can be...
-; TODO define all these using (define-aspect)
-(define :fq (aspect 'fq 'fundamental-quantity "The root for all fundamental quantities" 'root))
-
-;(define :scalar () ()) ??
-(define :count (aspect 'count 'count "How many?" :fq))  ; discrete continuous
-(define :mass (aspect 'mass 'mass "The m in e = mc^2" :fq))
-(define :energy (aspect 'energy 'energy "hoh boy" :fq))  ; TODO synonyms... distance...
-(define :length (aspect 'length 'length "hoh boy" :fq))
-(define :time (aspect 'time 'time "tick tock" :fq))
-(define :temperature (aspect 'temp 'temperature "hot cold" :fq))
-(define :charge (aspect 'Q 'charge "hoh boy" :fq))  ; why is it current??? http://amasci.com/miscon/fund.html
-
-(define :dq (aspect 'dq 'derived-quantity "A quantity derived from some other quantity" 'root))
-(define :current (aspect 'I 'current '(/ :charge :time) :dq))  ; TODO expand quoted definitions
-(define :weight (aspect 'weight 'weight "hrm..." :mass))
-(define :distance (aspect 'distance 'distance "hrm..." :length))
-
-(define :area (aspect 'area 'area '(expt :length 2) :dq))
-(define :volume (aspect 'vol 'volume '(expt :length 3) :dq))
-
-(define :duration (aspect 'dt 'duration '(- :time :time) :dq))
-
-(define :mol (aspect 'mol 'mole "HRM" :count))
-(define :l (aspect 'l 'liters "SI unit of weight" :volume))
-(define :g (aspect 'g 'grams "SI unit of weight" :mass))
+  (define :M (aspect 'M 'molarity "SI unit of weight" '(/ :mol :L)))  ; FIXME HRM... mol/volume vs mol/liter how to support...
+)
+(require 'aspects)
+(provide (all-from-out 'aspects))
 
 
 (define (run-tests)
