@@ -333,12 +333,14 @@
     (define/public (.docstring [doc null])
       (if (null? doc)
           docstring
-          (begin (set! docstring (string-join docstring doc "\n")) docstring)))
+          (begin (set! docstring (string-append docstring doc)) docstring)))
+    (define/public (def . things) 'pls-go)  ; FIXME this should not be here :/
     (define/public (.delegate . things) (void))  ; TODO! local to global lifting for this is probably appropriate
     (define/public (.identifier id) id)  ; TODO make it possible to add these dynamically, probably by spinning up a child class...
     ;(define/public (.input name [aspect null] [value null]) -name)  ; atomic structure of the message? ick
     (define/public (.vars . things) (void))  ; atomic structure of the message? ick
     (define/public (.inputs input-struct) (void))  ; atomic structure of the message? ick
+    (define/public (.output do-not-want) (void))  ; maybe we want this as a concise way to bind things
     (define/public (.invariant . things) (void))  ; copy me to make more!
     (define/public (.parameter . things) (void))  ; not clear if we actually need this?
     (define/public (.order . things)  ; order on making inputs and/or on individual actions, practical deps should resolve automatically
@@ -367,14 +369,14 @@
 (define-syntax (#%make stx) #'(void))  ; name
 
 (define-for-syntax (pw stx)
-  (when #t (display "syntax: ") (pretty-write (syntax->datum stx))))
+  (when #f (display "syntax: ") (pretty-write (syntax->datum stx))))
 
 ; message preprocessing boom extensiblity
 (module message-proc racket/base
   (require (for-syntax racket/pretty racket/base syntax/parse))
   (provide (all-defined-out))
   (define-for-syntax (pw stx)
-    (when #t (display "syntax: ") (pretty-write (syntax->datum stx))))
+    (when #f (display "syntax: ") (pretty-write (syntax->datum stx))))
 
   ;; begin defining message syntaxes
   (define-syntax (#%.delegate stx) (pw stx)
@@ -389,16 +391,24 @@
 
   (define-syntax (#%.vars stx) (pw stx) #''vars
     (syntax-parse stx
-      [(#%.vars v:id ...)
+      ;#:literals (: aspect-as-id) 
+      ;[(#%.vars v:aspect-expression)
+       ;#'(aspect-as-id (: ))]
+      [(#%.vars v:expr ...)  ; TODO v:id and aspect:expr :/
        #'(quote (v ...))]))
 
   (define-syntax (#%.inputs stx) (pw stx) #''inputs)
+
+  (define-syntax (#%.output stx) (pw stx) #''output)  ; FIXME probably should not be done the way that requires this... the name in the make should be the output...
 
   (define-syntax (#%.invariant stx) (pw stx) #''invariants)
 
   (define-syntax (#%.order stx) (pw stx) #''invariants)  ; should be used to specify the order in which to make named inputs
 
-  (define-syntax (#%.order+ stx) (pw stx) #''invariants))
+  (define-syntax (#%.order+ stx) (pw stx) #''invariants)
+
+  (define-syntax (#%def stx) (pw stx) #''invariants)  ; FIXME DO NOT WANT
+  )
 
 (require 'message-proc)
 
@@ -408,7 +418,7 @@
 
 (define-syntax (#%message stx)
   (pw stx)
-  (displayln "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+  ;(displayln "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
   (let ([output
          (syntax-parse stx
            #:literals (quote
@@ -449,7 +459,7 @@ For example use @(def solution (a+b solute solvent))."
                                 #%make
                                 ; delegate
                                 def)
-                [(_ ((~or* #%measure #%actualize) aspect:id -name:id) (~or* (def local-name:id body:expr) message:expr) ...)  ; TODO aspect-name:aspect
+                [(_ ((~or* #%measure #%actualize) aspect:id -name:id) (~alt (def local-name:id body:expr) message:expr) ...)  ; TODO aspect-name:aspect
                  ; TODO check whether the aspect exists and file the resulting
                  ;  spec as part of it or similar
                  #'(if-defined -name
@@ -467,7 +477,7 @@ For example use @(def solution (a+b solute solvent))."
                                  ;(define -name (new step% [name '-name]))  ; TODO append % to name -> name% automatically...
                                  ;(#%message -name message) ...))]
 
-                [(_ (#%make -name:id) (~or* (def local-name:id body:expr) message:expr) ...)
+                [(_ (#%make -name:id) (~alt (def local-name:id body:expr) message:expr) ...)
                  #'(if-defined -name
                                ;(set-step-spec! name% (list 'being (#%message name% message) ...))
                                (begin
@@ -492,7 +502,7 @@ For example use @(def solution (a+b solute solvent))."
                 ;[(_ (#%actualize aspect:id name:id) body:expr ...)
                  ;#'(define name (list 'aspect 'actualize body ...))]
 
-                [(_ ((~or* #%measure #%actualize) aspect:id name:id) message:expr ...) 
+                [(_ ((~or* #%measure #%actualize) aspect:id -name:id) message:expr ...) 
                  #'(if-defined -name
                                (begin aspect  ; make sure aspect is defined
                                  (#%message -name message) ...)
@@ -590,6 +600,8 @@ For example use @(def solution (a+b solute solvent))."
 
 
 (module aspects racket/base
+  ; TODO I think that types for aspects and beings will help a whole lot and will be much faster to check
+  ;  at compile time than at run time...
   ; TODO these need to be reworked to support si prefix notation etc...
   ; they also need to implemented in such a way that it is natural for define-aspect to add addiational aspects
   ; finally in the interim they probably need to support (: thing aspect ([aspect value])) syntax...
@@ -626,11 +638,14 @@ For example use @(def solution (a+b solute solvent))."
   (define :duration (aspect 'dt 'duration '(- :time :time) :dq))
 
   (define :mol (aspect 'mol 'mole "HRM" :count))
-  (define :l (aspect 'l 'liters "SI unit of weight" :volume))
+
+  (define :l (aspect 'l 'liters "SI unit of volume" :volume))
   (define :L :l)  ; TODO alternate forms that also have 'L as the short name (for example)
   (define :g (aspect 'g 'grams "SI unit of weight" :mass))
 
-  (define :M (aspect 'M 'molarity "SI unit of weight" '(/ :mol :L)))  ; FIXME HRM... mol/volume vs mol/liter how to support...
+  (define :M (aspect 'M 'molarity "SI unit of concentration" '(/ :mol :L)))  ; FIXME HRM... mol/volume vs mol/liter how to support...
+  (define _m 1e-3)
+  (define :mM (aspect 'mM 'milli-molarity "SI unit of weight" '(* _m :M)))  ; TODO auto prefix conversion because this is icky
 )
 (require 'aspects)
 (provide (all-from-out 'aspects))
@@ -653,11 +668,19 @@ For example use @(def solution (a+b solute solvent))."
         (.vars final-weight))
   (spec (#%make solution)
         (.vars final-volume)
-        (.inputs [solvent (= solute :volume final-volume)]
+        (.inputs [solvent (= solvent :volume final-volume)]
                  ;(with-invariants [(> :volume final-volume)] beaker)
                  [beaker (> :volume final-volume)]  ; this is super nice for lisp; beaker :volume > final-volume possible
                  [beaker (> beaker :volume final-volume)]
                  solute ...)
+        )
+  (spec (#%make solution)  ; TODO keywords... #:id id for global ids for steps need a good uid system
+        (.vars final-volume)
+        (.inputs
+         ;(: solvent volume final-volume)  ; interpreting variables on  inputs as constraints... very compact for equality is ok...
+         (= (: solution volume) final-volume)  ; the intention here is much clearer maybe not use = though
+         (> (: beaker volume) final-volume)
+         solute ...)
         )
   (impl (#%make solution way1)
         ;implicit order
