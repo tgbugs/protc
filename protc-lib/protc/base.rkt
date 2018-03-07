@@ -8,7 +8,7 @@
          protc/private/base
          )
 (provide (all-from-out protc/private/kernel)
-         ()
+         (all-from-out protc/private/base)
          )
 
 (module reader syntax/module-reader protc/base

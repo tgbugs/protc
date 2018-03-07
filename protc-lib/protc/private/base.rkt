@@ -18,12 +18,91 @@
          ;(for-meta 4 racket/base)
          )
 
+(provide spec impl :
+         #%make
+         #%measure
+         #%actualize)
+
+(module+ other
+
+  (define (specf #:type type
+                 #:name name
+                 #:aspect [aspect null]  ; again a reason to want a language...
+                 #:uses [uses '()]
+                 #:vars [vars '()]
+                 #:inputs [inputs '()] 
+                 #:invariants [invariants '()]  ; this is where this approach is annoying, we want to be able to have .invariant .invariant
+                 #:prov [prov '()])
+    (filter (λ (v) (not (null? v)))
+            (list name type aspect
+                  vars
+                  inputs  ; here we have no fancy .inputs name :kg/m 'value
+                  invariants  ; TODO when not using syntax we have to resolve inputs and vars manually :/
+                  prov
+                  ))
+    )
+
+  ; observe the drawbacks :/
+  (specf #:type 'actualize  ; this should be bound
+         #:name 'cut-down-to-size  ; this is a name we are doefining
+         #:aspect :mass
+         #:uses 'weigh
+         #:vars '(initial-weight final-weight)  ; and here we see another problem these need to be variables
+         #:inputs '(knife)
+         #:invariants '((< final-weight initial-weight))
+         )
+
+  ;; database setup
+  (define (setup-counter)
+    (define ic 0)
+    (λ () (let ([current-value ic])
+            (set! ic (add1 ic)) current-value)))
+
+  (define (setup-db)
+
+    ; tables, indexes, and sequences
+    (define being-index '((being . data)))
+    (define aspect-index '((aspect . data)))
+    ;(define messages '((aspect . data)))
+
+    (define being-counter (setup-counter))
+    (define aspect-counter (setup-counter))
+
+    (define being-records '((-1 . ())))
+    (define aspect-records '((-1 . ())))
+
+    (define (add-being name record)
+      (add-rec name record #:type 'being))
+
+    (define (add-aspect name record)
+      (add-rec name record #:type 'aspect))
+
+    (define (add-rec name record #:type type)
+      (let-values ([(index counter records)
+                    (cond ((eq? type 'being) (values being-index being-counter being-records))
+                          ((eq? type 'aspect) (values aspect-index aspect-counter aspect-records))
+                          (#t (error "type unkown")))])
+        (if (dict-ref name index)
+            (error "that being is already defined...")
+            (let ([current-index (counter)])
+              (set! index (cons (cons name current-index) index))
+              (set! records (cons `(,current-index . ,record) records))
+              (void)))))
+
+    (define (dump-recs) (list being-index aspect-index being-records aspect-records))
+
+    (values add-being add-aspect dump-recs))
+
+  (define-values (add-being add-aspect dump-recs) (setup-db))
+  )
+
 ;;; implementation of protc forms using only racket syntax tools
 
 ;; new syntax classes that we are defining for protc
 ; used to enforce section ordering and structure during pattern matching
 ; see https://docs.racket-lang.org/syntax/stxparse-specifying.html#(part._stxparse-attrs)
 
+(module+ thoughts
 ;; section
 #'(name:section-name header:section-header body:messages)
 
@@ -179,6 +258,16 @@
 ; implement
 ;impl _blank/generic
 
+; the thing is that this doesn't work because we don't know ahead of time
+; how many bound or unbound identifiers there are...
+'(let-values ([() ()])
+  (let ([spec-id-1]
+        [spec-id-2])
+    (let ([impl-id-1]
+          [impl-id-2])
+      (let))))
+)
+; MODULE END
 
 
 (define-syntax (define-black-box stx)
@@ -218,7 +307,8 @@
       [(_ id iftrue iffalse)
        (let ([where (identifier-binding #'id)])
          (if where #'iftrue #'iffalse))]))
-)
+  )
+
 (require 'utils
          ;(for-meta 1 'utils)
          ;(for-meta 2 'utils)
@@ -277,22 +367,85 @@
   (provide (all-defined-out))
   (define-for-syntax (pw stx)
     (display "syntax: ") (pretty-write (syntax->datum stx)))
-  (define-syntax (#%.vars stx)
-    (pw stx)
-    #''vars
+
+  ;; begin defining message syntaxes
+  (define-syntax (#%.identifier stx) (pw stx)
+    (syntax-parse stx
+      [(#%.identifier v)  ; TODO #:type [type 'iri] etc..  ; ideally v:str but also str:literal for quotes...
+       #'v]))
+
+  (define-syntax (#%.vars stx) (pw stx) #''vars
     (syntax-parse stx
       [(#%.vars v:id ...)
        #'(quote (v ...))]))
+
   (define-syntax (#%.inputs stx) (pw stx) #''inputs)
+
   (define-syntax (#%.invariant stx) (pw stx) #''invariants)
+
   (define-syntax (#%.order stx) (pw stx) #''invariants)  ; should be used to specify the order in which to make named inputs
-  (define-syntax (#%.order+ stx) (pw stx) #''invariants)
-)
+
+  (define-syntax (#%.order+ stx) (pw stx) #''invariants))
+
 (require 'message-proc)
 
 (define ms% (new step% [name 'ms]))
 (#%.vars a b c d e)
 (send ms% .echo (#%.vars hello))
+
+;; inline results desired behavior... because one use case is definitly in a closed loop where prov is not rigorous
+; (result 'self-evaluating-value 'self-evaluating-reference-to-protocol prov-identifier)
+; (define (prov res:f9fe4133610611385d1aaab628a04aa122080c2c))  ; or however we are going to do that...
+; pcb :length (result prov) -> pcb :length (result prov 100 mm)
+; (define (hprov "https://hyp.is/hy0bDnC0Eeer3jcZ6Qvypw"))
+; images :count (result hprov) -> images :count (result hprov 1850)
+; cows-on-the-moon :count (result 'bullshit 100000)
+; pcb :thickness (result (measure-with :mm "30 cm ruler") 3)
+
+;; searching for counterexamples where black-box :aspect would not be valid for our strict definition of black-box
+; i think the answer is that there aren't any becuase the ones that might fail just end up being zero
+; head-of-a-pin :number-of-butterflies-on-thing -> 0
+; as a thought experiment, is there any real black-box where the expression black-box :volume would be invalid?
+; what is (part-of intestines sperm-whale) :volume ? If you tried really hard you could probably come up with an answer
+; how about "the average time a pod of orcas in the galapagose spends diving between surface stops?"
+; have to refine to "what is the average time interaval between sighting orcas on the surface"
+; (observe (a-near-b pod-of-orcas (bounds surface water-of-ocean)) :time 
+; (observe (not (empty? (subset/a-in-b (part-of any (member-of any pod-of-orcas)) air-above-the-water)))) :time
+; :time-start :time-stop etc, need a way to specify more about the context of the observations
+; any and all could be special keywords...
+; what is the average time interval from the first surfacing to the last surfacing
+; what is the average time interval from the first surface to max on surface at same time
+; what is the average time from max on surface to none on survace for > time on surface?
+
+(define-syntax (: stx)
+  "an intermediate step toward thing :aspect value is (: aspect thing value) and :aspect is (: aspect)"
+  ; another goldmine https://docs.racket-lang.org/syntax/stxparse-patterns.html
+  ; TODO nesting?? hard to translate thing :a1 v1 :a2 :a3 v2 with only one reference to thing
+  ; lol not really (: thing ([a1 v1] a2 [a3 v2]) vs [a2]
+  (syntax-parse stx #:literals (:)
+    ;[(: thing:id ((~or [aspect:id value] lonely-aspect:id) ...))
+     ;#'(list thing aspect ... value ... lonely-aspect ...)] 
+    [(: thing:id lonely-aspect:id ... ([aspect:id value] ...)); a more consistent approach
+     ; TODO the context where this occurs is going to really affect how this is interpreted...
+     ; so leave it as is for now
+     #'(list thing lonely-aspect ... (cons aspect value) ...)]
+    [(: thing:id aspect:id value)
+     #'(list thing (cons aspect value))]
+    [(: thing:id aspect:id)
+     #'(list thing aspect)]
+    [(: aspect:id)
+     #'(list aspect)]
+    ; useful??
+    [(: aspect:id ...)
+     #'(list aspect ...)]
+    ;[()
+     ;#'()]
+    ;[(: aspect:id thing:id value)
+     ;#'()]
+    ;[(: aspect:id thing:id)
+     ;#'()]
+    )
+  )
 
 (define-syntax (#%message stx)
   (pw stx)
@@ -382,15 +535,6 @@
   "delegate this particular term/block to the current executor"
   #'(void))
 
-; the thing is that this doesn't work because we don't know ahead of time
-; how many bound or unbound identifiers there are...
-'(let-values ([() ()])
-  (let ([spec-id-1]
-        [spec-id-2])
-    (let ([impl-id-1]
-          [impl-id-2])
-      (let))))
-
 ;#'(let ([rec (list 'being body ...)])
 ;(if-defined name
 ;(set-step-spec! rec)
@@ -413,7 +557,8 @@
 ; TODO define all these using (define-aspect)
 (define :fq (aspect 'fq 'fundamental-quantity "The root for all fundamental quantities" 'root))
 
-(define :count (aspect 'count 'count "How many?" :fq))
+;(define :scalar () ()) ??
+(define :count (aspect 'count 'count "How many?" :fq))  ; discrete continuous
 (define :mass (aspect 'mass 'mass "The m in e = mc^2" :fq))
 (define :energy (aspect 'energy 'energy "hoh boy" :fq))  ; TODO synonyms... distance...
 (define :length (aspect 'length 'length "hoh boy" :fq))
@@ -429,126 +574,64 @@
 (define :area (aspect 'area 'area '(expt :length 2) :dq))
 (define :volume (aspect 'vol 'volume '(expt :length 3) :dq))
 
+(define :duration (aspect 'dt 'duration '(- :time :time) :dq))
+
 (define :mol (aspect 'mol 'mole "HRM" :count))
 (define :l (aspect 'l 'liters "SI unit of weight" :volume))
 (define :g (aspect 'g 'grams "SI unit of weight" :mass))
 
-;(define :g '(aspect grams))  ; TODO
-;(define :g ':g)
 
-;(debug-repl)
+(define (run-tests)
+  (define thing 'things-must-also-be-defined-beforehand)
+  (define aspect 'aspects-need-to-be-defined-beforehand)
+  (define-values (a1 a2 a3) (values 'a1 'a2 'a3))
+  (define-values (a at atv aaaa)
+    (values (: aspect)
+            (: thing aspect)
+            (: thing aspect 'value)
+            (: thing a2 ([a1 1] [a3 3]))
+            ; (: thing ([a1 1] a2 [a3 3])) ; fails as expected
+            ))
+  (spec (#%measure :g weigh)
+        (.invariant (< 0.01 (error :g))))
+  (spec (#%actualize :mass cut-down-to-size)
+        (.vars final-weight))
+  (spec (#%make solution)
+        (.vars final-volume)
+        (.inputs [solvent (= solute :volume final-volume)]
+                 ;(with-invariants [(> :volume final-volume)] beaker)
+                 [beaker (> :volume final-volume)]  ; this is super nice for lisp; beaker :volume > final-volume possible
+                 [beaker (> beaker :volume final-volume)]
+                 solute ...)
+        )
+  (impl (#%make solution way1)
+        ;implicit order
+        'step-0
+        'step-1
+        'step-2
+        )
+  (impl (#%make solution way2)
+        ; no dependencies
+        (.order
+         'another-thing-without-obvious-order
+         'thing-without-obvious-order
+         ))
+  (impl (#%make solution way3)
+        ; with input/output dependencies (may not need)
+        (.order+
+         'another-thing-without-obvious-order
+         'thing-without-obvious-order
+         ))
 
-(spec (#%measure :g weigh)
-      (.invariant (< 0.01 (error :g))))
-(spec (#%actualize :mass cut-down-to-size)
-      (.vars final-weight))
-(spec (#%make solution)
-      (.vars final-volume)
-      (.inputs [solvent (= solute :volume final-volume)]
-               ;(with-invariants [(> :volume final-volume)] beaker)
-               [beaker (> :volume final-volume)]  ; this is super nice for lisp; beaker :volume > final-volume possible
-               [beaker (> beaker :volume final-volume)]
-               solute ...)
-      )
-(impl (#%make solution way1)
-      ;implicit order
-      'step-0
-      'step-1
-      'step-2
-      )
-(impl (#%make solution way2)
-      ; no dependencies
-      (.order
-       'another-thing-without-obvious-order
-       'thing-without-obvious-order
-       ))
-(impl (#%make solution way3)
-      ; with input/output dependencies (may not need)
-      (.order+
-       'another-thing-without-obvious-order
-       'thing-without-obvious-order
-       ))
-
-; not at all clear why these fail before the impl sections fail...
-(displayln weigh)
-(displayln cut-down-to-size)
-(displayln solution)
-
-(module+ other
-
-  (define (specf #:type type
-                 #:name name
-                 #:aspect [aspect null]  ; again a reason to want a language...
-                 #:uses [uses '()]
-                 #:vars [vars '()]
-                 #:inputs [inputs '()] 
-                 #:invariants [invariants '()]  ; this is where this approach is annoying, we want to be able to have .invariant .invariant
-                 #:prov [prov '()])
-    (filter (λ (v) (not (null? v)))
-            (list name type aspect
-                  vars
-                  inputs  ; here we have no fancy .inputs name :kg/m 'value
-                  invariants  ; TODO when not using syntax we have to resolve inputs and vars manually :/
-                  prov
-                  ))
-    )
-
-  ; observe the drawbacks :/
-  (specf #:type 'actualize  ; this should be bound
-         #:name 'cut-down-to-size  ; this is a name we are doefining
-         #:aspect :mass
-         #:uses weigh
-         #:vars '(initial-weight final-weight)  ; and here we see another problem these need to be variables
-         #:inputs '(knife)
-         #:invariants '((< final-weight initial-weight))
-         )
-
-
-
-  ;; database setup
-  (define (setup-counter)
-    (define ic 0)
-    (λ () (let ([current-value ic])
-            (set! ic (add1 ic)) current-value)))
-
-  (define (setup-db)
-
-    ; tables, indexes, and sequences
-    (define being-index '((being . data)))
-    (define aspect-index '((aspect . data)))
-    ;(define messages '((aspect . data)))
-
-    (define being-counter (setup-counter))
-    (define aspect-counter (setup-counter))
-
-    (define being-records '((-1 . ())))
-    (define aspect-records '((-1 . ())))
-
-    (define (add-being name record)
-      (add-rec name record #:type 'being))
-
-    (define (add-aspect name record)
-      (add-rec name record #:type 'aspect))
-
-    (define (add-rec name record #:type type)
-      (let-values ([(index counter records)
-                    (cond ((eq? type 'being) (values being-index being-counter being-records))
-                          ((eq? type 'aspect) (values aspect-index aspect-counter aspect-records))
-                          (#t (error "type unkown")))])
-        (if (dict-ref name index)
-            (error "that being is already defined...")
-            (let ([current-index (counter)])
-              (set! index (cons (cons name current-index) index))
-              (set! records (cons `(,current-index . ,record) records))
-              (void)))))
-
-    (define (dump-recs) (list being-index aspect-index being-records aspect-records))
-
-    (values add-being add-aspect dump-recs))
-
-  (define-values (add-being add-aspect dump-recs) (setup-db))
+  ; not at all clear why these fail before the impl sections fail...
+  (displayln weigh)
+  (displayln cut-down-to-size)
+  (displayln solution)
   )
 
+(define asdf 'hahaha)
+(define lol 'heu)
 
 (module+ test
-  (displayln 'hello))
+  (run-tests)
+  )
