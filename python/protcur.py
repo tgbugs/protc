@@ -13,7 +13,7 @@ from hyputils.handlers import filterHandler
 from IPython import embed
 from flask import Flask, url_for, redirect, request, render_template, render_template_string, make_response, abort 
 
-get_annos = Memoizer('/tmp/protcur-annos.pickle')
+get_annos = Memoizer('/tmp/protcur-annos.pickle')  # group etc. set by environment variables
 
 def get_proper_citation(xml):
     root = etree.fromstring(xml)

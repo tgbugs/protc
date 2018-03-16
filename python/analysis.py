@@ -762,6 +762,12 @@ class protc(AstGeneric):
 #
 # utility
 
+def get_protcs(memoization_file='/tmp/protc-annotations.pickle'):
+    get_annos = Memoizer(memoization_file=memoization_file)
+    annos = get_annos()
+    protcs = [protc(a, annos) for a in annos]
+    return protcs
+
 class ParameterValue:
     def __init__(self, success, v, rest, indent=1):
         self.value = success, v, rest
