@@ -100,7 +100,8 @@ def main():
     get_annos, annos, stream_loop = annoSync('/tmp/protcure-server-annos.pickle',
                                              helpers=(protc,))
     stream_loop.start()
-    protcs = [protc(a, annos) for a in annos]
+    [protc(a, annos) for a in annos]
+    protcs = protc._annos_list
 
     # routes
 

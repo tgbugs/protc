@@ -881,7 +881,7 @@ def main():
                                              helpers=(Hybrid, protc))
 
     problem_child = 'KDEZFGzEEeepDO8xVvxZmw'
-    test_annos(annos)
+    #test_annos(annos)
     tree, extra = citation_tree(annos)
     i = papers(annos)
 
@@ -894,8 +894,8 @@ def main():
 
     #@profile_me
     def perftest():
-        protcs = [protc(a, annos) for a in annos]
-        return protcs
+        [protc(a, annos) for a in annos]
+        return protc._annos_list
     start = time()
     protcs = perftest()
     pc = protc.byId(problem_child)
