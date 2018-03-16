@@ -97,7 +97,8 @@ def render_2col_table(dict_, h1, h2, uriconv=lambda a:a):  # FIXME this sucks an
 def main():
     from core import annoSync
     app = Flask('protc curation id service')
-    get_annos, annos, stream_loop = annoSync('/tmp/protcure-server-annos.pickle')
+    get_annos, annos, stream_loop = annoSync('/tmp/protcure-server-annos.pickle',
+                                             helpers=(protc,))
     stream_loop.start()
     protcs = [protc(a, annos) for a in annos]
 

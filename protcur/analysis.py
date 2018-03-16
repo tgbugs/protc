@@ -185,6 +185,7 @@ class Hybrid(HypothesisHelper):
     children_tags = tuple()  # tags controlling how links in the text of the parent annotation are affected
     prefix_ast = tuple()  # the tag prefix(es) that are part of the ast
     objects = {}  # TODO updates
+    _tagIndex = {}
     _replies = {}
 
     def __init__(self, anno, annos):
@@ -387,7 +388,12 @@ class Hybrid(HypothesisHelper):
                 child.hasAstParent = True  # FIXME called every time :/
                 yield child  # buildAst will have a much eaiser time operating on these single depth childs
 
-    def __repr__(self, depth=0):
+    def __repr__(self, depth=0, cycle=None):
+        if cycle == self:
+            f'\n{" " * 4 * (depth + 1)}* {cycle.id} has a circular reference with this node {self.id}'
+            return ''  # prevent loops
+        elif cycle == None:
+            cycle = self
         start = '|' if depth else ''
         t = ' ' * 4 * depth + start
 
@@ -407,17 +413,20 @@ class Hybrid(HypothesisHelper):
         ct = f'\n{t}cleaned tags: {lct}' if self.references and lct and lct != self.tags else ''
         tc = f'\n{t}tag_corrs:    {self.tag_corrections}' if self.tag_corrections else ''
 
-        replies = ''.join(r.__repr__(depth + 1) for r in self.replies)
+        replies = ''.join(r.__repr__(depth + 1, cycle=cycle)
+                          for r in self.replies)
+                          #if not print(cycle.id, self.id, self.shareLink))
         rep_ids = f'\n{t}replies:      ' + ' '.join(f"{self.__class__.__name__}.byId('{r.id}')"
                                                     for r in self.replies)
         replies_text = (f'\n{t}replies:{replies}' if self.reprReplies else rep_ids) if replies else ''
 
-        childs = ''.join(c.__repr__(depth + 1)
-                         if self not in c.children
-                         else f'\n{" " * 4 * (depth + 1)}* {c.id} has a circular reference with this node {self.id}'  # avoid recursion
+        childs = ''.join(c.__repr__(depth + 1, cycle=cycle)
+                         if c != self else
+                         f'\n{" " * 4 * (depth + 1)}* {c.id} has a circular reference with this node {self.id}'  # avoid recursion
                          for c in self.children
-                         if c is not self.parent  # avoid accidental recursion with replies of depth 1 TODO WE NEED TO GO DEEPER
-                        )
+                         # avoid accidental recursion with replies of depth 1 TODO WE NEED TO GO DEEPER
+                         if c != self.parent)
+                         #and not print(cycle.id, self.id, self.shareLink))
         childs_text = f'\n{t}children:{childs}' if childs else ''
 
         return (f'\n{t.replace("|","")}*--------------------'
@@ -447,6 +456,7 @@ class AstGeneric(Hybrid):
     children_tags = 'annotation-children:delete',
     #indentDepth = 2
     #objects = {}
+    #_tagIndex = {}
     #_order = tuple()
     #_topLevel = tuple()
     linePreLen = 0
@@ -561,6 +571,10 @@ class AstGeneric(Hybrid):
                     else:
                         s = c.__repr__(depth + 1, new_nparens, new_plast, False)
                 except TypeError as e:
+                    # do not remove or bypass this error, it means that one of your
+                    # dicts like _replies or objects has members of some other class
+                    # and is actually probably being inherited from that class
+                    # you should give this class its own dictionary for that
                     raise TypeError(f'{c} is not an {self.__class__.__name__}') from e
                 cs.append(s)
             childs = comment + linestart + linestart.join(cs)
@@ -576,6 +590,8 @@ class protc(AstGeneric):
     prefix_ast = 'protc:',
     indentDepth = 2
     objects = {}  # TODO updates
+    _tagIndex = {}
+    _replies = {}  # without this Hybrid replies will creep in
     _order = (  # ordered based on dependence and then by frequency of occurence for performance (TODO tagdefs stats automatically)
               'structured-data-record',  # needs to come first since record contents also have a type (e.g. protc:parameter*)
               'parameter*',
@@ -861,14 +877,15 @@ def main():
     import requests
 
     global annos  # this is now only used for making embed sane to use
-    get_annos, annos, stream_loop = annoSync('/tmp/protcur-analysis-annos.pickle')
+    get_annos, annos, stream_loop = annoSync('/tmp/protcur-analysis-annos.pickle',
+                                             helpers=(Hybrid, protc))
 
     problem_child = 'KDEZFGzEEeepDO8xVvxZmw'
     test_annos(annos)
     tree, extra = citation_tree(annos)
     i = papers(annos)
 
-    #hybrids = [Hybrid(a, annos) for a in annos]
+    hybrids = [Hybrid(a, annos) for a in annos]
     #printD('protcs')
     #@profile_me
     def rep():
@@ -903,6 +920,7 @@ def main():
     more()
     def update():
         protc.objects = {}
+        protc._tagIndex = {}
         perftest()
         text()
         more()

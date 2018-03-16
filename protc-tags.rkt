@@ -98,7 +98,7 @@
          "Repeat commands or computations for a specific set of varying inputs (i.e. there should be an associated annotation that enumerates said inputs), related to `protc:substitute-input`.")
 (tag-doc 'protc:result 'ilxtr:informationArtifact
          "A number generated as the result of a `protc:*measure`.")
-(tag-doc 'protc:substitute-input
+(tag-doc 'protc:substitute-input 'protc:control-flow
          "What steps/materials should be replaced in order to conduct a slightly different procedure e.g. a control experiment, should refer back to the original *make* or *measure function")
 (tag-doc 'protc:symbolic-input 'ilxtr:informationArtifact
          "The input to a `protc:symbolic-measure`. Should be a symbolic entity such as a data file, number, or other symbol. Not a physical input which should be annotated with `protc:input`. These are distinguished from `protc:parameter*` by the fact that they often exist without the intention or knowledge of how to bind them to a physical entite. In some abstract sense they are parameters but there is no intention to act on them, and often one cannot do so easily (e.g. changing the conversion efficiency of a particular GFP protein requires extensive engineering). There are cases in closed loop systems where these can be the symbolic inputs to a `protc:parameter*` which will then be actualized.")
