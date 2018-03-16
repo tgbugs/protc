@@ -88,8 +88,8 @@
          "Prepositions about time and organizing steps.")
 (tag-doc 'protc:output 'ilxtr:participant
          "What is obtained from the procedure, specifically physical objects")
-(tag-doc 'protc:output-spec
-         "Description of the structure of the information to be saved (e.g. neurolucida in (x, y, z, d) out) [THIS IS CONFUSING BECAUSE IT IS FOR NUMBERS NOT PHYSICAL OBJECTS?]")
+(tag-doc 'protc:output-spec '(ilxtr:deprecatedTag)
+         "Description of the structure of the information to be saved (e.g. neurolucida in (x, y, z, d) out) [THIS IS CONFUSING BECAUSE IT IS FOR NUMBERS NOT PHYSICAL OBJECTS?] [3-16-18: replace with protc:aspect or protc:parameter or protc:result]")
 (tag-doc 'protc:parameter* 'ilxtr:parameter
          "Numbers or specific measurements/locations used for lab settings, directly measureable. Often have units or are 'counts' of things")
 (tag-doc 'protc:references-for-use 'ilxtr:citationTag
