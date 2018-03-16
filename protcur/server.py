@@ -2,17 +2,13 @@
 import os
 from datetime import date
 from markdown import markdown
-from hyputils.hypothesis import HypothesisUtils, Memoizer
-from hyputils.hypothesis import group
-from hyputils.handlers import annotationSyncHandler
-from hyputils.subscribe import preFilter, setup_websocket, AnnotationStream
+from hyputils.hypothesis import HypothesisUtils
 from analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid
 from analysis import citation_tree, papers, statistics, tagdefs, readTagDocs, addDocLinks, protc
 from IPython import embed
 from flask import Flask, url_for, redirect, request, render_template, render_template_string, make_response, abort 
 
 hutils = HypothesisUtils(username='')
-get_annos = Memoizer('/tmp/protcur-annos.pickle')  # group etc. set by environment variables
 
 def get_proper_citation(xml):
     root = etree.fromstring(xml)
@@ -99,11 +95,9 @@ def render_2col_table(dict_, h1, h2, uriconv=lambda a:a):  # FIXME this sucks an
     return out
 
 def main():
+    from core import annoSync
     app = Flask('protc curation id service')
-    annos = get_annos()
-    prefilter = preFilter(groups=[group]).export()
-    annotationSyncHandler.memoizer = get_annos
-    stream_loop = AnnotationStream(annos, prefilter, annotationSyncHandler)()
+    get_annos, annos, stream_loop = annoSync('/tmp/protcure-server-annos.pickle')
     stream_loop.start()
     protcs = [protc(a, annos) for a in annos]
 
@@ -126,7 +120,7 @@ def main():
     def route_annotations():
         stats = statistics(annos)
         total = sum(stats.values())
-        stats = {hl:atag(hyputils.search_url(url=hypothesis_local(hl)), n) for hl, n in stats.items()}
+        stats = {hl:atag(hutils.search_url(url=hypothesis_local(hl)), n) for hl, n in stats.items()}
         return render_2col_table(stats, f'HLN n={len(stats)}', f'Annotation count n={total}', hypothesis_local)
 
     @app.route('/curation/tags', methods=['GET'])

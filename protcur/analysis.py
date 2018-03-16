@@ -763,12 +763,6 @@ class protc(AstGeneric):
 #
 # utility
 
-def get_protcs(memoization_file='/tmp/protc-annotations.pickle'):
-    get_annos = Memoizer(memoization_file=memoization_file)
-    annos = get_annos()
-    protcs = [protc(a, annos) for a in annos]
-    return protcs
-
 class ParameterValue:
     def __init__(self, success, v, rest, indent=1):
         self.value = success, v, rest
@@ -854,19 +848,13 @@ def test_annos(annos):
 def main():
     from pprint import pformat
     from time import sleep, time
+    from core import annoSync
     import requests
-    from hyputils.hypothesis import Memoizer, group
-    from hyputils.subscribe import preFilter, AnnotationStream
-    from hyputils.handlers import annotationSyncHandler
-
-    get_annos = Memoizer('/tmp/protocol-annotations.pickle')
-    prefilter = preFilter(groups=[group]).export()
-    annotationSyncHandler.memoizer = get_annos
 
     global annos  # this is now only used for making embed sane to use
-    annos = get_annos()
+    get_annos, annos, stream_loop = annoSync('/tmp/protcur-analysis-annos.pickle')
+
     problem_child = 'KDEZFGzEEeepDO8xVvxZmw'
-    stream_loop = AnnotationStream(annos, prefilter, annotationSyncHandler)()
     test_annos(annos)
     tree, extra = citation_tree(annos)
     i = papers(annos)
