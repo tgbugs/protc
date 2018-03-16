@@ -885,7 +885,7 @@ def main():
     tree, extra = citation_tree(annos)
     i = papers(annos)
 
-    hybrids = [Hybrid(a, annos) for a in annos]
+    [Hybrid(a, annos) for a in annos]
     #printD('protcs')
     #@profile_me
     def rep():
@@ -895,9 +895,8 @@ def main():
     #@profile_me
     def perftest():
         [protc(a, annos) for a in annos]
-        return protc._annos_list
     start = time()
-    protcs = perftest()
+    perftest()
     pc = protc.byId(problem_child)
     stop = time()
     print('BAD TIME', stop - start)

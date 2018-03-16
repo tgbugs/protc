@@ -101,7 +101,6 @@ def main():
                                              helpers=(protc,))
     stream_loop.start()
     [protc(a, annos) for a in annos]
-    protcs = protc._annos_list
 
     # routes
 
