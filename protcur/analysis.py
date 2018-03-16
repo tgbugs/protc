@@ -68,11 +68,17 @@ def url_pmid(pmid):
 #
 # docs
 
+class TagDoc:
+    def __init__(self, doc, parent):
+        self.doc = doc
+        self.parent = parent
+
+
 def readTagDocs():
     with open(f'{__script_folder__}/../protc-tags.rkt', 'rt') as f:
         text = f.read()
     success, docs, rest = parsing.tag_docs(text)
-    tag_lookup = {tag:doc for _, tag, doc in docs}
+    tag_lookup = {tag:TagDoc(doc, parent) for _, tag, parent, doc in docs}
     return tag_lookup
 
 def addDocLinks(base_url, doc):
@@ -367,6 +373,9 @@ class Hybrid(HypothesisHelper):
             return
         for id_ in self._children_ids:
             child = self.getObjectById(id_)
+            if child is None:
+                print(f"WARNING: child of {self.__class__.__name__}.byId('{self.id}') {id_} does not exist!")
+                continue 
             for reply in child.replies:
                 if 'protc:implied-aspect' in reply.tags:
                     self.hasAstParent = True  # FIXME called every time :/

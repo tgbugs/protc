@@ -140,7 +140,7 @@ def main():
     def route_tags_star(tagname):
         try:
             return markdown(addDocLinks(request.base_url.rsplit('/',1)[0],
-                                        readTagDocs()[tagname]))  # sure it is slow but it allows live updates
+                                        readTagDocs()[tagname].doc))  # sure it is slow but it allows live updates
         except KeyError:
             return abort(404)
 
