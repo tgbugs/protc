@@ -1,18 +1,17 @@
 #!/usr/bin/env python3.6
 import os
-import asyncio
 from datetime import date
-from threading import Thread
 from markdown import markdown
-from hyputils.hypothesis import HypothesisUtils, HypothesisAnnotation, Memoizer
-from hyputils.hypothesis import api_token, username, group
+from hyputils.hypothesis import HypothesisUtils, Memoizer
+from hyputils.hypothesis import group
+from hyputils.handlers import annotationSyncHandler
+from hyputils.subscribe import preFilter, setup_websocket, AnnotationStream
 from analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid
 from analysis import citation_tree, papers, statistics, tagdefs, readTagDocs, addDocLinks, protc
-from hyputils.subscribe import preFilter, setup_websocket
-from hyputils.handlers import filterHandler
 from IPython import embed
 from flask import Flask, url_for, redirect, request, render_template, render_template_string, make_response, abort 
 
+hutils = HypothesisUtils(username='')
 get_annos = Memoizer('/tmp/protcur-annos.pickle')  # group etc. set by environment variables
 
 def get_proper_citation(xml):
@@ -42,41 +41,6 @@ def export_json_impl(annos):
     DATE = date.today().strftime('%Y-%m-%d')
     return output_json, DATE
 
-# hypothesis websocket
-
-class protcurHandler(filterHandler):
-    def __init__(self, annos):
-        self.annos = annos
-    def handler(self, message):
-        try:
-            act = message['options']['action'] 
-            if act != 'create': # update delete
-                mid = message['payload'][0]['id']
-                gone = [_ for _ in self.annos if _.id == mid][0]
-                self.annos.remove(gone)
-            if act != 'delete':  # create update
-                anno = HypothesisAnnotation(message['payload'][0])
-                self.annos.append(anno)
-            #print(len(self.annos), 'annotations.')
-            get_annos.memoize_annos(self.annos)
-        except KeyError as e:
-            embed()
-
-def streaming(annos):
-    filters = preFilter(groups=[group]).export()
-    filter_handlers = [protcurHandler(annos)]
-    ws_loop = setup_websocket(api_token, filters, filter_handlers)
-    return ws_loop 
-
-def loop_target(loop, ws_loop):
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(ws_loop())
-
-def start_loop(annos):
-    loop = asyncio.get_event_loop()
-    ws_loop = streaming(annos)
-    stream_loop = Thread(target=loop_target, args=(loop, ws_loop))
-    return stream_loop 
 
 # rendering
 
@@ -86,6 +50,11 @@ table_style = ('<style>'
                'a:link { color: black; }'
                'a:visited { color: grey; }'
                '</style>')
+
+def atag(href, value=None):
+    if value is None:
+        value = href
+    return f'<a href={href}>{value}</a>'
 
 def render_idents(idents):
     #print(idents)
@@ -132,7 +101,9 @@ def render_2col_table(dict_, h1, h2, uriconv=lambda a:a):  # FIXME this sucks an
 def main():
     app = Flask('protc curation id service')
     annos = get_annos()
-    stream_loop = start_loop(annos)
+    prefilter = preFilter(groups=[group]).export()
+    annotationSyncHandler.memoizer = get_annos
+    stream_loop = AnnotationStream(annos, prefilter, annotationSyncHandler)()
     stream_loop.start()
     protcs = [protc(a, annos) for a in annos]
 
@@ -154,13 +125,15 @@ def main():
     @app.route('/curation/annotations', methods=['GET'])
     def route_annotations():
         stats = statistics(annos)
-        return render_2col_table(stats, f'HLN n={len(stats)}', f'Annotation count n={sum(stats.values())}', hypothesis_local)
+        total = sum(stats.values())
+        stats = {hl:atag(hyputils.search_url(url=hypothesis_local(hl)), n) for hl, n in stats.items()}
+        return render_2col_table(stats, f'HLN n={len(stats)}', f'Annotation count n={total}', hypothesis_local)
 
     @app.route('/curation/tags', methods=['GET'])
     def route_tags():
         querybase = ''
 
-        tags = {t:f'<a href=https://hypothes.is/search?q=tag:{t}>{d}</a>'
+        tags = {t:atag(hutils.search_url(tag=t), d)
                 for t, d in tagdefs(annos).items()
                 if all(p not in t for p in ('RRID:', 'NIFORG:', 'CHEBI:')) }
     
@@ -192,4 +165,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

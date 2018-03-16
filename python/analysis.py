@@ -11,7 +11,7 @@ from pyontutils.core import makeGraph, makePrefixes
 from pyontutils.scigraph_client import Vocabulary
 from pysercomb import parsing
 from pysercomb import parsing_parsec
-from hyputils.hypothesis import HypothesisAnnotation, HypothesisHelper, idFromShareLink, shareLinkFromId, Memoizer
+from hyputils.hypothesis import HypothesisAnnotation, HypothesisHelper, idFromShareLink, shareLinkFromId
 from desc.prof import profile_me
 
 try:
@@ -146,6 +146,7 @@ def statistics(annos):
         if hl not in stats:
             stats[hl] = 0
         stats[hl] += 1
+
     return stats
 
 def tagdefs(annos):
@@ -852,17 +853,20 @@ def test_annos(annos):
 
 def main():
     from pprint import pformat
-    from protcur import start_loop, get_annos
     from time import sleep, time
     import requests
+    from hyputils.hypothesis import Memoizer, group
+    from hyputils.subscribe import preFilter, AnnotationStream
+    from hyputils.handlers import annotationSyncHandler
 
-    mem_file = '/tmp/protocol-annotations.pickle'
-    get_annos.memoization_file = mem_file  # FIXME hackish
+    get_annos = Memoizer('/tmp/protocol-annotations.pickle')
+    prefilter = preFilter(groups=[group]).export()
+    annotationSyncHandler.memoizer = get_annos
 
     global annos  # this is now only used for making embed sane to use
     annos = get_annos()
     problem_child = 'KDEZFGzEEeepDO8xVvxZmw'
-    stream_loop = start_loop(annos)
+    stream_loop = AnnotationStream(annos, prefilter, annotationSyncHandler)()
     test_annos(annos)
     tree, extra = citation_tree(annos)
     i = papers(annos)
