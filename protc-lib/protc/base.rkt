@@ -15,6 +15,8 @@
         ;#:read read
         ;#:read-syntax read-syntax
         ;#:whole-body-readers? #t
+        #:info protc/base-get-info
         #:module-wrapper protc-module-wrapper
         (require protc/private/reader
+                 (only-in protc/get-info protc/base-get-info)
                  (submod protc/private/kernel module-wrapper)))

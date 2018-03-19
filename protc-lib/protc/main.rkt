@@ -27,4 +27,13 @@
   output-syntax)
 
 (module+ reader ; syntax/module-reader protc
-        (provide read-syntax))
+  (provide read-syntax get-info)
+  (define (get-info port sourc-module source-line source-collection source-position)
+    (define (handle-query key default)
+      (case key
+        ;[(color-lexer) (dynamic-require 'protc/colorer 'protc-color)]
+        ;[(drracket:indentation) (dynamic-require 'protc/indenter 'indent-protc)]
+        [(drracket:toolbar-buttons) (dynamic-require 'protc/protcheck 'button-list)]
+        [else default]))
+    handle-query)
+  )
