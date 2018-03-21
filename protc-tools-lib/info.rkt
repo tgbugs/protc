@@ -4,7 +4,8 @@
 
 (define version "0.0.1")
 (define deps '("base"
-               "gui-lib"))
+               "gui-lib"
+               "protc"))
 (define build-deps '())
 
 (define implies deps)
