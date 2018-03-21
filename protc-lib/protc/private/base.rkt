@@ -569,48 +569,61 @@ For example use @(def solution (a+b solute solvent))."
 ; what is the average time interval from the first surface to max on surface at same time
 ; what is the average time from max on surface to none on survace for > time on surface?
 
-(module protc-syntax-classes racket/base
-  (require syntax/parse
-           (for-syntax racket/base syntax/parse)
-           )
 
-  (provide (all-defined-out))
+(module protc-syntax-classes racket/base
+  
+
+  (module prims racket/base
+    (require syntax/parse (for-syntax racket/base syntax/parse))
+    (provide (all-defined-out))
+    (define-syntax (: stx)
+      "an intermediate step toward thing :aspect value is (: aspect thing value) and :aspect is (: aspect)"
+      ; another goldmine https://docs.racket-lang.org/syntax/stxparse-patterns.html
+      ; TODO nesting?? hard to translate thing :a1 v1 :a2 :a3 v2 with only one reference to thing
+      ; lol not really (: thing ([a1 v1] a2 [a3 v2]) vs [a2]
+      (syntax-parse stx ; #:literals (:)
+        ;[(: thing:id ((~or [aspect:id value] lonely-aspect:id) ...))
+        ;#'(list thing aspect ... value ... lonely-aspect ...)] 
+        [(: thing:id lonely-aspect:id ... ([aspect:id value] ...)); a more consistent approach
+         ; TODO the context where this occurs is going to really affect how this is interpreted...
+         ; so leave it as is for now
+         #'(list thing lonely-aspect ... (cons aspect value) ...)]
+        [(: thing:id aspect:id value)
+         #'(list thing (cons aspect value))]
+        [(: thing:id aspect:id)
+         #'(list thing aspect)]
+        [(: aspect:id)
+         #'(list aspect)]
+        ; useful??
+        [(: aspect:id ...)
+         #'(list aspect ...)]
+        ;[()
+        ;#'()]
+        ;[(: aspect:id thing:id value)
+        ;#'()]
+        ;[(: aspect:id thing:id)
+        ;#'()]
+        ))
+    )
+  (require syntax/parse
+           'prims
+           (for-syntax 'prims racket/base syntax/parse)
+           ;(for-meta -2 'prims)
+           (for-meta -1 'prims)  ; OH MY GOD FINALLY
+           ;(for-meta 0 'prims)
+           ;(for-meta 1 'prims)
+           )
+  (provide (all-defined-out)
+           (all-from-out 'prims))
   ;(provide (except-out (all-defined-out) :))
 
   ;(define-for-syntax : 'you)
 
-  (define-syntax (: stx)
-    "an intermediate step toward thing :aspect value is (: aspect thing value) and :aspect is (: aspect)"
-    ; another goldmine https://docs.racket-lang.org/syntax/stxparse-patterns.html
-    ; TODO nesting?? hard to translate thing :a1 v1 :a2 :a3 v2 with only one reference to thing
-    ; lol not really (: thing ([a1 v1] a2 [a3 v2]) vs [a2]
-    (syntax-parse stx ; #:literals (:)
-                  ;[(: thing:id ((~or [aspect:id value] lonely-aspect:id) ...))
-                  ;#'(list thing aspect ... value ... lonely-aspect ...)] 
-                  [(: thing:id lonely-aspect:id ... ([aspect:id value] ...)); a more consistent approach
-                   ; TODO the context where this occurs is going to really affect how this is interpreted...
-                   ; so leave it as is for now
-                   #'(list thing lonely-aspect ... (cons aspect value) ...)]
-                  [(: thing:id aspect:id value)
-                   #'(list thing (cons aspect value))]
-                  [(: thing:id aspect:id)
-                   #'(list thing aspect)]
-                  [(: aspect:id)
-                   #'(list aspect)]
-                  ; useful??
-                  [(: aspect:id ...)
-                   #'(list aspect ...)]
-                  ;[()
-                  ;#'()]
-                  ;[(: aspect:id thing:id value)
-                  ;#'()]
-                  ;[(: aspect:id thing:id)
-                  ;#'()]
-                  ))
+  
 
   (define-syntax-class asp
     #:description "(: aspect:id) or (: thing:id aspect:id) or (: thing:id aspect:id value)"
-    ; #:literals (:)  ; FIXME nasty phase binding issues that I can't find a solution for :/
+    #:literals (:)  ; FIXME nasty phase binding issues that I can't find a solution for :/
     ;#:datum-literals (:)
     ;#:disable-colon-notation
     ;#:attributes ((lone-aspect 0) thing lonely-aspect aspect)
@@ -619,13 +632,17 @@ For example use @(def solution (a+b solute solvent))."
 
   (define-syntax-class tasp
     #:description "(: thing:id lonely-aspect:id ... ([aspect:id value] ...))"
-    ; #:literals (:)
+    #:literals (:)
     ;(pattern (: thing:id aspect-value:id value))  ; normally only want (t a v) but (t a a a a v) is more consistent
     ;(pattern (: thing:id aspect-l:id ...))
     ;(pattern (: thing:id (~optional aspect:id ...) (~optional ([aspect-value:id value] ...))))
     (pattern (: thing:id aspect:id ... ([aspect-value:id value] ...)))
     )
   ;(pattern (: thing:id lonely-aspect:id ... ([aspect:id value] ...))))
+
+  (define-syntax-class are-you-kidding-me
+    #:literals (:)
+    (pattern (: (~seq aspect:id value) ...)))
 )
 
 (require 'protc-syntax-classes 
@@ -644,6 +661,12 @@ For example use @(def solution (a+b solute solvent))."
 (define thing 'wat)
 (define my-thing 'other-wat)
 (define g 'grams)
+(define m 'meters)
+
+(syntax-parse #'(: g 10 m 12)
+  [a:are-you-kidding-me
+   #'([a.aspect a.value] ...)])
+
 (syntax-parse #'(: g) ; b [c 1])
   [a:asp  ; note to self, syntax classes surrounded by () dont need an extra pair ala (a:asp)
    #'a.aspect])
