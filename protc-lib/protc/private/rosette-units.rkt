@@ -1,8 +1,8 @@
 #lang rosette
 (require racket/pretty
          racket/trace
-         "units/si-prefixes-exp-data.rkt"
-         "units/si-prefixes-data.rkt"
+         protc/units/si-prefixes-exp-data
+         protc/units/si-prefixes-data
          ;(only-in protc/private/base name-join)  ; TODO when emacs is not slow
          (for-syntax syntax/parse)
          (prefix-in racket: (only-in racket/base number?)))
