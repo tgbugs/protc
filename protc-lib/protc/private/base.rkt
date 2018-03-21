@@ -23,7 +23,10 @@
          ;(rename-out [#%make make] [#%measure measure] [#%actualize actualize])
          #%make
          #%measure
-         #%actualize)
+         #%actualize
+         ; for utility, should not be required by base... probably need to reorganize
+         (for-syntax name-join)
+         )
 
 (module+ other
 
@@ -577,84 +580,90 @@ For example use @(def solution (a+b solute solvent))."
     (require syntax/parse (for-syntax racket/base syntax/parse))
     (provide (all-defined-out))
     (define-syntax (: stx)
-      "an intermediate step toward thing :aspect value is (: aspect thing value) and :aspect is (: aspect)"
+      "thing-aspect binding operator"
+      ;"an intermediate step toward thing :aspect value is (: aspect thing value) and :aspect is (: aspect)"
       ; another goldmine https://docs.racket-lang.org/syntax/stxparse-patterns.html
       ; TODO nesting?? hard to translate thing :a1 v1 :a2 :a3 v2 with only one reference to thing
       ; lol not really (: thing ([a1 v1] a2 [a3 v2]) vs [a2]
-      (syntax-parse stx ; #:literals (:)
-        ;[(: thing:id ((~or [aspect:id value] lonely-aspect:id) ...))
+      (syntax-parse stx
+        ;[(_ thing:id ((~or [aspect:id value] lonely-aspect:id) ...))
         ;#'(list thing aspect ... value ... lonely-aspect ...)] 
-        [(: thing:id lonely-aspect:id ... ([aspect:id value] ...)); a more consistent approach
+        [(_ thing:id lonely-aspect:id ... ([aspect:id value] ...)); a more consistent approach
          ; TODO the context where this occurs is going to really affect how this is interpreted...
          ; so leave it as is for now
          #'(list thing lonely-aspect ... (cons aspect value) ...)]
-        [(: thing:id aspect:id value)
+        [(_ thing:id aspect:id value)
          #'(list thing (cons aspect value))]
-        [(: thing:id aspect:id)
-         #'(list thing aspect)]
-        [(: aspect:id)
-         #'(list aspect)]
-        ; useful??
-        [(: aspect:id ...)
-         #'(list aspect ...)]
-        ;[()
-        ;#'()]
-        ;[(: aspect:id thing:id value)
-        ;#'()]
-        ;[(: aspect:id thing:id)
-        ;#'()]
-        ))
-    )
+        [(_ thing:id aspect:id)
+         #'(list thing aspect)]))
+
+    (define-syntax (*: stx)
+      "measure-aspect binding"
+      (syntax-parse stx
+        [(_ measure-name:id aspect:id)
+         #'(list measure-name aspect)]))
+    (define-syntax (:* stx)
+      "actualize-aspect binding
+This is very useful for specifying a new actulization procedure and also for saying clearly
+\"This is the actualization procedure that I intend to use.\"
+
+The two ways that this could go are (:* my-actualization-procedure g) or (: my-actualization-procedure)
+or even just (:* my-actualization-procedure) though that is unlikely to work in cases where there is more than
+one thing that has aspect grams.
+"
+      (syntax-parse stx
+        [(_ actualize-name:id aspect:id)
+         #'(list actualize-name aspect)]))
+  )
+
   (require syntax/parse
            'prims
            (for-syntax 'prims racket/base syntax/parse)
-           ;(for-meta -2 'prims)
            (for-meta -1 'prims)  ; OH MY GOD FINALLY
-           ;(for-meta 0 'prims)
-           ;(for-meta 1 'prims)
            )
-  (provide (all-defined-out)
+  (provide (except-out (all-defined-out) -asp)
            (all-from-out 'prims))
   ;(provide (except-out (all-defined-out) :))
 
   ;(define-for-syntax : 'you)
 
-  
+  (define-syntax-class -asp
+    ; NOTE we do not need this form anymore, it is more consistent to refer to unbound aspects without the colon
+    ; so for example if I want to spec a measure for grams I would (spec (*: g)) which is much clearer
+    #:description "(: aspect:id)"
+    #:literals (:)
+    (pattern (: aspect:id)))
 
   (define-syntax-class asp
-    #:description "(: aspect:id) or (: thing:id aspect:id) or (: thing:id aspect:id value)"
-    #:literals (:)  ; FIXME nasty phase binding issues that I can't find a solution for :/
-    ;#:datum-literals (:)
-    ;#:disable-colon-notation
-    ;#:attributes ((lone-aspect 0) thing lonely-aspect aspect)
-    (pattern (: aspect:id))  ; FIXME will have to error on id not an aspect
-    )
-
-  (define-syntax-class tasp
     #:description "(: thing:id lonely-aspect:id ... ([aspect:id value] ...))"
     #:literals (:)
     ;(pattern (: thing:id aspect-value:id value))  ; normally only want (t a v) but (t a a a a v) is more consistent
     ;(pattern (: thing:id aspect-l:id ...))
     ;(pattern (: thing:id (~optional aspect:id ...) (~optional ([aspect-value:id value] ...))))
+    ;(pattern (: thing:id aspect:id ... (~optional ([aspect-value:id value] ... ))))
     (pattern (: thing:id aspect:id ... ([aspect-value:id value] ...)))
+    ;(pattern (: thing:id aspect:id ...))
+    ;(pattern (: thing:id (~seq aspect:id value) ...))
     )
   ;(pattern (: thing:id lonely-aspect:id ... ([aspect:id value] ...))))
 
   (define-syntax-class are-you-kidding-me
     #:literals (:)
-    (pattern (: (~seq aspect:id value) ...)))
+    (pattern (: (~seq aspect:id value) ...)))  ; yay for ~seq :)
+
+  (define-syntax-class act
+    #:description "(:* actualize-name:id aspect:id)"
+    #:literals (:*)
+    (pattern (:* actualize-name:id aspect:id)))
+
+  (define-syntax-class measure
+    #:description "(*: measure-name:id aspect:id)"
+    #:literals (*:)
+    (pattern (*: measure-name:id aspect:id)))
 )
 
 (require 'protc-syntax-classes 
-         (for-syntax 'protc-syntax-classes)
-         ;(for-template 'protc-syntax-classes)
-         ;(for-meta -2 'protc-syntax-classes)
-         ;(for-meta -1 'protc-syntax-classes)
-         ;(for-meta 0 'protc-syntax-classes)
-         ;(for-meta 1 'protc-syntax-classes)
-         ;(for-meta 2 'protc-syntax-classes)
-         ;(for-meta 3 'protc-syntax-classes)
-         )
+         (for-syntax 'protc-syntax-classes))
 
 (define volume 'volume)
 (define brain 'asdf)
@@ -667,37 +676,33 @@ For example use @(def solution (a+b solute solvent))."
   [a:are-you-kidding-me
    #'([a.aspect a.value] ...)])
 
-(syntax-parse #'(: g) ; b [c 1])
-  [a:asp  ; note to self, syntax classes surrounded by () dont need an extra pair ala (a:asp)
-   #'a.aspect])
-(syntax-parse #'(: my-thing g ([volume 10])) [a:tasp
+;(syntax-parse #'(: g) ; b [c 1])  ; unused
+  ;[a:asp  ; note to self, syntax classes surrounded by () dont need an extra pair ala (a:asp)
+   ;#'a.aspect])
+
+(syntax-parse #'(: my-thing g ([volume 10])) [a:asp
                                               #'(a.thing a.aspect ... [a.aspect-value a.value] ... )])
 (syntax-parse #'(: my-thing g kg mM ([volume 10] [voltage 9999]))
-  [a:tasp #'(a.thing a.aspect ... a.aspect-value ... a.value ... )])
+  [a:asp #'(a.thing a.aspect ... a.aspect-value ... a.value ... )])
 (syntax-parse #'(: my-thing g kg mM ([volume 10] [voltage 9999]))
-  [a:tasp #'(a.thing a.aspect ... (a.aspect-value a.value) ... )])
-(syntax-parse #'(: my-thing g ([volume 10])) [a:tasp #'(a.aspect ...)])
-(syntax-parse #'(: my-thing g g g g g ([volume 10])) [a:tasp #'(a.aspect ...)])
+  [a:asp #'(a.thing a.aspect ... (a.aspect-value a.value) ... )])
+(syntax-parse #'(: my-thing g ([volume 10])) [a:asp #'(a.aspect ...)])
+(syntax-parse #'(: my-thing g g g g g ([volume 10])) [a:asp #'(a.aspect ...)])
 
-(: g)
+g
 (: my-thing g)
 
 (define-syntax (test-asp stx)
   (syntax-parse stx
     [(_ a:asp)
-     ;#'(list (~maybe a.thing) a.aspect)]
-     #'(list a.aspect)]
-    [(_ a:tasp)
-     #'(list a.thing a.aspect ... (list a.aspect-value a.value) ...)]
+     ;#'(list a.aspect ... )]
+      #'(list a.thing a.aspect ... (list a.aspect-value a.value) ...)]
     ))
 
-(test-asp (: g))
+;(test-asp (: g))  ; no longer relevant
 ;(test-asp (: brain g))  ; FIXME
 (test-asp (: brain g ([volume 5])))
 (test-asp (: brain g ([volume 5] [volume 1000])))
-
-
-
 
 (module aspects racket/base
   ; TODO I think that types for aspects and beings will help a whole lot and will be much faster to check
@@ -755,9 +760,10 @@ For example use @(def solution (a+b solute solvent))."
   (define thing 'things-must-also-be-defined-beforehand)
   (define aspect 'aspects-need-to-be-defined-beforehand)
   (define-values (a1 a2 a3) (values 'a1 'a2 'a3))
-  (define-values (a at atv aaaa)
-    (values (: aspect)
-            (: thing aspect)
+  (define-values (;a at
+                    atv aaaa)
+    (values ;(: aspect)
+            ;(: thing aspect)  ; FIXME
             (: thing aspect 'value)
             (: thing a2 ([a1 1] [a3 3]))
             ; (: thing ([a1 1] a2 [a3 3])) ; fails as expected
