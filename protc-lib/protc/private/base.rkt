@@ -6,6 +6,8 @@
 (require (for-syntax racket/base
                      ;racket/class
                      syntax/parse)
+         (except-in racket/base time)  ; FIXME how to address this?
+         (prefix-in racket: (only-in racket/base time))
          racket/class
          racket/syntax
          racket/string
@@ -416,9 +418,11 @@
 
 (require 'message-proc)
 
-(define ms% (new step% [name 'ms]))
-(#%.vars a b c d e)
-(send ms% .echo (#%.vars hello))
+(module+ test
+  (define ms% (new step% [name 'ms]))
+  (#%.vars a b c d e)
+  (send ms% .echo (#%.vars hello))
+)
 
 (define-syntax (#%message stx)
   (pw stx)
@@ -551,10 +555,10 @@ For example use @(def solution (a+b solute solvent))."
 ;; inline results desired behavior... because one use case is definitly in a closed loop where prov is not rigorous
 ; (result 'self-evaluating-value 'self-evaluating-reference-to-protocol prov-identifier)
 ; (define (prov res:f9fe4133610611385d1aaab628a04aa122080c2c))  ; or however we are going to do that...
-; pcb :length (result prov) -> pcb :length (result prov 100 mm)
+; pcb length (result prov) -> pcb :length (result prov 100 mm)
 ; (define (hprov "https://hyp.is/hy0bDnC0Eeer3jcZ6Qvypw"))
-; images :count (result hprov) -> images :count (result hprov 1850)
-; cows-on-the-moon :count (result 'bullshit 100000)
+; images count (result hprov) -> images :count (result hprov 1850)
+; cows-on-the-moon count (result 'bullshit 100000)
 ; pcb :thickness (result (measure-with :mm "30 cm ruler") 3)
 
 ;; searching for counterexamples where black-box :aspect would not be valid for our strict definition of black-box
@@ -564,9 +568,9 @@ For example use @(def solution (a+b solute solvent))."
 ; what is (part-of intestines sperm-whale) :volume ? If you tried really hard you could probably come up with an answer
 ; how about "the average time a pod of orcas in the galapagose spends diving between surface stops?"
 ; have to refine to "what is the average time interaval between sighting orcas on the surface"
-; (observe (a-near-b pod-of-orcas (bounds surface water-of-ocean)) :time 
-; (observe (not (empty? (subset/a-in-b (part-of any (member-of any pod-of-orcas)) air-above-the-water)))) :time
-; :time-start :time-stop etc, need a way to specify more about the context of the observations
+; (observe (a-near-b pod-of-orcas (bounds surface water-of-ocean)) time 
+; (observe (not (empty? (subset/a-in-b (part-of any (member-of any pod-of-orcas)) air-above-the-water)))) time
+; time-start time-stop etc, need a way to specify more about the context of the observations
 ; any and all could be special keywords...
 ; what is the average time interval from the first surfacing to the last surfacing
 ; what is the average time interval from the first surface to max on surface at same time
@@ -651,60 +655,74 @@ one thing that has aspect grams.
     #:literals (:)
     (pattern (: (~seq aspect:id value) ...)))  ; yay for ~seq :)
 
-  (define-syntax-class act
-    #:description "(:* actualize-name:id aspect:id)"
+  (define-syntax-class actualize
+    #:description "(:* aspect:id actualize-name:id)"
     #:literals (:*)
-    (pattern (:* actualize-name:id aspect:id)))
+    (pattern (:* aspect:id actualize-name:id)))
 
   (define-syntax-class measure
-    #:description "(*: measure-name:id aspect:id)"
+    #:description "(*: aspect:id measure-name:id)"
     #:literals (*:)
-    (pattern (*: measure-name:id aspect:id)))
+    (pattern (*: aspect:id measure-name:id)))
+
+  (define-syntax-class make
+    ; TODO not clear what the most consistent way to do this is
+    ; bind a name for a new black box VS specify how to make it???
+    #:description "(** name:id)"
+    #:literals (**)
+    (pattern (** name:id)))
+
 )
+
 
 (require 'protc-syntax-classes 
          (for-syntax 'protc-syntax-classes))
 
-(define volume 'volume)
-(define brain 'asdf)
-(define thing 'wat)
-(define my-thing 'other-wat)
-(define g 'grams)
-(define m 'meters)
+(module+ test
+  (define volume 'volume)
+  (define brain 'asdf)
+  (define thing 'wat)
+  (define my-thing 'other-wat)
+  (define g 'grams)
+  (define m 'meters)
 
-(syntax-parse #'(: g 10 m 12)
-  [a:are-you-kidding-me
-   #'([a.aspect a.value] ...)])
+  (syntax-parse #'(: g 10 m 12)
+    [a:are-you-kidding-me
+     #'([a.aspect a.value] ...)])
 
-;(syntax-parse #'(: g) ; b [c 1])  ; unused
+  ;(syntax-parse #'(: g) ; b [c 1])  ; unused
   ;[a:asp  ; note to self, syntax classes surrounded by () dont need an extra pair ala (a:asp)
-   ;#'a.aspect])
+  ;#'a.aspect])
 
-(syntax-parse #'(: my-thing g ([volume 10])) [a:asp
-                                              #'(a.thing a.aspect ... [a.aspect-value a.value] ... )])
-(syntax-parse #'(: my-thing g kg mM ([volume 10] [voltage 9999]))
-  [a:asp #'(a.thing a.aspect ... a.aspect-value ... a.value ... )])
-(syntax-parse #'(: my-thing g kg mM ([volume 10] [voltage 9999]))
-  [a:asp #'(a.thing a.aspect ... (a.aspect-value a.value) ... )])
-(syntax-parse #'(: my-thing g ([volume 10])) [a:asp #'(a.aspect ...)])
-(syntax-parse #'(: my-thing g g g g g ([volume 10])) [a:asp #'(a.aspect ...)])
+  (syntax-parse #'(: my-thing g ([volume 10])) [a:asp
+                                                #'(a.thing a.aspect ... [a.aspect-value a.value] ... )])
+  (syntax-parse #'(: my-thing g kg mM ([volume 10] [voltage 9999]))
+    [a:asp #'(a.thing a.aspect ... a.aspect-value ... a.value ... )])
+  (syntax-parse #'(: my-thing g kg mM ([volume 10] [voltage 9999]))
+    [a:asp #'(a.thing a.aspect ... (a.aspect-value a.value) ... )])
+  (syntax-parse #'(: my-thing g ([volume 10])) [a:asp #'(a.aspect ...)])
+  (syntax-parse #'(: my-thing g g g g g ([volume 10])) [a:asp #'(a.aspect ...)])
 
-g
-(: my-thing g)
+  g
+  (: my-thing g)
 
-(define-syntax (test-asp stx)
-  (syntax-parse stx
-    [(_ a:asp)
-     ;#'(list a.aspect ... )]
-      #'(list a.thing a.aspect ... (list a.aspect-value a.value) ...)]
-    ))
+  (define-syntax (test-asp stx)
+    (syntax-parse stx
+      [(_ a:asp)
+       ;#'(list a.aspect ... )]
+       #'(list a.thing a.aspect ... (list a.aspect-value a.value) ...)]
+      ))
 
-;(test-asp (: g))  ; no longer relevant
-;(test-asp (: brain g))  ; FIXME
-(test-asp (: brain g ([volume 5])))
-(test-asp (: brain g ([volume 5] [volume 1000])))
+  ;(test-asp (: g))  ; no longer relevant
+  ;(test-asp (: brain g))  ; FIXME
+  (test-asp (: brain g ([volume 5])))
+  (test-asp (: brain g ([volume 5] [volume 1000])))
+)
 
 (module aspects racket/base
+  ; It is important to distinguish between aspects as aspects and aspects as units
+  ; this is not the ultimate representation that we want for aspects either...
+  
   ; TODO I think that types for aspects and beings will help a whole lot and will be much faster to check
   ;  at compile time than at run time...
   ; TODO these need to be reworked to support si prefix notation etc...
@@ -714,6 +732,7 @@ g
   ; so inside of (: could default to not needing to quote, and have another special form (-: (lol) or something that
   ; allowed programic access
   ; (aspect vs (aspect-variable or something
+  ;(require (except-in racket/base time))  ; sigh, how to fix
   (provide (all-defined-out))
   (struct aspect (shortname name def parent)  ; note that #:auto is global...
     ; aka measurable
@@ -721,40 +740,41 @@ g
 
   ;(define unit (aspect 'unit 'unit "Units are not aspects but they can be used as aspects"))  ; units are not aspects their names can be...
   ; TODO define all these using (define-aspect)
-  (define :fq (aspect 'fq 'fundamental-quantity "The root for all fundamental quantities" 'root))
+  (define fq (aspect 'fq 'fundamental-quantity "The root for all fundamental quantities" 'root))
 
   ;(define :scalar () ()) ??
-  (define :count (aspect 'count 'count "How many?" :fq))  ; discrete continuous
-  (define :mass (aspect 'mass 'mass "The m in e = mc^2" :fq))
-  (define :energy (aspect 'energy 'energy "hoh boy" :fq))  ; TODO synonyms... distance...
-  (define :length (aspect 'length 'length "hoh boy" :fq))
-  (define :time (aspect 'time 'time "tick tock" :fq))
-  (define :temperature (aspect 'temp 'temperature "hot cold" :fq))
-  (define :charge (aspect 'Q 'charge "hoh boy" :fq))  ; why is it current??? http://amasci.com/miscon/fund.html
+  (define count (aspect 'count 'count "How many?" fq))  ; discrete continuous
+  (define mass (aspect 'mass 'mass "The m in e = mc^2" fq))
+  (define energy (aspect 'energy 'energy "hoh boy" fq))  ; TODO synonyms... distance...
+  (define length-aspect (aspect 'length 'length "hoh boy" fq))
+  (define time-aspect (aspect 'time 'time "tick tock" fq))
+  (define temperature (aspect 'temp 'temperature "hot cold" fq))
+  (define charge (aspect 'Q 'charge "hoh boy" fq))  ; why is it current??? http://amasci.com/miscon/fund.html
 
-  (define :dq (aspect 'dq 'derived-quantity "A quantity derived from some other quantity" 'root))
-  (define :current (aspect 'I 'current '(/ :charge :time) :dq))  ; TODO expand quoted definitions
-  (define :weight (aspect 'weight 'weight "hrm..." :mass))
-  (define :distance (aspect 'distance 'distance "hrm..." :length))
+  (define dq (aspect 'dq 'derived-quantity "A quantity derived from some other quantity" 'root))
+  (define current (aspect 'I 'current '(/ charge time-aspect) dq))  ; TODO expand quoted definitions
+  (define weight (aspect 'weight 'weight "hrm..." mass))
+  (define distance (aspect 'distance 'distance "hrm..." length-aspect))
 
-  (define :area (aspect 'area 'area '(expt :length 2) :dq))
-  (define :volume (aspect 'vol 'volume '(expt :length 3) :dq))
+  (define area (aspect 'area 'area '(expt length-aspect 2) dq))
+  (define volume (aspect 'vol 'volume '(expt length-aspect 3) dq))
 
-  (define :duration (aspect 'dt 'duration '(- :time :time) :dq))
+  (define duration (aspect 'dt 'duration '(- time-aspect time-aspect) dq))
 
-  (define :mol (aspect 'mol 'mole "HRM" :count))
+  (define mol (aspect 'mol 'mole "HRM" count))
 
-  (define :l (aspect 'l 'liters "SI unit of volume" :volume))
-  (define :L :l)  ; TODO alternate forms that also have 'L as the short name (for example)
-  (define :g (aspect 'g 'grams "SI unit of weight" :mass))
+  (define l (aspect 'l 'liters "SI unit of volume" volume))
+  (define L l)  ; TODO alternate forms that also have 'L as the short name (for example)
+  (define g (aspect 'g 'grams "SI unit of weight" mass))
 
-  (define :M (aspect 'M 'molarity "SI unit of concentration" '(/ :mol :L)))  ; FIXME HRM... mol/volume vs mol/liter how to support...
+  (define M (aspect 'M 'molarity "SI unit of concentration" '(/ mol L)))  ; FIXME HRM... mol/volume vs mol/liter how to support...
   (define _m 1e-3)
-  (define :mM (aspect 'mM 'milli-molarity "SI unit of weight" '(* _m :M)))  ; TODO auto prefix conversion because this is icky
+  (define mM (aspect 'mM 'milli-molarity "SI unit of weight" '(* _m M)))  ; TODO auto prefix conversion because this is icky
 )
 (require 'aspects)
-(provide (all-from-out 'aspects))
-
+(provide (all-from-out 'aspects)
+         (prefix-out : (all-from-out 'aspects))  ; TODO remove these
+         )
 
 (define (run-tests)
   (define thing 'things-must-also-be-defined-beforehand)
@@ -768,11 +788,11 @@ g
             (: thing a2 ([a1 1] [a3 3]))
             ; (: thing ([a1 1] a2 [a3 3])) ; fails as expected
             ))
-  (spec (#%measure :g weigh)
-        (.invariant (< 0.01 (error :g))))
-  (spec (#%actualize :mass cut-down-to-size)
+  (spec (*: g weigh) ;(#%measure :g weigh)
+        (.invariant (< 0.01 (error g))))
+  (spec (:* mass cut-down-to-size) ;(#%actualize :mass cut-down-to-size)
         (.vars final-weight))
-  (spec (#%make solution)
+  (spec (** solution) ;(#%make solution)
         (.vars final-volume)
         (.inputs [solvent (= solvent :volume final-volume)]
                  ;(with-invariants [(> :volume final-volume)] beaker)
