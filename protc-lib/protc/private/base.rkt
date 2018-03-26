@@ -86,9 +86,9 @@
 
     (define (add-rec name record #:type type)
       (let-values ([(index counter records)
-                    (cond ((eq? type 'being) (values being-index being-counter being-records))
-                          ((eq? type 'aspect) (values aspect-index aspect-counter aspect-records))
-                          (#t (error "type unkown")))])
+                    (cond [(eq? type 'being) (values being-index being-counter being-records)]
+                          [(eq? type 'aspect) (values aspect-index aspect-counter aspect-records)]
+                          [#t (error "type unkown")])])
         (if (dict-ref name index)
             (error "that being is already defined...")
             (let ([current-index (counter)])

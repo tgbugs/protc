@@ -453,10 +453,10 @@
 
 (define (retrieve thing)
   (implicit known-storage-location)
-  (cond ((*contains-a-inside-b* thing known-storage-location) (take-a-from-b thing known-storage-location))
-        ((has-creation-protocol? thing) ((has-creation-protocol? thing)))
-        ((has-acquisition-protocol? thing) ((has-acquisition-protocol? thing)))
-        (#t (*cry*))))
+  (cond [(*contains-a-inside-b* thing known-storage-location) (take-a-from-b thing known-storage-location)]
+        [(has-creation-protocol? thing) ((has-creation-protocol? thing))]
+        [(has-acquisition-protocol? thing) ((has-acquisition-protocol? thing))]
+        [#t (*cry*)]))
 
 (define-syntax (steps stx)  ; TODO ...
   (syntax-parse stx
@@ -597,8 +597,8 @@
   (equal? (map *density (*all-possible-spatial-divisions* thing))))
 
 (define (norm ndpoint1 ndpoint2)
-  (cond ((and (number? ndpoint1) (number? ndpoint2))
-         (abs (- ndpoint1 ndpoint2)))))
+  (cond [(and (number? ndpoint1) (number? ndpoint2))
+         (abs (- ndpoint1 ndpoint2))]))
         ;((/= (length ndpoint1) (length ndpoint2))  ; wat
          ;#f)
         ;(#t (sqrt (apply + (map 'list 'square (mapcar - ndpoint1 ndpoint2)))))))
@@ -617,9 +617,9 @@
   (implicit reference-point)
   (norm reference-point
         (under (uniform-density thing)
-               (cond ((and (*convex? thing) (*topo-sphere? thing))
-                      (minimize (surface-points thing)))
-                     (#t *guess-a-point thing))))
+               (cond [(and (*convex? thing) (*topo-sphere? thing))
+                      (minimize (surface-points thing))]
+                     [#t *guess-a-point thing])))
   )
 
 (define (*shake-alt* thing)

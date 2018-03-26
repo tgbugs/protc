@@ -34,11 +34,11 @@
 	[(_ id:id) #'(cdr id)]))
 
 (define (type thing)
-  (cond ((integer? thing) 'integer)
-		((flonum? thing) 'flonum)
-		((number? thing) 'number)
-		((string? thing) 'string)
-		((pair? thing) (cdr thing))))
+  (cond [(integer? thing) 'integer]
+		[(flonum? thing) 'flonum]
+		[(number? thing) 'number]
+		[(string? thing) 'string]
+		[(pair? thing) (cdr thing)]))
 
 (define (type-bad thing)
   (case (eval thing)  ; this doesnt work :/
