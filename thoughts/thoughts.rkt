@@ -65,7 +65,7 @@
 
 (dip zoop "bar") zoop
 (dip foo) foo
-(dip are-you-shitting-me) are-you-shitting-me
+(dip are-you-pooping-me) are-you-pooping-me
 
 (define-syntax (step-sequence stx)
   (syntax-parse stx

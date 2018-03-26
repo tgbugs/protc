@@ -52,7 +52,7 @@
   ; observe the drawbacks :/
   (specf #:type 'actualize  ; this should be bound
          #:name 'cut-down-to-size  ; this is a name we are doefining
-         #:aspect :mass
+         #:aspect mass
          #:uses 'weigh
          #:vars '(initial-weight final-weight)  ; and here we see another problem these need to be variables
          #:inputs '(knife)
@@ -303,8 +303,115 @@
 ;  or define it as a fundamental quantity aspect, id something like the kilogram
 ;  all other actual measurement devices used in *aspect sections
 
-(define-syntax-class section-header
-  (pattern (_?-or-aspect-name ) ))
+;(define-syntax-class section-header
+;  (pattern (_?-or-aspect-name ) ))
+
+(module protc-syntax-classes racket/base
+  
+
+  (module prims racket/base
+    (require syntax/parse (for-syntax racket/base syntax/parse))
+    (provide (all-defined-out))
+    (define-syntax (: stx)
+      "thing-aspect binding operator"
+      ;"an intermediate step toward thing :aspect value is (: aspect thing value) and :aspect is (: aspect)"
+      ; another goldmine https://docs.racket-lang.org/syntax/stxparse-patterns.html
+      ; TODO nesting?? hard to translate thing :a1 v1 :a2 :a3 v2 with only one reference to thing
+      ; lol not really (: thing ([a1 v1] a2 [a3 v2]) vs [a2]
+      (syntax-parse stx
+        ;[(_ thing:id ((~or [aspect:id value] lonely-aspect:id) ...))
+        ;#'(list thing aspect ... value ... lonely-aspect ...)] 
+        [(_ thing:id lonely-aspect:id ... ([aspect:id value] ...)); a more consistent approach
+         ; TODO the context where this occurs is going to really affect how this is interpreted...
+         ; so leave it as is for now
+         #'(list thing lonely-aspect ... (cons aspect value) ...)]
+        [(_ thing:id aspect:id value)
+         #'(list thing (cons aspect value))]
+        [(_ thing:id aspect:id)
+         #'(list thing aspect)]))
+
+    (define-syntax (*: stx)
+      "measure-aspect binding"
+      (syntax-parse stx
+        [(_ measure-name:id aspect:id)
+         #'(list measure-name aspect)]))
+
+    (define-syntax (:* stx)
+      "actualize-aspect binding
+This is very useful for specifying a new actulization procedure and also for saying clearly
+\"This is the actualization procedure that I intend to use.\"
+
+The two ways that this could go are (:* my-actualization-procedure g) or (: my-actualization-procedure)
+or even just (:* my-actualization-procedure) though that is unlikely to work in cases where there is more than
+one thing that has aspect grams.
+"
+      (syntax-parse stx
+        [(_ actualize-name:id aspect:id)
+         #'(list actualize-name aspect)]))
+
+    (define-syntax (** stx)  ; FIXME not sure we need or want this...
+      "make section indicator"
+      (syntax-parse stx
+        [(_ make-name:id)
+         #'(list make-name)]))
+  )
+
+  (require syntax/parse
+           'prims
+           (for-syntax 'prims racket/base syntax/parse)
+           (for-meta -1 'prims)  ; OH MY GOD FINALLY
+           )
+  (provide (except-out (all-defined-out) -asp)
+           (all-from-out 'prims))
+  ;(provide (except-out (all-defined-out) :))
+
+  ;(define-for-syntax : 'you)
+
+  (define-syntax-class -asp
+    ; NOTE we do not need this form anymore, it is more consistent to refer to unbound aspects without the colon
+    ; so for example if I want to spec a measure for grams I would (spec (*: g)) which is much clearer
+    #:description "(: aspect:id)"
+    #:literals (:)
+    (pattern (: aspect:id)))
+
+  (define-syntax-class asp
+    #:description "(: thing:id lonely-aspect:id ... ([aspect:id value] ...))"
+    #:literals (:)
+    ;(pattern (: thing:id aspect-value:id value))  ; normally only want (t a v) but (t a a a a v) is more consistent
+    ;(pattern (: thing:id aspect-l:id ...))
+    ;(pattern (: thing:id (~optional aspect:id ...) (~optional ([aspect-value:id value] ...))))
+    ;(pattern (: thing:id aspect:id ... (~optional ([aspect-value:id value] ... ))))
+    (pattern (: thing:id aspect:id ... ([aspect-value:id value] ...)))
+    ;(pattern (: thing:id aspect:id ...))
+    ;(pattern (: thing:id (~seq aspect:id value) ...))
+    )
+  ;(pattern (: thing:id lonely-aspect:id ... ([aspect:id value] ...))))
+
+  (define-syntax-class are-you-kidding-me
+    #:literals (:)
+    (pattern (: (~seq aspect:id value) ...)))  ; yay for ~seq :)
+
+  (define-syntax-class actualize
+    #:description "(:* aspect:id actualize-name:id)"
+    #:literals (:*)
+    (pattern (:* aspect:id actualize-name:id)))
+
+  (define-syntax-class measure
+    #:description "(*: aspect:id measure-name:id)"
+    #:literals (*:)
+    (pattern (*: aspect:id measure-name:id)))
+
+  (define-syntax-class make
+    ; TODO not clear what the most consistent way to do this is
+    ; bind a name for a new black box VS specify how to make it???
+    #:description "(** name:id)"
+    #:literals (**)
+    (pattern (** name:id)))
+
+)
+
+(require 'protc-syntax-classes 
+         (for-syntax 'protc-syntax-classes))
 
 (module utils racket/base
   (require (for-syntax racket/base))
@@ -467,6 +574,30 @@ For example use @(def solution (a+b solute solvent))."
                                 #%make
                                 ; delegate
                                 def)
+
+                [(_ type:actualize (~alt (def local-name:id body:expr) message:expr) ... )
+                 #'((if-defined type.actualize-name
+                               (begin type.aspect
+                                      (def local-name body) ...
+                                      (#%message type.actualize-name message) ...)
+                               (begin type.aspect
+                                 (define type.actualize-name (new step% [name 'type.actualize-name]))
+                                 (def local-name body) ...
+                                 (#%message type.actualize-name message) ...)))]
+
+                [(_ type:measure (~alt (def local-name:id body:expr) message:expr) ... )
+                 #'(if-defined type.measure-name
+                               (begin type.aspect  ; check to make sure the aspect has been defined
+                                      (def local-name body) ...
+                                      (#%message type.measure-name message) ...)
+                               (begin type.aspect
+                                      (define type.measure-name (new step% [name 'type.measure-name]))  ; TODO append % to name -> name% automatically...
+                                      (def local-name body) ...
+                                      (#%message type.measure-name message) ...))
+                 ]
+
+                [(_ type:make (~alt (def local-name:id body:expr) message:expr) ... ) #'"TODO"]
+
                 [(_ ((~or* #%measure #%actualize) aspect:id -name:id) (~alt (def local-name:id body:expr) message:expr) ...)  ; TODO aspect-name:aspect
                  ; TODO check whether the aspect exists and file the resulting
                  ;  spec as part of it or similar
@@ -575,108 +706,6 @@ For example use @(def solution (a+b solute solvent))."
 ; what is the average time interval from the first surfacing to the last surfacing
 ; what is the average time interval from the first surface to max on surface at same time
 ; what is the average time from max on surface to none on survace for > time on surface?
-
-
-(module protc-syntax-classes racket/base
-  
-
-  (module prims racket/base
-    (require syntax/parse (for-syntax racket/base syntax/parse))
-    (provide (all-defined-out))
-    (define-syntax (: stx)
-      "thing-aspect binding operator"
-      ;"an intermediate step toward thing :aspect value is (: aspect thing value) and :aspect is (: aspect)"
-      ; another goldmine https://docs.racket-lang.org/syntax/stxparse-patterns.html
-      ; TODO nesting?? hard to translate thing :a1 v1 :a2 :a3 v2 with only one reference to thing
-      ; lol not really (: thing ([a1 v1] a2 [a3 v2]) vs [a2]
-      (syntax-parse stx
-        ;[(_ thing:id ((~or [aspect:id value] lonely-aspect:id) ...))
-        ;#'(list thing aspect ... value ... lonely-aspect ...)] 
-        [(_ thing:id lonely-aspect:id ... ([aspect:id value] ...)); a more consistent approach
-         ; TODO the context where this occurs is going to really affect how this is interpreted...
-         ; so leave it as is for now
-         #'(list thing lonely-aspect ... (cons aspect value) ...)]
-        [(_ thing:id aspect:id value)
-         #'(list thing (cons aspect value))]
-        [(_ thing:id aspect:id)
-         #'(list thing aspect)]))
-
-    (define-syntax (*: stx)
-      "measure-aspect binding"
-      (syntax-parse stx
-        [(_ measure-name:id aspect:id)
-         #'(list measure-name aspect)]))
-    (define-syntax (:* stx)
-      "actualize-aspect binding
-This is very useful for specifying a new actulization procedure and also for saying clearly
-\"This is the actualization procedure that I intend to use.\"
-
-The two ways that this could go are (:* my-actualization-procedure g) or (: my-actualization-procedure)
-or even just (:* my-actualization-procedure) though that is unlikely to work in cases where there is more than
-one thing that has aspect grams.
-"
-      (syntax-parse stx
-        [(_ actualize-name:id aspect:id)
-         #'(list actualize-name aspect)]))
-  )
-
-  (require syntax/parse
-           'prims
-           (for-syntax 'prims racket/base syntax/parse)
-           (for-meta -1 'prims)  ; OH MY GOD FINALLY
-           )
-  (provide (except-out (all-defined-out) -asp)
-           (all-from-out 'prims))
-  ;(provide (except-out (all-defined-out) :))
-
-  ;(define-for-syntax : 'you)
-
-  (define-syntax-class -asp
-    ; NOTE we do not need this form anymore, it is more consistent to refer to unbound aspects without the colon
-    ; so for example if I want to spec a measure for grams I would (spec (*: g)) which is much clearer
-    #:description "(: aspect:id)"
-    #:literals (:)
-    (pattern (: aspect:id)))
-
-  (define-syntax-class asp
-    #:description "(: thing:id lonely-aspect:id ... ([aspect:id value] ...))"
-    #:literals (:)
-    ;(pattern (: thing:id aspect-value:id value))  ; normally only want (t a v) but (t a a a a v) is more consistent
-    ;(pattern (: thing:id aspect-l:id ...))
-    ;(pattern (: thing:id (~optional aspect:id ...) (~optional ([aspect-value:id value] ...))))
-    ;(pattern (: thing:id aspect:id ... (~optional ([aspect-value:id value] ... ))))
-    (pattern (: thing:id aspect:id ... ([aspect-value:id value] ...)))
-    ;(pattern (: thing:id aspect:id ...))
-    ;(pattern (: thing:id (~seq aspect:id value) ...))
-    )
-  ;(pattern (: thing:id lonely-aspect:id ... ([aspect:id value] ...))))
-
-  (define-syntax-class are-you-kidding-me
-    #:literals (:)
-    (pattern (: (~seq aspect:id value) ...)))  ; yay for ~seq :)
-
-  (define-syntax-class actualize
-    #:description "(:* aspect:id actualize-name:id)"
-    #:literals (:*)
-    (pattern (:* aspect:id actualize-name:id)))
-
-  (define-syntax-class measure
-    #:description "(*: aspect:id measure-name:id)"
-    #:literals (*:)
-    (pattern (*: aspect:id measure-name:id)))
-
-  (define-syntax-class make
-    ; TODO not clear what the most consistent way to do this is
-    ; bind a name for a new black box VS specify how to make it???
-    #:description "(** name:id)"
-    #:literals (**)
-    (pattern (** name:id)))
-
-)
-
-
-(require 'protc-syntax-classes 
-         (for-syntax 'protc-syntax-classes))
 
 (module+ test
   (define volume 'volume)
@@ -790,8 +819,15 @@ one thing that has aspect grams.
             ))
   (spec (*: g weigh) ;(#%measure :g weigh)
         (.invariant (< 0.01 (error g))))
+
+  ;(spec (#%actualize mass cut-down-to-size)
+        ;(.vars final-weight))
+
+  ; FIXME (begin (define complaints :/
+  (define cut-down-to-size (new step% [name 'cut-down-to-size]))
   (spec (:* mass cut-down-to-size) ;(#%actualize :mass cut-down-to-size)
         (.vars final-weight))
+
   (spec (** solution) ;(#%make solution)
         (.vars final-volume)
         (.inputs [solvent (= solvent :volume final-volume)]
