@@ -4,7 +4,7 @@ from datetime import date
 from markdown import markdown
 from hyputils.hypothesis import HypothesisUtils
 from analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid
-from analysis import citation_tree, papers, statistics, tagdefs, readTagDocs, addDocLinks, protc
+from analysis import citation_tree, papers, statistics, tagdefs, readTagDocs, justTags, addDocLinks, protc
 from IPython import embed
 from flask import Flask, url_for, redirect, request, render_template, render_template_string, make_response, abort 
 
@@ -144,6 +144,10 @@ def main():
                                         readTagDocs()[tagname].doc))  # sure it is slow but it allows live updates
         except KeyError:
             return abort(404)
+
+    @app.route('/curation/controlled-tags', methods=['GET'])
+    def route_controlled_tags():
+        return '\n'.join(tag for tag in justTags()), 200, {'Content-Type':'text/plain; charset=utf-8'}
 
     @app.route('/curation', methods=['GET'])
     @app.route('/curation/', methods=['GET'])

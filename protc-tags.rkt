@@ -82,9 +82,9 @@
          "error: no criteria defined, the referent is nowhere to be found in the paper")
 (tag-doc 'protc:objective* '(ilxtr:parameter ilxtr:goal)
          "An ill-defined parameter. Goal of the steps outlined [compare 'cryoprotectant' with 'bath changing times were minimized' >> maybe we need to distinguish instructions from goals? how vs nature of what?]")
-(tag-doc 'protc:operator
+(tag-doc 'protc:operator '()
          "Steps involving addition, division, subtraction, multiplication.")
-(tag-doc 'protc:order
+(tag-doc 'protc:order '()
          "Prepositions about time and organizing steps.")
 (tag-doc 'protc:output 'ilxtr:participant
          "What is obtained from the procedure, specifically physical objects")
@@ -108,4 +108,4 @@
          "The output of a `protc:*measure` or `protc:symbolic-measure` these probably don't need to be tagged explicitly during curation. Should be a data file, number, or symbol. Not a physical object.")
 (tag-doc 'protc:telos 'ilxtr:goal
          "Explaining the purpose of a specific step. Differes from `protc:objective*` in that it may not be directly relevant for determining whether the goal of the current step has been achieved.")
-(tag-doc 'protc:impl 'protc:control-flow "protc:impl indicates that the text in question, or its translation into protc sould be contained in an impl section."
+(tag-doc 'protc:impl 'protc:control-flow "protc:impl indicates that the text in question, or its translation into protc sould be contained in an impl section.")

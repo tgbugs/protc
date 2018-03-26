@@ -77,9 +77,19 @@ class TagDoc:
 def readTagDocs():
     with open(f'{__script_folder__}/../protc-tags.rkt', 'rt') as f:
         text = f.read()
+    with open(f'{__script_folder__}/../anno-tags.rkt', 'rt') as f:
+        text += f.read()
     success, docs, rest = parsing.tag_docs(text)
+    if rest:
+        raise SyntaxError(f'tag docs did not parse everything!\n{rest}')
     tag_lookup = {tag:TagDoc(doc, parent) for _, tag, parent, doc in docs}
     return tag_lookup
+
+tag_prefixes = 'ilxtr:', 'protc:', 'mo:', 'annotation-'
+def justTags():
+    for tag in sorted(readTagDocs().keys()):
+        if anyMembers(tag, *tag_prefixes):
+            yield tag
 
 def addDocLinks(base_url, doc):
     prefix = base_url + '/'
