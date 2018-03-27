@@ -12,6 +12,35 @@
 (current-bitwidth #f)
 ;(current-bitwidth 10)  ; slooowww
 
+(module units-syntax-classes racket/base
+  (require racket/string syntax/parse (for-syntax racket/base syntax/parse))
+  (provide (all-defined-out))
+
+  (define (split-prefix-unit stx)
+    ;(println stx)
+    (define p-u (symbol->string (syntax->datum stx)))
+    (define len (string-length p-u))
+
+    (cond [(= len 1) stx]
+          [(= len 2)
+           ; FIXME TODO this fails for cases where the names are not a single char!
+           #`((quote #,(datum->syntax stx (string->symbol (substring p-u 0 1))))
+              #,(datum->syntax stx (string->symbol (substring p-u 1 2))))]
+          [(= len 3) (cond [(string-prefix? p-u "da") (error)] ; TODO enable for other 2 part char prefixes
+                           [#t (error)]  ; TODO
+                           )]))
+
+  (define-syntax-class maybe-prefix-unit
+    (pattern prefix+unit:id
+             #:attr prefix (let-values ([(p u) (split-prefix-unit #'prefix+unit)]) p)
+             #:attr quoted-prefix (let-values ([(p u) (split-prefix-unit #'prefix+unit)]) #`(quote #,#'p))
+             #:attr unit (let-values ([(p u) (split-prefix-unit #'prefix+unit)]) u)
+             #:attr keyword (let-values ([(p u) (split-prefix-unit #'prefix+unit)])
+                              ; WARNING! that #f right there may try to destroy the universe again
+                              (datum->syntax #f (string->keyword (symbol->string (syntax->datum u))))))))
+
+(require 'units-syntax-classes (for-syntax 'units-syntax-classes))
+
 (define (new-symbol) (define-symbolic* x real?) x)
 
 (define (milli-symbol) (define-symbolic* milli- real?) milli-)
@@ -50,15 +79,7 @@
      ; surely there is a better way...
      #'((λ () (define-symbolic name real?) name))]))
 
-(define-for-syntax (split-prefix-unit stx)
-  ;(println stx)
-  (define p-u (symbol->string (syntax->datum stx)))
 
-  ; FIXME TODO this fails for cases where the names are not a single char!
-  #`(
-   (quote #,(datum->syntax stx (string->symbol (substring p-u 0 1))))
-   #,(datum->syntax stx (string->symbol (substring p-u 1 2)))
-  ))
   
 `(test: kilo multiplier ,(get-multiplier 'k))
 
@@ -73,6 +94,18 @@
          out)
        )]))
 
+(define-syntax (prefix-assert stx)
+  (syntax-parse stx
+    [(_ si-prefix:id name:id)  ; name should already be bound
+     (with-syntax ([prefixed-name (name-join (symbol->string (syntax->datum #'si-prefix))
+                                             #'name stx)]
+                   [quoted-prefix #`(quote #,#'si-prefix)])
+       (pretty-print (syntax->datum #'quoted-prefix))
+       (pretty-print (syntax->datum #'prefixed-name))
+       #'((λ () (define-symbolic prefixed-name real?)
+             (assert (= prefixed-name (* name (get-multiplier quoted-prefix))))
+             prefixed-name)))]))
+
 (define-syntax (prefix stx)
   (syntax-parse stx
     [(_ si-prefix:id name:id)  ; name should already be bound
@@ -82,6 +115,7 @@
        (pretty-print (syntax->datum #'quoted-prefix))
        (pretty-print (syntax->datum #'prefixed-name))
        #'(define prefix-name
+           ; TODO replace with prefix-assert
            ((λ ()
               (define-symbolic prefixed-name real?)
               (assert (= prefixed-name (* name (get-multiplier quoted-prefix))))
@@ -158,13 +192,40 @@
 
   by-aspect)
 
+(define (prefix-conversions) 'TODO )  ; should probably be define-syntax
+
+(define (prefix-convert prefix value)
+  (* (get-multiplier prefix) value))
+
+
+(define ? #'DEADBEEF)
+
+(define-syntax (let-quants stx)
+  (syntax-parse stx #:literals (?)
+    [(_ ([unit:maybe-prefix-unit (~or* ? value)] ... ))
+     ; do the unit conversion outside the solver
+     #'(all-knowns (~seq unit.keyword (if (not (eq? #f value))
+                                          (prefix-convert unit.prefix value)
+                                          (begin (when (not (null? unit.prefix))
+                                                   (prefix-assert unit.prefix unit.unit))
+                                                 (sym unit.unit)))) ... )]))
+(let-quants ([g ?] [m ?]))
+
+'(define (test-quants)
+  (let-quants ([g ?]
+               [L final-volume]
+               [g/mol 58.4]
+               [kg 10])
+              'stuff))
+
 (define (all-knowns
          ; singluar
-         #:g [g (sym g)] #:m [m (sym m)] #:s [s (sym s)]
-         #:L [L (sym L)] #:mol [mol (sym mol)] #:M [M (sym M)]
-         #:N [N (sym N)]
+         ; all units not appearing in this film should be set to 1 by default to help the solver
+         #:g [g 1] #:m [m 1] #:s [s 1]
+         #:L [L 1] #:mol [mol 1] #:M [M 1]
+         #:N [N 1]
          ; compound  TODO we need a way to compute these on the fly...
-         #:g/mol [g/mol (sym g/mol)] #:mol/L [mol/L (sym mol/L)] #:g/L [g/L (sym g/L)]
+         #:g/mol [g/mol 1] #:mol/L [mol/L 1] #:g/L [g/L 1]
          ; FIXME TODO should not have to do these manually
          ; there are some fun functions for setting keywords and arity...
          #:kg [kg null]
