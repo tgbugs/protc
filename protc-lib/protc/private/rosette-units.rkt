@@ -1,6 +1,7 @@
 #lang rosette
 (require racket/pretty
          racket/trace
+         syntax/parse
          protc/units/si-prefixes-exp-data
          protc/units/si-prefixes-data
          ;(only-in protc/private/base name-join)  ; TODO when emacs is not slow
@@ -21,25 +22,28 @@
     ;(println stx)
     (define p-u (symbol->string (syntax->datum stx)))
     (define len (string-length p-u))
-
-    (cond [(= len 1) (values #'null stx)]
+    (define fixed-stx (if (eq? #f stx) #'#f stx))
+    (let-values ([(p v) (cond [(= len 1) (values #'null fixed-stx)]
           [(= len 2)
            ; FIXME TODO this fails for cases where the names are not a single char!
-           #`(
-               (quote #,(datum->syntax stx (string->symbol (substring p-u 0 1))))
-               #,(datum->syntax stx (string->symbol (substring p-u 1 2))))]
+           (values
+            (datum->syntax fixed-stx (string->symbol (substring p-u 0 1)))
+            (datum->syntax fixed-stx (string->symbol (substring p-u 1 2))))]
           [(= len 3) (cond [(string-prefix? p-u "da") (error)] ; TODO enable for other 2 part char prefixes
                            [#t (error)]  ; TODO
-                           )]))
+                           )])])
+      ;(println `(p-v: ,p ,v))
+      (values p v)))
 
   (define-syntax-class maybe-prefix-unit
     (pattern prefix+unit:id
-             #:attr prefix (let-values ([(p u) (split-prefix-unit #'prefix+unit)]) p)
-             #:attr quoted-prefix (let-values ([(p u) (split-prefix-unit #'prefix+unit)]) #`(quote #,#'p))
-             #:attr unit (let-values ([(p u) (split-prefix-unit #'prefix+unit)]) u)
-             #:attr keyword (let-values ([(p u) (split-prefix-unit #'prefix+unit)])
-                              ; WARNING! that #f right there may try to destroy the universe again
-                              (datum->syntax #f (string->keyword (symbol->string (syntax->datum u))))))))
+             #:attr prefix-unit (let-values ([(p u) (split-prefix-unit #'prefix+unit)]) `(,p ,u))
+             #:attr prefix (car (attribute prefix-unit))
+             #:attr unit (cadr (attribute prefix-unit))
+             #:attr quoted-prefix #`(quote #,(attribute prefix))
+             #:attr keyword (datum->syntax this-syntax (string->keyword (symbol->string (syntax->datum (attribute unit)))))
+             ;#:attr kw-unit #`(~seq ,(attribute keyword) ,(attribute unit))
+             )))
 
 (require 'units-syntax-classes (for-syntax 'units-syntax-classes))
 
@@ -86,14 +90,10 @@
 (define-syntax (assert-unit stx)
   (pretty-print (syntax->datum stx))
   (syntax-parse stx
-    [(_ prefix+unit:id)
-     (with-syntax ([(prefix unit) (split-prefix-unit #'prefix+unit)])
-       (println (format "prefix: ~a" #'prefix))
-       (println (format "unit: ~a" #'unit))
-       (let ([out #'(assert (= prefix+unit (* unit (get-multiplier prefix))))])
-         (pretty-print (syntax->datum out))
-         out)
-       )]))
+    [(_ prefix+unit:maybe-prefix-unit)
+     (let ([out #'(assert (= prefix+unit (* prefix+unit.unit (get-multiplier prefix+unit.quoted-prefix))))])
+       (pretty-print (syntax->datum out))
+       out)]))
 
 (define-syntax (prefix-assert stx)
   (syntax-parse stx
@@ -198,50 +198,15 @@
 (define (prefix-convert prefix value)
   (* (get-multiplier prefix) value))
 
-
-(define ? #'DEADBEEF)
-
-(define-syntax (let-quants stx)
-  (syntax-parse stx #:literals (?)
-    [(_ ([unit:maybe-prefix-unit (~or* ? value)] ... ))
-     ; do the unit conversion outside the solver
-     #'(all-knowns (~seq unit.keyword (if (not (eq? #f value))
-                                          (prefix-convert unit.prefix value)
-                                          (begin (when (not (null? unit.prefix))
-                                                   (prefix-assert unit.prefix unit.unit))
-                                                 (sym unit.unit)))) ... )]))
-
-(require syntax/parse)
-(displayln 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
-'(if (not (eq? #f value))
-                                        (prefix-convert unit.prefix value)
-                                        (begin (when (not (null? unit.prefix))
-                                                 (prefix-assert unit.prefix unit.unit))
-                                               (sym unit.unit)))
-'(all-knowns (~seq unit.keyword #''WTF-M8) ... )
-(syntax-parse #'([g ?] [m 1] [f 10]) #:literals (?)
-  [([unit:maybe-prefix-unit (~or* ? value)] ... )
-   ; do the unit conversion outside the solver
-   #''(you wot m8 ?)])
-
-(displayln 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb)
-'(let-quants ([g ?] [m ?]))
-
-'(define (test-quants)
-  (let-quants ([g ?]
-               [L final-volume]
-               [g/mol 58.4]
-               [kg 10])
-              'stuff))
-
 (define (all-knowns
          ; singluar
          ; all units not appearing in this film should be set to 1 by default to help the solver
-         #:g [g 1] #:m [m 1] #:s [s 1]
-         #:L [L 1] #:mol [mol 1] #:M [M 1]
-         #:N [N 1]
+         ; or maybe this doesn't help the solver?
+         #:g [g (sym g)] #:m [m (sym m)] #:s [s (sym s)]
+         #:L [L (sym L)] #:mol [mol (sym mol)] #:M [M (sym M)]
+         #:N [N (sym N)]
          ; compound  TODO we need a way to compute these on the fly...
-         #:g/mol [g/mol 1] #:mol/L [mol/L 1] #:g/L [g/L 1]
+         #:g/mol [g/mol (sym g/mol)] #:mol/L [mol/L (sym mol/L)] #:g/L [g/L (sym g/L)]
          ; FIXME TODO should not have to do these manually
          ; there are some fun functions for setting keywords and arity...
          #:kg [kg null]
@@ -288,6 +253,42 @@
   (assert (= N (/ (* kg m) (* s s))))
   (void))
 
+(define ? #'DEADBEEF)
+
+; FIXME
+'(if (not (eq? #f value))
+     (prefix-convert unit.prefix value)
+     (begin (when (not (null? unit.prefix))
+              (prefix-assert unit.prefix unit.unit))
+            (sym unit.unit)))
+
+(define-syntax (let-quants stx)
+  (pretty-print `(let-quants: ,stx))
+  (syntax-parse stx #:literals (? prefix-convert sym)
+    [(_ (symbolic-unit:maybe-prefix-unit ... [unit:maybe-prefix-unit value:expr] ... ))
+     ; do the unit conversion outside the solver
+     ;(pretty-print #'((~seq symbolic-unit.keyword (sym symbolic-unit.unit)) ... (~seq unit.keyword value) ... ))
+     ;(pretty-print #'((symbolic-unit.keyword (sym symbolic-unit.unit)) ... (~seq unit.keyword value) ... ))
+     (let ([out #'(keyword-apply all-knowns
+                      '(symbolic-unit.keyword ... unit.keyword ... )
+                      (list (sym symbolic-unit.unit) ... value ...)
+                      '())])
+       (pretty-print (syntax->datum out))
+       out)]))
+
+(let-quants (g m))
+;(let-quants (g m [kg 1]))  ; FIXME cases like mg/kg where there are clearly distinct black boxes in question
+;(let-quants (g m [mol 100]))  ; FIXME units without 1char abbrevs
+(let-quants ([L 100]))
+;(let-quants (g m [L 100]))  ; FIXME kwarg ordering :/
+
+(define (test-quants)
+  ;(define final-volume 10)
+  (let-quants ([g ?]  ; FIXME prefer this syntax due to the fact that it is eaiser to change what is known/unknown? support both?
+               [L final-volume]
+               ;[g/mol 58.4]  ; TODO
+               [kg 10])))
+
 (define (if-number-exact? maybe-number)
   (when (racket:number? maybe-number)
     (when (inexact? maybe-number)
@@ -312,9 +313,8 @@
    (flatten (for/list ([kw all-keywords]
                        [arg (map exact->inexact kwargs)]) `(,kw ,arg))))
   
-  (pretty-print all-keywords)
-  (pretty-print keywords)
-  ;(println "aaaaaaaaaaaaaaaaaaaaaaa")
+  ;(pretty-print all-keywords)
+  ;(pretty-print keywords)
   (keyword-apply all-knowns
                  (if (not (null? all-keywords))
                      all-keywords
@@ -402,31 +402,23 @@ This function should be wrapped with make-func-safe"
                       ;(clear-asserts!)
                       ;; inject all-knows
                       ;()
-
-                      ;(println "bbbbbbbbbbbbbbbbbbbbbb")
-                      ;(pretty-print all-keywords)
-                      ;(pretty-print keywords)
-                      ;(pretty-print kwargs)
-                      (take  ; FIXME 0 this doesn't work if the missing kwarg is out of order!
-                       (if (not (null? all-keywords))
-                           all-keywords
-                           keywords)
-                       (length kwargs))
-                      (pretty-print
-                       (flatten (for/list ([kw all-keywords]
-                                           [arg (map exact->inexact kwargs)])
-                                  `(,kw ,arg))))
-
-                      (keyword-apply func
-                                     all-keywords  ; FIXME
-                                     (map inexact?->exact kwargs)
-                                     '()))))
+                      (let-values ([(keyword-list arg-list) (for/lists (l0 l1)
+                                               ([key kw]
+                                                [arg kwargs]
+                                                #:when (member key all-keywords))
+                                               (values key (inexact->exact arg)))])
+                        (pretty-write `(keyword-list ,keyword-list))
+                        (pretty-write `(arg-list ,arg-list))
+                        (keyword-apply func
+                                       keyword-list
+                                       arg-list
+                                       '())))))
   new-func)
 
 (define solve-molarity (make-func-safe -solve-molarity))
 ;(trace -solve-molarity)
 
-(solve-molarity #:M 0.01 #:g g #:L 2 #:g/mol 58.4)
+(solve-molarity #:M 0.01 #:g g #:L 2 #:g/mol 58.4 #:qq 'lol)
 (solve-molarity #:M M #:g 10 #:L L #:g/mol 58.4)
 (solve-molarity #:M M #:g 10 #:L 1 #:g/mol 58.4)
 (solve-molarity #:M M #:g 10 #:L 1.0 #:g/mol 58.4)
