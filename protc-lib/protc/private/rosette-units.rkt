@@ -13,7 +13,8 @@
 ;(current-bitwidth 10)  ; slooowww
 
 (module units-syntax-classes racket/base
-  (require racket/string syntax/parse (for-syntax racket/base syntax/parse))
+  (require racket/string syntax/parse
+           (for-template racket/base syntax/parse))
   (provide (all-defined-out))
 
   (define (split-prefix-unit stx)
@@ -21,11 +22,12 @@
     (define p-u (symbol->string (syntax->datum stx)))
     (define len (string-length p-u))
 
-    (cond [(= len 1) stx]
+    (cond [(= len 1) (values #'null stx)]
           [(= len 2)
            ; FIXME TODO this fails for cases where the names are not a single char!
-           #`((quote #,(datum->syntax stx (string->symbol (substring p-u 0 1))))
-              #,(datum->syntax stx (string->symbol (substring p-u 1 2))))]
+           #`(
+               (quote #,(datum->syntax stx (string->symbol (substring p-u 0 1))))
+               #,(datum->syntax stx (string->symbol (substring p-u 1 2))))]
           [(= len 3) (cond [(string-prefix? p-u "da") (error)] ; TODO enable for other 2 part char prefixes
                            [#t (error)]  ; TODO
                            )]))
@@ -78,17 +80,16 @@
     [(_ name:id)
      ; surely there is a better way...
      #'((λ () (define-symbolic name real?) name))]))
-
-
   
 `(test: kilo multiplier ,(get-multiplier 'k))
 
 (define-syntax (assert-unit stx)
+  (pretty-print (syntax->datum stx))
   (syntax-parse stx
     [(_ prefix+unit:id)
      (with-syntax ([(prefix unit) (split-prefix-unit #'prefix+unit)])
-       (println #'prefix)
-       (println #'unit)
+       (println (format "prefix: ~a" #'prefix))
+       (println (format "unit: ~a" #'unit))
        (let ([out #'(assert (= prefix+unit (* unit (get-multiplier prefix))))])
          (pretty-print (syntax->datum out))
          out)
@@ -209,7 +210,22 @@
                                           (begin (when (not (null? unit.prefix))
                                                    (prefix-assert unit.prefix unit.unit))
                                                  (sym unit.unit)))) ... )]))
-(let-quants ([g ?] [m ?]))
+
+(require syntax/parse)
+(displayln 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+'(if (not (eq? #f value))
+                                        (prefix-convert unit.prefix value)
+                                        (begin (when (not (null? unit.prefix))
+                                                 (prefix-assert unit.prefix unit.unit))
+                                               (sym unit.unit)))
+'(all-knowns (~seq unit.keyword #''WTF-M8) ... )
+(syntax-parse #'([g ?] [m 1] [f 10]) #:literals (?)
+  [([unit:maybe-prefix-unit (~or* ? value)] ... )
+   ; do the unit conversion outside the solver
+   #''(you wot m8 ?)])
+
+(displayln 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb)
+'(let-quants ([g ?] [m ?]))
 
 '(define (test-quants)
   (let-quants ([g ?]
@@ -402,7 +418,7 @@ This function should be wrapped with make-func-safe"
                                   `(,kw ,arg))))
 
                       (keyword-apply func
-                                     -keywords 
+                                     all-keywords  ; FIXME
                                      (map inexact?->exact kwargs)
                                      '()))))
   new-func)
