@@ -23,10 +23,12 @@
 
 (provide spec impl :
          ;(rename-out [#%make make] [#%measure measure] [#%actualize actualize])
-         #%make
-         #%measure
-         #%actualize
+         ;#%make
+         ;#%measure
+         ;#%actualize
          ; for utility, should not be required by base... probably need to reorganize
+         :* *: **
+         actualize measure make
          (for-syntax name-join)
          )
 
@@ -400,53 +402,55 @@ one thing that has aspect grams.
     #:literals (:)
     (pattern (: (~seq aspect:id value) ...)))  ; yay for ~seq :)
 
+  (define warning-string
+    "WARNING: ~a already bound! Modifying an existing spec. Duplicate starts on line ~a\n")
+
   (define-syntax-class actualize-sc
-    #:description "(:* aspect:id actualize-name:id)"
+    #:description "(:* aspect:id section-name:id)"
     #:literals (:* actualize)
     (pattern ((~or* :* actualize) aspect:id name:id)
+             #:do ((when (identifier-binding #'name)
+                    (printf warning-string
+                     (syntax-e #'name)
+                     (syntax-line #'name))))
              #:attr type #'actualize))
 
   (define-syntax-class measure-sc
-    #:description "(*: aspect:id measure-name:id)"
-    #:literals (*:)
-    (pattern (*: aspect:id name:id)
+    #:description "(*: aspect:id section-name:id)"
+    #:literals (*: measure)
+    (pattern ((~or* *: measure) aspect:id name:id)
+             #:do ((when (identifier-binding #'name)
+                    (printf
+                     warning-string
+                     (syntax-e #'name)
+                     (syntax-line #'name))))
              #:attr type #'measure))
 
   (define-syntax-class make-sc
     ; TODO not clear what the most consistent way to do this is
     ; bind a name for a new black box VS specify how to make it???
     #:description "(** thing-name:id)"
-    #:literals (**)
-    (pattern (** name:id)
+    #:literals (** make)
+    (pattern ((~or* ** make) name:id)
+             #:do ((when (identifier-binding #'name)
+                    (printf
+                     warning-string
+                     (syntax-e #'name)
+                     (syntax-line #'name))))
              #:attr type #'make))
-
-  ;(define-syntax-class impl-make-sc
-    ;#:description "(** thing-name:id impl-name:id)"
-    ;#:literals (**)
-    ;(pattern (** name:id impl-name:id)))
 
   (define-syntax-class impl-sc
     #:description "(spec-name:id [impl-name:id])"
-    (pattern (spec:id (~optional name:id))  ; TODO ordering...
-             #|
-             ; we can't catch this error here
-             ; spec should be an object? in the current setup
-             ; but I'm not sure how to dereference it or if that
-             ; is even possible during this phase
-             #:fail-when (not
-                          (and (identifier-binding #'spec)
-                               (object? (syntax-e #'spec))))
-                         (format "~a is not a spec, it is a ~a"
-                                 (syntax-e #'spec)
-                                 "TODO types in Racket?!?!")
-             |#
+    (pattern (spec:id (~optional -name:id))  ; TODO ordering...
+             ; maybe at some point revisit fail-when? (see 238ca3559)
+             #:attr name (if (attribute -name) #'-name #'spec)
              #:attr type #'measure))
 
 
   (define-syntax-class def-sc
     #:description "(def name:id body:expr)"
     #:literals (def)
-    )
+    (pattern (def name:id body:expr)))
 
   (define-syntax-class message-sc
     #:literals (quote def)
@@ -455,7 +459,9 @@ one thing that has aspect grams.
     (pattern (quote thing)
              #:attr type 'quote
              )
-    (pattern (def local-name:id body:expr)
+    (pattern l-def:def-sc
+             #:attr name #'l-def.name
+             #:attr body #'l-def.body
              #:attr type 'def)
     (pattern (name:id body ...)  ; #%message handles the type on body and needs ellipis
              #:attr type 'message))
@@ -517,9 +523,9 @@ one thing that has aspect grams.
     (define/public (.identifier id) id)  ; TODO make it possible to add these dynamically, probably by spinning up a child class...
     ;(define/public (.input name [aspect null] [value null]) -name)  ; atomic structure of the message? ick
     (define/public (.vars . things) (void))  ; atomic structure of the message? ick
-    (define/public (.inputs input-struct) (void))  ; atomic structure of the message? ick
+    (define/public (.inputs input-struct) (set! -inputs (cons input-struct -inputs)))  ; atomic structure of the message? ick
     (define/public (.output do-not-want) (void))  ; maybe we want this as a concise way to bind things
-    (define/public (.invariant . things) (void))  ; copy me to make more!
+    (define/public (.invariant . things) (void))  ; copy me to make more! TODO this cannot be allowed in the impl section...
     (define/public (.parameter . things) (void))  ; not clear if we actually need this?
     (define/public (.order . things)  ; order on making inputs and/or on individual actions, practical deps should resolve automatically
       (void))
@@ -575,7 +581,16 @@ one thing that has aspect grams.
       [(#%.vars v:expr ...)  ; TODO v:id and aspect:expr :/
        #'(quote (v ...))]))
 
-  (define-syntax (#%.inputs stx) (pw stx) #''inputs)
+  (define .... 'more-to-come)
+  (define-syntax (#%.inputs stx)
+    ;(pw stx)
+    (syntax-parse stx
+      #:literals (....)  ; FIXME ... not ....
+      [(_ local-name:id ... [local-name-inv:id invariant:expr] ... ....)  ; FIXME this needs its own syntax class
+       #'(λ (thunk)  ; FIXME we need to be able to inject these names into a closure
+           (define local-name 'thing-1) ...
+           (define local-name-inv 'thing-2) ...
+           (void))]))
 
   (define-syntax (#%.output stx) (pw stx) #''output)  ; FIXME probably should not be done the way that requires this... the name in the make should be the output...
 
@@ -606,6 +621,9 @@ one thing that has aspect grams.
            ; not actual messages TODO handled before we get here??
            ;[(_ target (delegate body:expr ...))  ; FIXME should catch earlier to lift terms?
             ;'#(delegate body ...)]
+
+           ; TODO use target to make the name local? also, will local-def.body evaluate correctly here?!
+           [(_ target local-def:def-sc) #'(define local-def.name local-def.body)]
            [(_ target doc:str) #'(send target .docstring doc)]
            [(_ target (quote thing)) #'(send target .echo (quote thing))]  ; send quoted stuff directly as a literal
 
@@ -613,6 +631,7 @@ one thing that has aspect grams.
            [(_ target (message-name:id message-body:expr ...))
             ; this will throw weird errors if a quoted expression is in the body... probably need to fix
             (with-syntax ([process-message (name-join "#%" #'message-name stx)])
+              ; FIXME we need to be able to define here! .inputs specifically :/
               #'(send target message-name (process-message message-body ...)))])])
         (pw output)
         output))
@@ -637,44 +656,26 @@ For example use @(def solution (a+b solute solvent))."
     ; (spec (measure (aspect g) weigh) ...)
   (let ([output 
   (syntax-parse stx #:literals (spec  ; note that syntax-case doesn't work with syntax classes :( so body:expr fails :/
-                                #%measure
-                                #%actualize
-                                #%make
+                                ;#%measure
+                                ;#%actualize
+                                ;#%make
                                 name
                                 ; delegate
                                 def)
 
-                [(_ (~or* section:actualize-sc section:measure-sc) (~alt (def local-name:id body:expr) message:expr) ... )
-                 #'(if-defined section.name  ; that extra set of parents though...
-                               (begin section.aspect
-                                      ; TODO validate types
-                                      ;(class? )
-                                      (def local-name body) ...
-                                      (#%message section.name message) ...)
-                               (begin section.aspect
-                                 (define section.name (new step% [name 'section.name]))
-                                 (def local-name body) ...
-                                 (#%message section.name message) ...))]
 
-                [(_ section:make-sc (~alt (def local-name:id body:expr) message:expr) ... )
-                 #'(begin (if-defined section.name
+                [(_ (~or* section:actualize-sc section:measure-sc) message:impl-spec-body-sc ... )
+                 #'(begin section.aspect
+                          (if-defined section.name
                                       (void)
                                       (define section.name (new step% [name 'section.name])))
                           (#%message section.name message) ... )]
 
-                #|
-                [(_ section:measure (~alt (def local-name:id body:expr) message:expr) ... )
-                 #'(if-defined section.name
-                               (begin section.aspect  ; check to make sure the aspect has been defined
-                                      (def local-name body) ...
-                                      (#%message section.name message) ...)
-                               (begin section.aspect
-                                      (define section.name (new step% [name 'section.name]))  ; TODO append % to name -> name% automatically...
-                                      (def local-name body) ...
-                                      (#%message section.name message) ...))]
-                |#
-
-
+                [(_ section:make-sc message:impl-spec-body-sc ... )
+                 #'(begin (if-defined section.name
+                                      (void)
+                                      (define section.name (new step% [name 'section.name])))
+                          (#%message section.name message) ... )]
 
                 #|
                 [(_ ((~or* #%measure #%actualize) aspect:id -name:id) (~alt (def local-name:id body:expr) message:expr) ...)  ; TODO aspect-name:aspect
@@ -714,9 +715,9 @@ For example use @(def solution (a+b solute solvent))."
 (define-syntax (impl stx)
   (let ([output
          (syntax-parse stx #:literals (impl
-                                       #%measure
-                                       #%actualize
-                                       #%make
+                                       ;#%measure
+                                       ;#%actualize
+                                       ;#%make
                                        add-impl
                                        send quote case
                                        )
@@ -731,7 +732,7 @@ For example use @(def solution (a+b solute solvent))."
                                                       (quote section.name))
                                              (begin
                                                (printf
-                                                "WARNING: line ~a: defining the default impl for ~a"
+                                                "WARNING: line ~a: defining the default impl for ~a\n"
                                                 (syntax-line section)
                                                 section.spec)))
                                            (define section.name (new step%
@@ -906,13 +907,9 @@ For example use @(def solution (a+b solute solvent))."
      ; (: thing ([a1 1] a2 [a3 3])) ; fails as expected
      ))
   (spec (*: g weigh) ;(#%measure :g weigh)
+        (def bob 'hello?)
         (.invariant (< 0.01 (error g))))
 
-  ;(spec (#%actualize mass cut-down-to-size)
-  ;(.vars final-weight))
-
-  ; FIXME (begin (define complaints :/
-  ;(define cut-down-to-size (new step% [name 'cut-down-to-size]))
   (spec (:* mass cut-down-to-size) ;(#%actualize :mass cut-down-to-size)
         (.vars final-weight))
 
@@ -925,23 +922,15 @@ For example use @(def solution (a+b solute solvent))."
 
   (spec (** solution) ;(#%make solution)
         (.vars final-volume)
-        (.inputs [solvent (= solvent :volume final-volume)]
+        (.inputs solute   ; FIXME allow arbitrary order
+                 [solvent (= solvent :volume final-volume)]
                  ;(with-invariants [(> :volume final-volume)] beaker)
-                 [beaker (> :volume final-volume)]  ; this is super nice for lisp; beaker :volume > final-volume possible
-                 [beaker (> beaker :volume final-volume)]
-                 solute ...)
+                 ;comm for testing;[beaker (> :volume final-volume)]  ; this is super nice for lisp; beaker :volume > final-volume possible
+                 ;comm for testing;[beaker (> beaker :volume final-volume)]
+                 [beaker (> (: _ volume) final-volume)]  ; FIXME how to bind beaker implicitly?
+                 ....)
         )
 
-  #|
-  (spec (#%make solution)  ; TODO keywords... #:id id for global ids for steps need a good uid system
-        (.vars final-volume)
-        (.inputs
-         ;(: solvent volume final-volume)  ; interpreting variables on  inputs as constraints... very compact for equality is ok...
-         (= (: solution volume) final-volume)  ; the intention here is much clearer maybe not use = though
-         (> (: beaker volume) final-volume)
-         solute ...)
-        )
-  |#
   (impl (solution way0)
         'no
         'steps
