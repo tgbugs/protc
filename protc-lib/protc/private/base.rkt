@@ -2,7 +2,7 @@
 (require debug/repl (for-syntax debug/repl
                      racket/pretty
                                 ))
- 
+
 (require (for-syntax racket/base
                      ;racket/class
                      syntax/parse)
@@ -307,7 +307,7 @@
 ;  (pattern (_?-or-aspect-name ) ))
 
 (module protc-syntax-classes racket/base
-  
+
   (module prims racket/base
     (require syntax/parse (for-syntax racket/base syntax/parse))
     (provide (all-defined-out)
@@ -365,6 +365,7 @@ one thing that has aspect grams.
   )
 
   (require syntax/parse
+           (only-in racket/class class? object?)
            'prims
            (for-syntax 'prims racket/base syntax/parse)
            (for-meta -1 'prims (only-in racket/base quote))  ; OH MY GOD FINALLY
@@ -427,6 +428,18 @@ one thing that has aspect grams.
   (define-syntax-class impl-sc
     #:description "(spec-name:id [impl-name:id])"
     (pattern (spec:id (~optional name:id))  ; TODO ordering...
+             #|
+             ; we can't catch this error here
+             ; spec should be an object? in the current setup
+             ; but I'm not sure how to dereference it or if that
+             ; is even possible during this phase
+             #:fail-when (not
+                          (and (identifier-binding #'spec)
+                               (object? (syntax-e #'spec))))
+                         (format "~a is not a spec, it is a ~a"
+                                 (syntax-e #'spec)
+                                 "TODO types in Racket?!?!")
+             |#
              #:attr type #'measure))
 
 
@@ -479,12 +492,13 @@ one thing that has aspect grams.
 
 (define step%
   (class object%
-    "Step objects. Probably will be broken into impl and spec since there are slightly different needs."
+    (inspect (make-inspector))  ; and this is how to let your objects be not opaque!
     (init name)
     (init [spec this])  ; FIXME this needs to be exracted to an impl class
     (define -name name)
     (define -spec spec)
     (super-new)
+    "Step objects. Probably will be broken into impl and spec since there are slightly different needs."
     (define -impls '())
     (define -vars '())
     (define -inputs '())
@@ -642,6 +656,12 @@ For example use @(def solution (a+b solute solvent))."
                                  (def local-name body) ...
                                  (#%message section.name message) ...))]
 
+                [(_ section:make-sc (~alt (def local-name:id body:expr) message:expr) ... )
+                 #'(begin (if-defined section.name
+                                      (void)
+                                      (define section.name (new step% [name 'section.name])))
+                          (#%message section.name message) ... )]
+
                 #|
                 [(_ section:measure (~alt (def local-name:id body:expr) message:expr) ... )
                  #'(if-defined section.name
@@ -654,8 +674,9 @@ For example use @(def solution (a+b solute solvent))."
                                       (#%message section.name message) ...))]
                 |#
 
-                [(_ section:make-sc (~alt (def local-name:id body:expr) message:expr) ... ) #'"TODO"]
 
+
+                #|
                 [(_ ((~or* #%measure #%actualize) aspect:id -name:id) (~alt (def local-name:id body:expr) message:expr) ...)  ; TODO aspect-name:aspect
                  ; TODO check whether the aspect exists and file the resulting
                  ;  spec as part of it or similar
@@ -684,86 +705,51 @@ For example use @(def solution (a+b solute solvent))."
                                (begin
                                  (define -name (new step% [name '-name]))  ; TODO append % to name -> name% automatically...
                                  (def local-name body.) ...
-                                 (#%message -name message) ...))])])
+                                 (#%message -name message) ...))]
+                |#
+                )])
     (pw output)
     output))
 
 (define-syntax (impl stx)
-  (let ([output 
-  (syntax-parse stx #:literals (impl
-                                #%measure
-                                #%actualize
-                                #%make
-                                add-impl
-                                send quote case
-                                )
-                [(_ section:impl-sc message:impl-spec-body-sc ...)
-                 #'(if-defined section.spec  ; this should be a spec name ; there is not aspect in the impl...
-                               ; TODO default impl name allowed to be the same as the spec?
-                               ;(begin
-                               ;(case (attribute message.type)
-                                 ;[('doc) (send section.impl-name .docstring doc)]
-                                 ;[('quote) (send section.impl-name .echo (quote message.thing))]
-                                 ;[('def) (define message.local-name message.body)]
-                                 ;[('message (#%message section.impl-name (message.name message.body)))]  ; FIXME
-                                 ;[else (raise-syntax-error 'unknown-body-type "we should never get here")]) ... )
-                               (begin
-                                 (if-defined section.name
-                                             (void)
+  (let ([output
+         (syntax-parse stx #:literals (impl
+                                       #%measure
+                                       #%actualize
+                                       #%make
+                                       add-impl
+                                       send quote case
+                                       )
+                       [(_ section:impl-sc message:impl-spec-body-sc ...)
+                        #'(if-defined
+                           section.spec
+                           (begin
+                             (if-defined section.name
+                                         (void)
+                                         (begin
+                                           (when (eq? (quote section.spec)
+                                                      (quote section.name))
                                              (begin
-                                               (when (eq? (quote section.spec)
-                                                          (quote section.name))
-                                                 (begin
-                                                   (printf
-                                                    "WARNING: line ~a: defining the default impl for ~a"
-                                                    (syntax-line section)
-                                                    section.spec)))
-                                               (define section.name (new step%
-                                                                         [name 'section.name]
-                                                                         ; TODO need to decouple
-                                                                         ; into impl% class
-                                                                         ; going to take a bit of
-                                                                         ; thinking for how to do it
-                                                                         [spec 'section.spec]))
-                                               (send section.spec add-impl section.name)
-                                               ))
-                                 (#%message section.name message) ...)
-                               (raise-syntax-error 'impl-before-spec
-                                                   (format
-                                                    "No specifiction exists for ~s. Please create that first."
-                                                    'section.spec)))]
-                ;[(_ section:impl-make-sc body:impl-spec-body-sc ...)
-                 ;#'(define (section.impl-name) body ...)]
-
-                ;[(_ (#%measure aspect:id name:id) body:expr ...)
-                 ;#'(define name (list 'aspect 'measure body ...))]
-                ;[(_ (#%actualize aspect:id name:id) body:expr ...)
-                 ;#'(define name (list 'aspect 'actualize body ...))]
-
-                #|
-                [(_ ((~or* #%measure #%actualize) aspect:id -name:id) message:expr ...) 
-                 #'(if-defined -name
-                               (begin aspect  ; make sure aspect is defined
-                                 (#%message -name message) ...)
-                               (raise-syntax-error 'impl-before-spec
-                                                   (format "No specifiction exists for ~s. Please create that first." '-name)))
-                 ]
-
-                [(_ (#%make -name:id impl-name:id) message:expr ...)
-                 ; TODO something with impl-name...
-                 ; TODO
-                 #'(if-defined -name
-                               (begin (#%message -name message) ...)
-                               (raise-syntax-error 'impl-before-spec
-                                                   (format "No specifiction exists for ~s. Please create that first." '-name)))]
-                |#
-                )])
-                 ;#'(if-defined name
-                               ; TODO this is an improvement, but we really need to enforce spec first
-                               ; because the impl has to look up all the terms from the spec
-                               ; could look into using namespaces? how about modules... :D
-                               ;(set-step-impl! name (list 'being body ...))
-                               ;(define name (step 'name '() (list 'being body ...))))]))
+                                               (printf
+                                                "WARNING: line ~a: defining the default impl for ~a"
+                                                (syntax-line section)
+                                                section.spec)))
+                                           (define section.name (new step%
+                                                                     [name 'section.name]
+                                                                     ; TODO need to decouple
+                                                                     ; into impl% class
+                                                                     ; going to take a bit of
+                                                                     ; thinking for how to do it
+                                                                     [spec section.spec]))
+                                           (send section.spec add-impl section.name)
+                                           ))
+                             ; FIXME (def ... will not quite work as desired here becuase the defines
+                             ; will go into a global namespace
+                             (#%message section.name message) ...)
+                           (raise-syntax-error 'impl-before-spec
+                                               (format
+                                                "No specifiction exists for ~s. Please create that first."
+                                                'section.spec)))])])
     (pw output)
     output))
 
@@ -848,12 +834,12 @@ For example use @(def solution (a+b solute solvent))."
   ;(test-asp (: brain g))  ; FIXME
   (test-asp (: brain g ([volume 5])))
   (test-asp (: brain g ([volume 5] [volume 1000])))
-)
+  )
 
 (module aspects racket/base
   ; It is important to distinguish between aspects as aspects and aspects as units
   ; this is not the ultimate representation that we want for aspects either...
-  
+
   ; TODO I think that types for aspects and beings will help a whole lot and will be much faster to check
   ;  at compile time than at run time...
   ; TODO these need to be reworked to support si prefix notation etc...
@@ -901,7 +887,7 @@ For example use @(def solution (a+b solute solvent))."
   (define M (aspect 'M 'molarity "SI unit of concentration" '(/ mol L)))  ; FIXME HRM... mol/volume vs mol/liter how to support...
   (define _m 1e-3)
   (define mM (aspect 'mM 'milli-molarity "SI unit of weight" '(* _m M)))  ; TODO auto prefix conversion because this is icky
-)
+  )
 (require 'aspects)
 (provide (all-from-out 'aspects)
          (prefix-out : (all-from-out 'aspects))  ; TODO remove these
@@ -912,18 +898,18 @@ For example use @(def solution (a+b solute solvent))."
   (define aspect 'aspects-need-to-be-defined-beforehand)
   (define-values (a1 a2 a3) (values 'a1 'a2 'a3))
   (define-values (;a at
-                    atv aaaa)
+                  atv aaaa)
     (values ;(: aspect)
-            ;(: thing aspect)  ; FIXME
-            (: thing aspect 'value)
-            (: thing a2 ([a1 1] [a3 3]))
-            ; (: thing ([a1 1] a2 [a3 3])) ; fails as expected
-            ))
+     ;(: thing aspect)  ; FIXME
+     (: thing aspect 'value)
+     (: thing a2 ([a1 1] [a3 3]))
+     ; (: thing ([a1 1] a2 [a3 3])) ; fails as expected
+     ))
   (spec (*: g weigh) ;(#%measure :g weigh)
         (.invariant (< 0.01 (error g))))
 
   ;(spec (#%actualize mass cut-down-to-size)
-        ;(.vars final-weight))
+  ;(.vars final-weight))
 
   ; FIXME (begin (define complaints :/
   ;(define cut-down-to-size (new step% [name 'cut-down-to-size]))
@@ -946,6 +932,7 @@ For example use @(def solution (a+b solute solvent))."
                  solute ...)
         )
 
+  #|
   (spec (#%make solution)  ; TODO keywords... #:id id for global ids for steps need a good uid system
         (.vars final-volume)
         (.inputs
@@ -954,6 +941,7 @@ For example use @(def solution (a+b solute solvent))."
          (> (: beaker volume) final-volume)
          solute ...)
         )
+  |#
   (impl (solution way0)
         'no
         'steps
@@ -982,9 +970,6 @@ For example use @(def solution (a+b solute solvent))."
   (displayln cut-down-to-size)
   (displayln solution)
   )
-
-(define asdf 'hahaha)
-(define lol 'heu)
 
 (module+ test
   (run-tests)
