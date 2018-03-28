@@ -419,25 +419,38 @@ one thing that has aspect grams.
     (pattern (** name:id)
              #:attr type #'make))
 
-  (define-syntax-class impl-make-sc
-    #:description "(** thing-name:id impl-name:id)"
-    #:literals (**)
-    (pattern (** name:id impl-name:id)))
+  ;(define-syntax-class impl-make-sc
+    ;#:description "(** thing-name:id impl-name:id)"
+    ;#:literals (**)
+    ;(pattern (** name:id impl-name:id)))
+
+  (define-syntax-class impl-sc
+    #:description "(spec-name:id [impl-name:id])"
+    (pattern (spec:id (~optional name:id))  ; TODO ordering...
+             #:attr type #'measure))
+
 
   (define-syntax-class def-sc
     #:description "(def name:id body:expr)"
     #:literals (def)
-    (pattern (def local-name:id body:expr)))
+    )
 
   (define-syntax-class message-sc
-    #:literals (quote)
-    (pattern doc:str)
-    (pattern (quote thing))
-    (pattern (name:id body:expr)))
+    #:literals (quote def)
+    (pattern doc:str
+             #:attr type 'doc)
+    (pattern (quote thing)
+             #:attr type 'quote
+             )
+    (pattern (def local-name:id body:expr)
+             #:attr type 'def)
+    (pattern (name:id body ...)  ; #%message handles the type on body and needs ellipis
+             #:attr type 'message))
 
   (define-syntax-class impl-spec-body-sc
     (pattern
      (~or* definition:def-sc message:message-sc)
+
      ;(~seq def:def-sc ...)
      ;(~seq message:message-sc ...)
      ;#:attr defs #'(definition ...)
@@ -468,8 +481,11 @@ one thing that has aspect grams.
   (class object%
     "Step objects. Probably will be broken into impl and spec since there are slightly different needs."
     (init name)
+    (init [spec this])  ; FIXME this needs to be exracted to an impl class
     (define -name name)
+    (define -spec spec)
     (super-new)
+    (define -impls '())
     (define -vars '())
     (define -inputs '())
     (define -invariants '())
@@ -481,6 +497,7 @@ one thing that has aspect grams.
       (if (null? doc)
           docstring
           (begin (set! docstring (string-append docstring doc)) docstring)))
+    (define/public (add-impl impl) (set! -impls (cons impl -impls)))
     (define/public (def . things) 'pls-go)  ; FIXME this should not be here :/
     (define/public (.delegate . things) (void))  ; TODO! local to global lifting for this is probably appropriate
     (define/public (.identifier id) id)  ; TODO make it possible to add these dynamically, probably by spinning up a child class...
@@ -600,6 +617,7 @@ For example use @(def solution (a+b solute solvent))."
      #'(define name (quote body))]))
 
 (define name #''placeholder-for-class-syntax)
+(define add-impl #''placeholder-for-class-syntax)
 
 (define-syntax (spec stx)
     ; (spec (measure (aspect g) weigh) ...)
@@ -612,29 +630,31 @@ For example use @(def solution (a+b solute solvent))."
                                 ; delegate
                                 def)
 
-                [(_ (~or* type:actualize-sc type:measure-sc) (~alt (def local-name:id body:expr) message:expr) ... )
-                 #'(if-defined type.name  ; that extra set of parents though...
-                               (begin type.aspect
+                [(_ (~or* section:actualize-sc section:measure-sc) (~alt (def local-name:id body:expr) message:expr) ... )
+                 #'(if-defined section.name  ; that extra set of parents though...
+                               (begin section.aspect
+                                      ; TODO validate types
+                                      ;(class? )
                                       (def local-name body) ...
-                                      (#%message type.name message) ...)
-                               (begin type.aspect
-                                 (define type.name (new step% [name 'type.name]))
+                                      (#%message section.name message) ...)
+                               (begin section.aspect
+                                 (define section.name (new step% [name 'section.name]))
                                  (def local-name body) ...
-                                 (#%message type.name message) ...))]
+                                 (#%message section.name message) ...))]
 
                 #|
-                [(_ type:measure (~alt (def local-name:id body:expr) message:expr) ... )
-                 #'(if-defined type.name
-                               (begin type.aspect  ; check to make sure the aspect has been defined
+                [(_ section:measure (~alt (def local-name:id body:expr) message:expr) ... )
+                 #'(if-defined section.name
+                               (begin section.aspect  ; check to make sure the aspect has been defined
                                       (def local-name body) ...
-                                      (#%message type.name message) ...)
-                               (begin type.aspect
-                                      (define type.name (new step% [name 'type.name]))  ; TODO append % to name -> name% automatically...
+                                      (#%message section.name message) ...)
+                               (begin section.aspect
+                                      (define section.name (new step% [name 'section.name]))  ; TODO append % to name -> name% automatically...
                                       (def local-name body) ...
-                                      (#%message type.name message) ...))]
+                                      (#%message section.name message) ...))]
                 |#
 
-                [(_ type:make-sc (~alt (def local-name:id body:expr) message:expr) ... ) #'"TODO"]
+                [(_ section:make-sc (~alt (def local-name:id body:expr) message:expr) ... ) #'"TODO"]
 
                 [(_ ((~or* #%measure #%actualize) aspect:id -name:id) (~alt (def local-name:id body:expr) message:expr) ...)  ; TODO aspect-name:aspect
                  ; TODO check whether the aspect exists and file the resulting
@@ -673,17 +693,54 @@ For example use @(def solution (a+b solute solvent))."
   (syntax-parse stx #:literals (impl
                                 #%measure
                                 #%actualize
-                                #%make)
-                [(_ (~or* type:actualize-sc type:measure-sc) body:impl-spec-body-sc ...)
-                 #'(type.type type.aspect type.name)]
-                [(_ type:impl-make-sc body:impl-spec-body-sc ...)
-                 #'(define (type.impl-name) body ...)]
+                                #%make
+                                add-impl
+                                send quote case
+                                )
+                [(_ section:impl-sc message:impl-spec-body-sc ...)
+                 #'(if-defined section.spec  ; this should be a spec name ; there is not aspect in the impl...
+                               ; TODO default impl name allowed to be the same as the spec?
+                               ;(begin
+                               ;(case (attribute message.type)
+                                 ;[('doc) (send section.impl-name .docstring doc)]
+                                 ;[('quote) (send section.impl-name .echo (quote message.thing))]
+                                 ;[('def) (define message.local-name message.body)]
+                                 ;[('message (#%message section.impl-name (message.name message.body)))]  ; FIXME
+                                 ;[else (raise-syntax-error 'unknown-body-type "we should never get here")]) ... )
+                               (begin
+                                 (if-defined section.name
+                                             (void)
+                                             (begin
+                                               (when (eq? (quote section.spec)
+                                                          (quote section.name))
+                                                 (begin
+                                                   (printf
+                                                    "WARNING: line ~a: defining the default impl for ~a"
+                                                    (syntax-line section)
+                                                    section.spec)))
+                                               (define section.name (new step%
+                                                                         [name 'section.name]
+                                                                         ; TODO need to decouple
+                                                                         ; into impl% class
+                                                                         ; going to take a bit of
+                                                                         ; thinking for how to do it
+                                                                         [spec 'section.spec]))
+                                               (send section.spec add-impl section.name)
+                                               ))
+                                 (#%message section.name message) ...)
+                               (raise-syntax-error 'impl-before-spec
+                                                   (format
+                                                    "No specifiction exists for ~s. Please create that first."
+                                                    'section.spec)))]
+                ;[(_ section:impl-make-sc body:impl-spec-body-sc ...)
+                 ;#'(define (section.impl-name) body ...)]
 
                 ;[(_ (#%measure aspect:id name:id) body:expr ...)
                  ;#'(define name (list 'aspect 'measure body ...))]
                 ;[(_ (#%actualize aspect:id name:id) body:expr ...)
                  ;#'(define name (list 'aspect 'actualize body ...))]
 
+                #|
                 [(_ ((~or* #%measure #%actualize) aspect:id -name:id) message:expr ...) 
                  #'(if-defined -name
                                (begin aspect  ; make sure aspect is defined
@@ -691,14 +748,16 @@ For example use @(def solution (a+b solute solvent))."
                                (raise-syntax-error 'impl-before-spec
                                                    (format "No specifiction exists for ~s. Please create that first." '-name)))
                  ]
-;
+
                 [(_ (#%make -name:id impl-name:id) message:expr ...)
                  ; TODO something with impl-name...
                  ; TODO
                  #'(if-defined -name
                                (begin (#%message -name message) ...)
                                (raise-syntax-error 'impl-before-spec
-                                                   (format "No specifiction exists for ~s. Please create that first." '-name)))])])
+                                                   (format "No specifiction exists for ~s. Please create that first." '-name)))]
+                |#
+                )])
                  ;#'(if-defined name
                                ; TODO this is an improvement, but we really need to enforce spec first
                                ; because the impl has to look up all the terms from the spec
@@ -868,14 +927,16 @@ For example use @(def solution (a+b solute solvent))."
 
   ; FIXME (begin (define complaints :/
   ;(define cut-down-to-size (new step% [name 'cut-down-to-size]))
-  (println 'debug-0)
   (spec (:* mass cut-down-to-size) ;(#%actualize :mass cut-down-to-size)
         (.vars final-weight))
 
   (spec (actualize mass cut-down-to-size)
+        ; TODO there is no issue with having multiple different specifications with the same name
+        ; since they all point to the same underlying object
+        ; HOWEVER we probably do need to warn people that they cannot overwrite
+        ; and we need to error in cases where there are conflicts
         (.vars final-weight))
 
-  (println 'debug-1)
   (spec (** solution) ;(#%make solution)
         (.vars final-volume)
         (.inputs [solvent (= solvent :volume final-volume)]
@@ -893,23 +954,23 @@ For example use @(def solution (a+b solute solvent))."
          (> (: beaker volume) final-volume)
          solute ...)
         )
-  (impl (** solution way0)
+  (impl (solution way0)
         'no
         'steps
         'here!)
-  (impl (#%make solution way1)
+  (impl (solution way1)
         ;implicit order
         'step-0
         'step-1
         'step-2
         )
-  (impl (#%make solution way2)
+  (impl (solution way2)
         ; no dependencies
         (.order
          'another-thing-without-obvious-order
          'thing-without-obvious-order
          ))
-  (impl (#%make solution way3)
+  (impl (solution way3)
         ; with input/output dependencies (may not need)
         (.order+
          'another-thing-without-obvious-order
