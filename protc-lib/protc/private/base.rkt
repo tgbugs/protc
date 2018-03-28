@@ -3,6 +3,7 @@
                      racket/pretty
                                 ))
 
+
 (require (for-syntax racket/base
                      ;racket/class
                      syntax/parse)
@@ -21,6 +22,14 @@
          ;(for-meta 4 racket/base)
          )
 
+(require "syntax-classes.rkt"  ; vs protc/private/syntax-classes
+         "utils.rkt"
+         (for-meta -1 protc/private/syntax-classes)
+         (for-syntax protc/private/syntax-classes
+                     (only-in "utils.rkt" name-join))
+         (for-template protc/private/syntax-classes)
+         )
+
 (provide spec impl :
          ;(rename-out [#%make make] [#%measure measure] [#%actualize actualize])
          ;#%make
@@ -29,7 +38,7 @@
          ; for utility, should not be required by base... probably need to reorganize
          :* *: **
          actualize measure make
-         (for-syntax name-join)
+         ;(for-syntax name-join)
          )
 
 (module+ other
@@ -237,21 +246,6 @@
 ; def *being-name*
 ; def function  ; juse reuse define...
 
-(module utility racket/base
-    ; TODO this is not working yet
-  (require (for-syntax racket/base syntax/parse))
-  (define-syntax (simple-syntax outer-stx)
-    (syntax-parse outer-stx
-      [(simple-syntax (name:id stx-expr) body:expr)
-       #'(define-syntax (name stx)
-           (syntax-parse stx
-             [(stx-expr)
-              body]
-             ))]))
-  (provide simple-syntax))
-
-;(require 'utility (for-syntax 'utility))
-
 '(define-measure aspect-name spec-name-or-use-_-for-generic #:type 'non-destructive #:uses)
 '(define-actualize aspect-name spec-name-or-use-_-for-generic #:type 'non-destructive #:uses)
 
@@ -291,7 +285,7 @@
      #'(define name (list body))  ; simple for now
      ]))
 
-(define-syntax (define-message outer-stx)
+(define-syntax (-define-message outer-stx) ; dead
   (syntax-parse outer-stx
     [(define-message (name:id spec) body:expr)  ; TODO spec:message-spec
      #'(define-syntax (.name stx)  ; may need to use syntax->datum to add the .
@@ -299,200 +293,89 @@
            [(_ spec)
             #'()]))]))
 
+(define-syntax (define-message stx)
+  (syntax-parse stx
+    #:literals (begin
+                pattern
+                define-syntax-class)
+    [(_ mess:message-struct-sc body-syntax-template)
+     #'(begin
+         (define-syntax-class mess.sc-name
+           ; TODO add the dot out front ala .message-name
+           (pattern ((mess.name mess.body-pattern ...))))
+         ;(impl-spec-add-message message-name #'local-sc-name)  ; TODO more args here
+         (define-syntax (mess.name stx-i)
+           (syntax-parse stx-i
+             [(_ mess.body-pattern ...)
+              ; can't use the syntax class from above
+              ; because then the references would be mymess.thing-defined-template
+              ; and we don't want to have to write #'(mymess.thing) in the template
+              body-syntax-template
+              ]))
+         (provide mess.name mess.sc-name)
+         )]))
+
+(define-message (vars free-variable:id ...)
+  ; and then we can use write a macro that wraps parameterize
+  #'(λ () (define free-variable (make-parameter null)) ... (void)))  ; FIXME nothunks?
+
+(define-message (inputs local-name:id ... aspect-expr:asp ... (~optional ....))  ; FIXME asp-exp instead?
+  #'(λ () (define local-name 'TODO-some-real-thing) ...  ; FIXME no thunks, need to figure out what causes begin to fail
+       ; the alternative here is to use let instead.... (let ([local-name 'some-thing-TODO] ...) future-body)
+           ; FIXME need a better way to check if the name exists
+           aspect-expr.aspects ... ; asp has nested
+           ;aspect-expr.aspect-value ... ...
+           (define aspect-expr.thing 'TODO-some-real-thing) ...
+           ; TODO inject the invairants...
+           (println (list local-name ... aspect-expr.thing ...))
+           (void)))
+
+(define-message (invariant body:expr)
+  #''(rosette-assert body))
+
+(define-message (order step ...)  ; FIXME should be step:id
+  #'(list step ...))
+
+(define-message (order+ step ...)
+  #'(list 'compose step ...))  ; TODO
+
+(define-message (identifier (~seq type ident) ...)
+  ; FIXME figure out the best syntax and move on
+  ; KISS for these things, no alternate forms
+  #''((type . ident) ...))
+
+(define dc-list '())
+
+(define (delegated-concepts . rest)
+  (if (null? rest)
+      dc-list
+      (set! dc-list (append rest dc-list))
+      ))
+
+(define (ont-term curie)
+  ; TODO heh
+  curie)
+
+(provide delegated-concepts ont-term)
+
+(define-message (delegate (~seq concept (~optional ident)) ...)
+  ; FIXME executor
+  #'(λ ()
+      (define concept (if ident ident (symbol->string (syntax->datum concept)))) ...
+      (delegated-concepts concept ...)
+      (displayln delegated-concepts)
+      ))
+
 ; *aspect says I'm going to measure this (measure aspect)
 ; aspect* says I'm going to actualize this (actualize aspect)
 ; aspect says I'm going to define this based on other aspects (define aspect)
 ;  or define it as a fundamental quantity aspect, id something like the kilogram
 ;  all other actual measurement devices used in *aspect sections
 
-;(define-syntax-class section-header
-;  (pattern (_?-or-aspect-name ) ))
-
-(module protc-syntax-classes racket/base
-
-  (module prims racket/base
-    (require syntax/parse (for-syntax racket/base syntax/parse))
-    (provide (all-defined-out)
-             (rename-out [:* actualize]
-                         [*: measure]
-                         [** make]))
-    (define-syntax (: stx)
-      "thing-aspect binding operator"
-      ;"an intermediate step toward thing :aspect value is (: aspect thing value) and :aspect is (: aspect)"
-      ; another goldmine https://docs.racket-lang.org/syntax/stxparse-patterns.html
-      ; TODO nesting?? hard to translate thing :a1 v1 :a2 :a3 v2 with only one reference to thing
-      ; lol not really (: thing ([a1 v1] a2 [a3 v2]) vs [a2]
-      (syntax-parse stx
-        ;[(_ thing:id ((~or [aspect:id value] lonely-aspect:id) ...))
-        ;#'(list thing aspect ... value ... lonely-aspect ...)] 
-        [(_ thing:id lonely-aspect:id ... ([aspect:id value] ...)); a more consistent approach
-         ; TODO the context where this occurs is going to really affect how this is interpreted...
-         ; so leave it as is for now
-         #'(list thing lonely-aspect ... (cons aspect value) ...)]
-        [(_ thing:id aspect:id value)
-         #'(list thing (cons aspect value))]
-        [(_ thing:id aspect:id)
-         #'(list thing aspect)]))
-
-    (define-syntax (*: stx)
-      "measure-aspect binding"
-      (syntax-parse stx
-        [(_ measure-name:id aspect:id)
-         #'(list measure-name aspect)]))
-
-    (define-syntax (:* stx)
-      "actualize-aspect binding
-This is very useful for specifying a new actulization procedure and also for saying clearly
-\"This is the actualization procedure that I intend to use.\"
-
-The two ways that this could go are (:* my-actualization-procedure g) or (: my-actualization-procedure)
-or even just (:* my-actualization-procedure) though that is unlikely to work in cases where there is more than
-one thing that has aspect grams.
-"
-      (syntax-parse stx
-        [(_ actualize-name:id aspect:id)
-         #'(list actualize-name aspect)]))
-
-    (define-syntax (** stx)  ; FIXME not sure we need or want this...
-      "make section indicator"
-      (syntax-parse stx
-        [(_ make-name:id)
-         #'(list make-name)]))
-
-    (define-syntax (def stx)
-      (syntax-parse stx
-        [(_ name:id body:expr)
-         #'(define name body)]))
-
-  )
-
-  (require syntax/parse
-           (only-in racket/class class? object?)
-           'prims
-           (for-syntax 'prims racket/base syntax/parse)
-           (for-meta -1 'prims (only-in racket/base quote))  ; OH MY GOD FINALLY
-           )
-  (provide (except-out (all-defined-out) -asp)
-           (all-from-out 'prims))
-  ;(provide (except-out (all-defined-out) :))
-
-  ;(define-for-syntax : 'you)
-
-  (define-syntax-class -asp
-    ; NOTE we do not need this form anymore, it is more consistent to refer to unbound aspects without the colon
-    ; so for example if I want to spec a measure for grams I would (spec (*: g)) which is much clearer
-    #:description "(: aspect:id)"
-    #:literals (:)
-    (pattern (: aspect:id)))
-
-  (define-syntax-class asp
-    #:description "(: thing:id lonely-aspect:id ... ([aspect:id value] ...))"
-    #:literals (:)
-    ;(pattern (: thing:id aspect-value:id value))  ; normally only want (t a v) but (t a a a a v) is more consistent
-    ;(pattern (: thing:id aspect-l:id ...))
-    ;(pattern (: thing:id (~optional aspect:id ...) (~optional ([aspect-value:id value] ...))))
-    ;(pattern (: thing:id aspect:id ... (~optional ([aspect-value:id value] ... ))))
-    (pattern (: thing:id aspect:id ... ([aspect-value:id value] ...)))
-    ;(pattern (: thing:id aspect:id ...))
-    ;(pattern (: thing:id (~seq aspect:id value) ...))
-    )
-  ;(pattern (: thing:id lonely-aspect:id ... ([aspect:id value] ...))))
-
-  (define-syntax-class are-you-kidding-me
-    #:literals (:)
-    (pattern (: (~seq aspect:id value) ...)))  ; yay for ~seq :)
-
-  (define warning-string
-    "WARNING: ~a already bound! Modifying an existing spec. Duplicate starts on line ~a\n")
-
-  (define-syntax-class actualize-sc
-    #:description "(:* aspect:id section-name:id)"
-    #:literals (:* actualize)
-    (pattern ((~or* :* actualize) aspect:id name:id)
-             #:do ((when (identifier-binding #'name)
-                    (printf warning-string
-                     (syntax-e #'name)
-                     (syntax-line #'name))))
-             #:attr type #'actualize))
-
-  (define-syntax-class measure-sc
-    #:description "(*: aspect:id section-name:id)"
-    #:literals (*: measure)
-    (pattern ((~or* *: measure) aspect:id name:id)
-             #:do ((when (identifier-binding #'name)
-                    (printf
-                     warning-string
-                     (syntax-e #'name)
-                     (syntax-line #'name))))
-             #:attr type #'measure))
-
-  (define-syntax-class make-sc
-    ; TODO not clear what the most consistent way to do this is
-    ; bind a name for a new black box VS specify how to make it???
-    #:description "(** thing-name:id)"
-    #:literals (** make)
-    (pattern ((~or* ** make) name:id)
-             #:do ((when (identifier-binding #'name)
-                    (printf
-                     warning-string
-                     (syntax-e #'name)
-                     (syntax-line #'name))))
-             #:attr type #'make))
-
-  (define-syntax-class impl-sc
-    #:description "(spec-name:id [impl-name:id])"
-    (pattern (spec:id (~optional -name:id))  ; TODO ordering...
-             ; maybe at some point revisit fail-when? (see 238ca3559)
-             #:attr name (if (attribute -name) #'-name #'spec)
-             #:attr type #'measure))
 
 
-  (define-syntax-class def-sc
-    #:description "(def name:id body:expr)"
-    #:literals (def)
-    (pattern (def name:id body:expr)))
 
-  (define-syntax-class message-sc
-    #:literals (quote def)
-    (pattern doc:str
-             #:attr type 'doc)
-    (pattern (quote thing)
-             #:attr type 'quote
-             )
-    (pattern l-def:def-sc
-             #:attr name #'l-def.name
-             #:attr body #'l-def.body
-             #:attr type 'def)
-    (pattern (name:id body ...)  ; #%message handles the type on body and needs ellipis
-             #:attr type 'message))
 
-  (define-syntax-class impl-spec-body-sc
-    (pattern
-     (~or* definition:def-sc message:message-sc)
-
-     ;(~seq def:def-sc ...)
-     ;(~seq message:message-sc ...)
-     ;#:attr defs #'(definition ...)
-     ;#:attr messages #'(message ...)
-     )))
-
-(require 'protc-syntax-classes 
-         (for-syntax 'protc-syntax-classes))
-
-(module utils racket/base
-  (require (for-syntax racket/base))
-  (provide (all-defined-out))
-  (define-syntax (if-defined stx)
-    (syntax-case stx ()
-      [(_ id iftrue iffalse)
-       (let ([where (identifier-binding #'id)])
-         (if where #'iftrue #'iffalse))]))
-  )
-
-(require 'utils
-         ;(for-meta 1 'utils)
-         ;(for-meta 2 'utils)
-         )
 
 (struct step (name [spec #:mutable] [impl #:mutable]) #:inspector #f); #:mutable #t)
 
@@ -557,7 +440,10 @@ one thing that has aspect grams.
 
 ; message preprocessing boom extensiblity
 (module message-proc racket/base
+  ; TODO redefine all of these as syntax classes
+  ; using a define-message macro
   (require (for-syntax racket/pretty racket/base syntax/parse))
+  (require "syntax-classes.rkt" (for-syntax "syntax-classes.rkt"))
   (provide (all-defined-out))
   (define-for-syntax (pw stx)
     (when #f (display "syntax: ") (pretty-write (syntax->datum stx))))
@@ -586,10 +472,13 @@ one thing that has aspect grams.
     ;(pw stx)
     (syntax-parse stx
       #:literals (....)  ; FIXME ... not ....
-      [(_ local-name:id ... [local-name-inv:id invariant:expr] ... ....)  ; FIXME this needs its own syntax class
-       #'(λ (thunk)  ; FIXME we need to be able to inject these names into a closure
-           (define local-name 'thing-1) ...
-           (define local-name-inv 'thing-2) ...
+      [;(_ local-name:id ... [local-name-inv:id invariant:expr] ... .... )  ; FIXME this needs its own syntax class
+       (_ local-name:id ... aspect-expression:asp ...)
+       #'(λ ()  ; FIXME we need to be able to inject these names into a closure
+           ; FIXME messages probably need to be syntax classes
+           ; so that input.name ... can be accessed from outside
+           (define local-name 'should-be-a-class?) ...
+           (define aspect-expression.thing 'should-be-a-class?) ...
            (void))]))
 
   (define-syntax (#%.output stx) (pw stx) #''output)  ; FIXME probably should not be done the way that requires this... the name in the make should be the output...
@@ -632,17 +521,13 @@ one thing that has aspect grams.
             ; this will throw weird errors if a quoted expression is in the body... probably need to fix
             (with-syntax ([process-message (name-join "#%" #'message-name stx)])
               ; FIXME we need to be able to define here! .inputs specifically :/
-              #'(send target message-name (process-message message-body ...)))])])
+              ;#'(send target message-name (process-message message-body ...)))])])
+              #'(send target message-name (message-name message-body ...))  ; TODO error handling here so we can get line numbers
+              )])])
         (pw output)
         output))
 
-(define-for-syntax (name-join prefix suffix stx)
-  (datum->syntax stx  ; if this is false then everything becomes unrooted and I go looking through 5 phase levels to find the problem
-   (string->symbol
-    (string-append prefix (symbol->string
-                           (syntax->datum suffix))))))
-
-(define-syntax (def stx)
+(define-syntax (--def stx)  ; dead
   "Define a local identifier using a single expression.
 For example use @(def solution (a+b solute solvent))."
   (syntax-parse stx
@@ -813,13 +698,21 @@ For example use @(def solution (a+b solute solvent))."
   ;#'a.aspect])
 
   (syntax-parse #'(: my-thing g ([volume 10])) [a:asp
-                                                #'(a.thing a.aspect ... [a.aspect-value a.value] ... )])
+                                                ;#'(a.thing a.aspect ... [a.aspect-value a.value] ... )
+                                                #'(a.thing a.aspects a.values)
+                                                ])
   (syntax-parse #'(: my-thing g kg mM ([volume 10] [voltage 9999]))
-    [a:asp #'(a.thing a.aspect ... a.aspect-value ... a.value ... )])
+    [a:asp
+     ;#'(a.thing a.aspect ... a.aspect-value ... a.value ... )
+     #'(a.thing a.aspects a.values)
+     ])
   (syntax-parse #'(: my-thing g kg mM ([volume 10] [voltage 9999]))
-    [a:asp #'(a.thing a.aspect ... (a.aspect-value a.value) ... )])
-  (syntax-parse #'(: my-thing g ([volume 10])) [a:asp #'(a.aspect ...)])
-  (syntax-parse #'(: my-thing g g g g g ([volume 10])) [a:asp #'(a.aspect ...)])
+    [a:asp
+     ;#'(a.thing a.aspect ... (a.aspect-value a.value) ... )
+     #'(a.thing a.aspects a.values)
+     ])
+  (syntax-parse #'(: my-thing g ([volume 10])) [a:asp #'a.aspects ])
+  (syntax-parse #'(: my-thing g g g g g ([volume 10])) [a:asp #'a.aspect ])
 
   g
   (: my-thing g)
@@ -828,7 +721,8 @@ For example use @(def solution (a+b solute solvent))."
     (syntax-parse stx
       [(_ a:asp)
        ;#'(list a.aspect ... )]
-       #'(list a.thing a.aspect ... (list a.aspect-value a.value) ...)]
+       ;#'(list a.thing a.aspect ... (list a.aspect-value a.value) ...)
+       #'(list a.aspects a.values)]
       ))
 
   ;(test-asp (: g))  ; no longer relevant
@@ -862,11 +756,14 @@ For example use @(def solution (a+b solute solvent))."
 
   ;(define :scalar () ()) ??
   (define count (aspect 'count 'count "How many?" fq))  ; discrete continuous
+  (define % (aspect '% 'percent "portion out of 100" count))  ; FIXME ratio
   (define mass (aspect 'mass 'mass "The m in e = mc^2" fq))
   (define energy (aspect 'energy 'energy "hoh boy" fq))  ; TODO synonyms... distance...
   (define length-aspect (aspect 'length 'length "hoh boy" fq))
   (define time-aspect (aspect 'time 'time "tick tock" fq))
   (define temperature (aspect 'temp 'temperature "hot cold" fq))
+  ; FIXME charge is actually NOT fundamental either... it is the count of the number of electrons
+  ; times the elementary charge (heh)
   (define charge (aspect 'Q 'charge "hoh boy" fq))  ; why is it current??? http://amasci.com/miscon/fund.html
 
   (define dq (aspect 'dq 'derived-quantity "A quantity derived from some other quantity" 'root))
@@ -881,12 +778,15 @@ For example use @(def solution (a+b solute solvent))."
 
   (define mol (aspect 'mol 'mole "HRM" count))
 
+  (define _m 1e-3)
+
   (define l (aspect 'l 'liters "SI unit of volume" volume))
   (define L l)  ; TODO alternate forms that also have 'L as the short name (for example)
+  (define ml (aspect 'ml 'milli-liters "very small liters" '(* _m l)))  ; FIXME all of this needs to be done in rosette
+  (define mL ml)
   (define g (aspect 'g 'grams "SI unit of weight" mass))
 
   (define M (aspect 'M 'molarity "SI unit of concentration" '(/ mol L)))  ; FIXME HRM... mol/volume vs mol/liter how to support...
-  (define _m 1e-3)
   (define mM (aspect 'mM 'milli-molarity "SI unit of weight" '(* _m M)))  ; TODO auto prefix conversion because this is icky
   )
 (require 'aspects)
@@ -906,6 +806,10 @@ For example use @(def solution (a+b solute solvent))."
      (: thing a2 ([a1 1] [a3 3]))
      ; (: thing ([a1 1] a2 [a3 3])) ; fails as expected
      ))
+
+  (.identifier DOI: 10.1234/hello.world PMID: 1234567)
+  ((.inputs a b c))
+  
   (spec (*: g weigh) ;(#%measure :g weigh)
         (def bob 'hello?)
         (.invariant (< 0.01 (error g))))
@@ -923,11 +827,20 @@ For example use @(def solution (a+b solute solvent))."
   (spec (** solution) ;(#%make solution)
         (.vars final-volume)
         (.inputs solute   ; FIXME allow arbitrary order
-                 [solvent (= solvent :volume final-volume)]
+                 ;[solvent (= solvent :volume final-volume)]
+                 ;[: solvent (= volume final-volume)]
+                 [: solvent ([volume final-volume])]  ; TODO asp-exp
+
                  ;(with-invariants [(> :volume final-volume)] beaker)
                  ;comm for testing;[beaker (> :volume final-volume)]  ; this is super nice for lisp; beaker :volume > final-volume possible
                  ;comm for testing;[beaker (> beaker :volume final-volume)]
-                 [beaker (> (: _ volume) final-volume)]  ; FIXME how to bind beaker implicitly?
+                 ;[beaker (> (: _ volume) final-volume)]  ; FIXME how to bind beaker implicitly?
+                 [: beaker ([volume final-volume])]  ; TODO asp-exp
+                 ;[: beaker (volume final-volume)]  ; basic equality but in theory could extend...
+                 ;(: beaker [= volume final-volume])  ; more consistent syntax also [] vs ()
+                 ;(: beaker (> volume final-volume))
+                 ;(: beaker [> volume final-volume])
+                 ;[: beaker [> volume final-volume]]  ; <- this one!
                  ....)
         )
 
