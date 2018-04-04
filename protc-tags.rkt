@@ -18,7 +18,7 @@
          "Input, Adobe Photoshop CS4 software (Adobe Systems, San Jose, CA)")
 (tag-doc 'RRIDCUR:Missing 'ilxtr:identifier
          "Tried to find the `protc:input` but could not and need to bug the authors")
-(tag-doc 'TODO 'nil
+(tag-doc 'TODO '()
          "A note to come back to this block and work on it more thoroughly")
 (tag-doc 'mo:analysis 'ilxtr:technique
          "a large chunk of text that talks about how data were analyized (as opposed to collected)")
@@ -38,7 +38,7 @@
          "Detailed description involving the desired outcome, probably should be `protc:objective*`.")
 (tag-doc 'mo:technique 'ilxtr:technique
          "Simple, concise verbs describing procedure (that you can learn)")
-(tag-doc 'protc:*make* '(ilxtr:deprecatedTag protc:output)
+(tag-doc 'protc:*make* '(ilxtr:deprecatedTag ilxtr:participant)
          "Descriptions of how to set up the lab environment (microscope, etc) or a specific input. See also `protc:output`, `protc:input` [3-15-18 This is an old usage, should be replaced by protc:output and protc:input if it is also used within the protocol (it usually is).]")
 (tag-doc 'protc:*measure '(ilxtr:measure ilxtr:aspect)
          "Takes `protc:input`s. Returns a `protc:symbolic-output`. The name of the subset of the world that we are interested in producing a number about?? [stick to the function name version of this?] [3-15-18: The actual text of most of these are aspects. From the text it is clear that they are aspects that are intended to be measured. The correct way to model these is probably with protc:aspect + protc:*measure] ")
@@ -58,7 +58,7 @@
          "Similar to `protc:executor-verb` but usually operating at a higher level, instructions given without enough background or context since the executor is expected to know what they mean")
 (tag-doc 'protc:executor-verb 'ilxtr:executorSemantics
          "error: actions without enough detailed instructions to be executed, might be described elsewhere, however the person running the protocol is expected to know what this means.")
-(tag-doc 'protc:function '(ilxtr:deprecated-tag ilxtr:aspect)
+(tag-doc 'protc:function '(ilxtr:deprecatedTag ilxtr:aspect)
          "Prefer `protc:symbolic-measure` which makes more sense in the context of `protc:*measure`. Usually an analysis function that converts data -> data. [3-15-18: The text that these target are usually apsects, often complex aspects that must be measured on symbolic inputs. The proper way to tag them is probably as protc:aspect ilxtr:hasInformationInput with the text box holding links to the intput?]")
 (tag-doc 'protc:how '(ilxtr:implementation ilxtr:compoundTechnique)
          "Specific details and descriptions of ways to perform each step.")
@@ -82,9 +82,9 @@
          "error: no criteria defined, the referent is nowhere to be found in the paper")
 (tag-doc 'protc:objective* '(ilxtr:parameter ilxtr:goal)
          "An ill-defined parameter. Goal of the steps outlined [compare 'cryoprotectant' with 'bath changing times were minimized' >> maybe we need to distinguish instructions from goals? how vs nature of what?]")
-(tag-doc 'protc:operator '()
+(tag-doc 'protc:operator '(ilxtr:symbolicFunction)
          "Steps involving addition, division, subtraction, multiplication.")
-(tag-doc 'protc:order '()
+(tag-doc 'protc:order '(protc:control-flow)
          "Prepositions about time and organizing steps.")
 (tag-doc 'protc:output 'ilxtr:participant
          "What is obtained from the procedure, specifically physical objects")
