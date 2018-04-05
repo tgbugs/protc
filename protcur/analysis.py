@@ -5,6 +5,7 @@ import re
 import ast
 from collections import Counter
 from IPython import embed
+from protcur.core import atag, deltag
 from pyontutils.hierarchies import creatTree
 from pyontutils.utils import async_getter, noneMembers, allMembers, anyMembers
 from pyontutils.core import makeGraph, makePrefixes
@@ -93,8 +94,8 @@ def readTagDocs():
 
 tag_prefixes = 'ilxtr:', 'protc:', 'mo:', 'annotation-'
 def justTags():
-    for tag in sorted(readTagDocs().keys()):
-        if anyMembers(tag, *tag_prefixes):
+    for tag, doc in sorted(readTagDocs().items()):
+        if anyMembers(tag, *tag_prefixes) and not doc.deprecated:
             yield tag
 
 def addDocLinks(base_url, doc):
@@ -397,14 +398,15 @@ class Hybrid(HypothesisHelper):
                 child.hasAstParent = True  # FIXME called every time :/
                 yield child  # buildAst will have a much eaiser time operating on these single depth childs
 
-    def __repr__(self, depth=0, cycle=None):
+    def __repr__(self, depth=0, cycle=None, html=False):
         if cycle == self:
             f'\n{" " * 4 * (depth + 1)}* {cycle.id} has a circular reference with this node {self.id}'
             return ''  # prevent loops
         elif cycle == None:
             cycle = self
         start = '|' if depth else ''
-        t = ' ' * 4 * depth + start
+        SPACE = '&nbsp;' if html else ' '
+        t = SPACE * 4 * depth + start
 
         parent_id =  f"\n{t}parent_id:    {self.parent.id} {self.__class__.__name__}.byId('{self.parent.id}')" if self.parent else ''
         exact_text = f'\n{t}exact:        {self.exact}' if self.exact else ''
@@ -422,14 +424,14 @@ class Hybrid(HypothesisHelper):
         ct = f'\n{t}cleaned tags: {lct}' if self.references and lct and lct != self.tags else ''
         tc = f'\n{t}tag_corrs:    {self.tag_corrections}' if self.tag_corrections else ''
 
-        replies = ''.join(r.__repr__(depth + 1, cycle=cycle)
+        replies = ''.join(r.__repr__(depth + 1, cycle=cycle, html=html)
                           for r in self.replies)
                           #if not print(cycle.id, self.id, self.shareLink))
         rep_ids = f'\n{t}replies:      ' + ' '.join(f"{self.__class__.__name__}.byId('{r.id}')"
                                                     for r in self.replies)
         replies_text = (f'\n{t}replies:{replies}' if self.reprReplies else rep_ids) if replies else ''
 
-        childs = ''.join(c.__repr__(depth + 1, cycle=cycle)
+        childs = ''.join(c.__repr__(depth + 1, cycle=cycle, html=html)
                          if c != self else
                          f'\n{" " * 4 * (depth + 1)}* {c.id} has a circular reference with this node {self.id}'  # avoid recursion
                          for c in self.children
@@ -438,8 +440,10 @@ class Hybrid(HypothesisHelper):
                          #and not print(cycle.id, self.id, self.shareLink))
         childs_text = f'\n{t}children:{childs}' if childs else ''
 
+        link = self.shareLink
+        if html: link = atag(link, link)
         return (f'\n{t.replace("|","")}*--------------------'
-                f"\n{t}{self.__class__.__name__ + ':':<14}{self.shareLink} {self.__class__.__name__}.byId('{self.id}')"
+                f"\n{t}{self.__class__.__name__ + ':':<14}{link} {self.__class__.__name__}.byId('{self.id}')"
                 f'\n{t}isAstNode:    {self.isAstNode}'
                 f'{parent_id}'
                 f'{exact_text}'
@@ -541,7 +545,7 @@ class AstGeneric(Hybrid):
         #else:
             #return False
 
-    def __repr__(self, depth=1, nparens=1, plast=True, top=True, cycle=False):
+    def __repr__(self, depth=1, nparens=1, plast=True, top=True, cycle=False, html=False):
         out = ''
         type_ = self.astType 
         if type_ is None:
@@ -550,16 +554,19 @@ class AstGeneric(Hybrid):
                 out = f"'(circular-link no-type {cycle.id})" + ')' * nparens
                 type_ = 'None'
             else:
-                return super().__repr__()
+                return super().__repr__(html=html)
 
         self.linePreLen = self.indentDepth * (depth - 1) + len('(') + len(type_) +  len(' ')
         value = self.astValue
         self.linePreLen += self.indentDepth  # doing the children now we bump back up
-        comment = f'  ; {self.shareLink}'
+        link = self.shareLink
+        if html: link = atag(link, link)
+        SPACE = '&nbsp;' if html else ' '
+        comment = f'{SPACE}{SPACE}; {link}'
 
         children = list(self.children)  # better to run the generator once up here
         if children:
-            indent = ' ' * self.indentDepth * depth
+            indent = SPACE * self.indentDepth * depth
             linestart = '\n' + indent
             nsibs = len(children)
             cs = []
@@ -576,9 +583,9 @@ class AstGeneric(Hybrid):
                             print('Circular link in', self.shareLink)
                             s = f"'(circular-link {cycle.id})" + ')' * nparens
                         else:
-                            s = c.__repr__(depth + 1, new_nparens, new_plast, False, self)
+                            s = c.__repr__(depth + 1, new_nparens, new_plast, False, self, html=html)
                     else:
-                        s = c.__repr__(depth + 1, new_nparens, new_plast, False)
+                        s = c.__repr__(depth + 1, new_nparens, new_plast, False, html=html)
                 except TypeError as e:
                     # do not remove or bypass this error, it means that one of your
                     # dicts like _replies or objects has members of some other class
@@ -887,13 +894,14 @@ def main():
 
     global annos  # this is now only used for making embed sane to use
     get_annos, annos, stream_loop = annoSync('/tmp/protcur-analysis-annos.pickle',
-                                             helpers=(Hybrid, protc))
+                                             helpers=(HypothesisHelper, Hybrid, protc))
 
     problem_child = 'KDEZFGzEEeepDO8xVvxZmw'
     #test_annos(annos)
     tree, extra = citation_tree(annos)
     i = papers(annos)
 
+    [HypothesisHelper(a, annos) for a in annos]
     [Hybrid(a, annos) for a in annos]
     #printD('protcs')
     #@profile_me

@@ -3,8 +3,9 @@ import os
 from datetime import date
 from markdown import markdown
 from hyputils.hypothesis import HypothesisUtils
-from analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid
-from analysis import citation_tree, papers, statistics, readTagDocs, justTags, addDocLinks, Hybrid, protc
+from protcur.core import atag, deltag
+from protcur.analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid
+from protcur.analysis import citation_tree, papers, statistics, readTagDocs, justTags, addDocLinks, Hybrid, protc
 from IPython import embed
 from flask import Flask, url_for, redirect, request, render_template, render_template_string, make_response, abort 
 
@@ -47,14 +48,6 @@ table_style = ('<style>'
                'a:visited { color: grey; }'
                'del { color: white; }'
                '</style>')
-
-def atag(href, value=None):
-    if value is None:
-        value = href
-    return f'<a href={href}>{value}</a>'
-
-def deltag(text):
-    return f'<del>{text}</del>'
 
 def render_idents(idents):
     #print(idents)
@@ -108,14 +101,8 @@ def render_table(rows, *headers):
     out = '<table>' + '\n'.join(output) + '</table>'
     return out
 
-def main():
-    from core import annoSync
+def make_app(annos):
     app = Flask('protc curation id service')
-    get_annos, annos, stream_loop = annoSync('/tmp/protcure-server-annos.pickle',
-                                             helpers=(protc,))
-    stream_loop.start()
-    [Hybrid(a, annos) for a in annos]
-    [protc(a, annos) for a in annos]
 
     # routes
 
@@ -140,6 +127,14 @@ def main():
                  atag(hutils.search_url(url=hypothesis_local(hl)), n)]
                 for hl, n in stats.items()]
         return render_table(sorted(rows), f'HLN n={len(stats)}', f'Annotation count n={total}')
+
+    @app.route('/curation/annotations/<id>', methods=['GET'])
+    def route_annotations_star(id):
+        return '<html>' ''.join((
+            # repr(HypothesisHelper.byId(id)).replace('\n', '<br>\n'),
+            Hybrid.byId(id).__repr__(html=True).replace('\n', '<br>\n'),
+            protc.byId(id).__repr__(html=True).replace('\n', '<br>\n'),
+            )) + '</html>'
 
     @app.route('/curation/tags', methods=['GET'])
     def route_tags():
@@ -191,6 +186,16 @@ def main():
         except KeyError:
             return abort(404)
 
+    @app.route('/curation/tags/<tagname>/annotations', methods=['GET'])
+    def route_tags_star_annos(tagname):
+        try:
+            return '<html>' ''.join(
+                [a.__repr__(html=True).replace('\n', '<br>\n') for a in  protc.byTags(tagname)] +
+                [a.__repr__(html=True).replace('\n', '<br>\n') for a in Hybrid.byTags(tagname)]
+                ) + '</html>'
+        except KeyError:
+            return abort(404)
+
     @app.route('/curation/controlled-tags', methods=['GET'])
     def route_controlled_tags():
         return '\n'.join(tag for tag in justTags()), 200, {'Content-Type':'text/plain; charset=utf-8'}
@@ -204,6 +209,19 @@ def main():
             out += f'<a href={url}>{route}</a> <br>'
         return out
 
+    return app
+
+def main():
+    from core import annoSync
+    get_annos, annos, stream_loop = annoSync('/tmp/protcure-server-annos.pickle',
+                                             helpers=(Hybrid, protc,))
+                                             #helpers=(HypothesisHelper, Hybrid, protc,))
+    #stream_loop.start()
+    #[HypothesisHelper(a, annos) for a in annos]
+    [Hybrid(a, annos) for a in annos]
+    [protc(a, annos) for a in annos]
+
+    app = make_app(annos)
     app.debug = False
     app.run(host='localhost', port=7000, threaded=True)  # nginxwoo
     os.sys.exit()
