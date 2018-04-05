@@ -4,7 +4,7 @@ from datetime import date
 from markdown import markdown
 from hyputils.hypothesis import HypothesisUtils
 from analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid
-from analysis import citation_tree, papers, statistics, tagdefs, readTagDocs, justTags, addDocLinks, protc
+from analysis import citation_tree, papers, statistics, readTagDocs, justTags, addDocLinks, Hybrid, protc
 from IPython import embed
 from flask import Flask, url_for, redirect, request, render_template, render_template_string, make_response, abort 
 
@@ -45,12 +45,16 @@ table_style = ('<style>'
                'table { font-family: Dejavu Sans Mono; }'
                'a:link { color: black; }'
                'a:visited { color: grey; }'
+               'del { color: white; }'
                '</style>')
 
 def atag(href, value=None):
     if value is None:
         value = href
     return f'<a href={href}>{value}</a>'
+
+def deltag(text):
+    return f'<del>{text}</del>'
 
 def render_idents(idents):
     #print(idents)
@@ -94,12 +98,23 @@ def render_2col_table(dict_, h1, h2, uriconv=lambda a:a):  # FIXME this sucks an
     out = '<table>' + '\n'.join(output) + '</table>'
     return out
 
+def render_table(rows, *headers):
+    output = []
+    output.append(table_style)
+    output.append('<tr><th>' + '</th><th>'.join(headers) + '</th><tr>')
+    for row in rows:
+        output.append('<tr><th>' + '</th><th>'.join(row) + '</th><tr>')
+
+    out = '<table>' + '\n'.join(output) + '</table>'
+    return out
+
 def main():
     from core import annoSync
     app = Flask('protc curation id service')
     get_annos, annos, stream_loop = annoSync('/tmp/protcure-server-annos.pickle',
                                              helpers=(protc,))
     stream_loop.start()
+    [Hybrid(a, annos) for a in annos]
     [protc(a, annos) for a in annos]
 
     # routes
@@ -121,21 +136,52 @@ def main():
     def route_annotations():
         stats = statistics(annos)
         total = sum(stats.values())
-        stats = {hl:atag(hutils.search_url(url=hypothesis_local(hl)), n) for hl, n in stats.items()}
-        return render_2col_table(stats, f'HLN n={len(stats)}', f'Annotation count n={total}', hypothesis_local)
+        rows = [[atag(hypothesis_local(hl), hl),
+                 atag(hutils.search_url(url=hypothesis_local(hl)), n)]
+                for hl, n in stats.items()]
+        return render_table(sorted(rows), f'HLN n={len(stats)}', f'Annotation count n={total}')
 
     @app.route('/curation/tags', methods=['GET'])
     def route_tags():
-        querybase = ''
-
-        tags = {t:atag(hutils.search_url(tag=t), d)
-                for t, d in tagdefs(annos).items()
-                if all(p not in t for p in ('RRID:', 'NIFORG:', 'CHEBI:')) }
-    
         def uriconv(v):
             uri = request.base_url + '/' + v
             return uri
-        return render_2col_table(tags, f'Tags n={len(tags)}', f'Count n={sum(int(_.split(">",1)[1].split("<")[0]) for _ in tags.values())}', uriconv=uriconv)
+
+        ptags = {t:len([p for p in v if p.isAstNode]) for t, v in protc._tagIndex.items()}
+        def renderpt(tag, acount):
+            count = ptags.get(tag, 0)
+            sc = str(count)
+            if count > acount:
+                return  f'{sc:<5}'.replace(' ', '&nbsp;')  + '+'
+            elif count == acount:
+                return sc
+            elif not count:
+                return ''
+            else:
+                return  f'{sc:<5}'.replace(' ', '&nbsp;')  + '-'
+        tag_docs = readTagDocs()
+        def rendertagname(tag):
+            if tag in tag_docs and tag_docs[tag].deprecated:
+                return deltag(tag)
+            else:
+                return tag
+
+        skip = ('RRID:', 'NIFORG:', 'CHEBI:', 'SO:')
+        atags = {t:len(v) for t, v in Hybrid._tagIndex.items()}
+        tags = [[atag(uriconv(t), rendertagname(t)),
+                 atag(hutils.search_url(tag=t), d),
+                 renderpt(t, d)]
+                for t, d in atags.items()
+                if all(p not in t for p in skip)]
+
+        total = sum([c for t, c in atags.items() if all(p not in t for p in skip)])
+        ptotal = sum([c for t, c in ptags.items() if all(p not in t for p in skip)])
+
+        return render_table(sorted(tags),
+                            f'Tags n={len(tags)}',
+                            #f'Count n={sum(int(v.split(">",1)[1].split("<")[0]) for _, v in tags)}'
+                            f'Count n={total}',
+                            f'Count n={ptotal}')
 
     @app.route('/curation/tags/<tagname>', methods=['GET'])
     def route_tags_star(tagname):

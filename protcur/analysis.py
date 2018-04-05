@@ -69,9 +69,15 @@ def url_pmid(pmid):
 # docs
 
 class TagDoc:
-    def __init__(self, doc, parent):
-        self.doc = doc
-        self.parent = parent
+    _depflags = 'ilxtr:deprecatedTag', 'typo'
+    def __init__(self, doc, parents):
+        self.parents = parents if isinstance(parents, tuple) else (parents,)
+        if anyMembers(self.parents, *self._depflags):
+            self.doc = '**DEPRECATED** ' + doc
+            self.deprecated = True
+        else:
+            self.doc = doc
+            self.deprecated = False
 
 
 def readTagDocs():
@@ -164,13 +170,6 @@ def statistics(annos):
         stats[hl] += 1
 
     return stats
-
-def tagdefs(annos):
-    tags = Counter()
-    for anno in annos:
-        for tag in anno.tags:
-            tags[tag] += 1
-    return dict(tags)
 
 def splitLines(text):
     for line in text.split('\n'):
