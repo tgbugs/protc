@@ -6,7 +6,7 @@ from pathlib import Path
 from datetime import date
 from markdown import markdown
 from hyputils.hypothesis import HypothesisUtils
-from protcur.core import atag, deltag
+from protcur.core import htmldoc, atag, deltag, titletag
 from protcur.analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid
 from protcur.analysis import citation_tree, papers, statistics, readTagDocs, justTags, addDocLinks, Hybrid, protc
 from IPython import embed
@@ -45,43 +45,43 @@ def export_json_impl(annos):
     DATE = date.today().strftime('%Y-%m-%d')
     return output_json, DATE
 
-# rendering
+# styles
 
-table_style = ('<style>'
-               'th { text-align: left; padding-right: 20px; }'
+monospace_body_style = 'body { font-family: Dejavu Sans Mono; font-size: 11pt }'
+
+table_style = ('th { text-align: left; padding-right: 20px; }'
                'table { font-family: Dejavu Sans Mono; }'
                'a:link { color: black; }'
                'a:visited { color: grey; }'
-               'del { color: white; }'
-               '</style>')
+               'del { color: white; }')
 
-def render_idents(idents):
+details_style = ('details summary::-webkit-details-marker { display: none; }\n'
+                'details > summary:first-of-type { list-style-type: none; }')
+
+# rendering
+
+def render_idents(idents, stats):
     #print(idents)
-    HLN, DOI, PMID, PDOI = 'HLN', 'DOI:', 'PMID:', 'protc:parent-doi'
-    fields = DOI, PMID, PDOI
-    cols = {f:len(f) + 2 for f in fields}
-    cols[HLN] = 0
-    for hl_name, others in idents.items():
-        lhln = len(hl_name) + 2
-        if lhln > cols[HLN]: cols[HLN] = lhln
-        for f in fields:
-            if f in others:
-                v = others[f]
-                lv = len(v) + 2
-                if lv > cols[f]: cols[f] = lv
-    output = []
+    HLN, DOI, PMID, ISBN, PDOI = 'hl:', 'DOI:', 'PMID:', 'ISBN:', 'protc:parent-doi'
+    records = []
     #output.append(f'{HLN:<{cols[HLN]}}{DOI:<{cols[DOI]}}{PMID:<{cols[PMID]}}{PDOI:<{cols[PDOI]}}')
-    output.append(table_style)
-    output.append(f'<tr><th>{HLN}</th><th>{DOI}</th><th>{PMID}</th><th>{PDOI}</th></tr>')
-    for hl_name, others in sorted(idents.items()):
-        doi = others[DOI] if DOI in others else ''
-        pmid = others[PMID] if PMID in others else ''
-        pdoi = others[PDOI] if PDOI in others else ''
+    #output.append(f'<tr><th>{HLN}</th><th>{DOI}</th><th>{PMID}</th><th>{PDOI}</th></tr>')
+    for hl, others in sorted(idents.items()):
+        hl_uri = hypothesis_local(hl)
+        doi = atag(others[DOI], uriconv=url_doi) if DOI in others else ''
+        pmid = atag(others[PMID], uriconv=url_pmid) if PMID in others else ''
+        isbn = others[ISBN] if ISBN in others else ''
+        pdoi = atag(others[PDOI], uriconv=url_doi) if PDOI in others else ''
+        count = atag(hutils.search_url(url=hl_uri), stats[hl])
+        records.append([atag(hl_uri, hl), doi, pmid, isbn, pdoi, count])
+        continue
         #output.append(f'{hl_name:<{cols[HLN]}}{doi:<{cols[DOI]}}{pmid:<{cols[PMID]}}{pdoi:<{cols[PDOI]}}')
         output.append(f'<tr><th><a href={hypothesis_local(hl_name)}>{hl_name}</a></th>'
                       f'<th><a href={url_doi(doi)}>{doi}</th>'
                       f'<th><a href={url_pmid(pmid)}>{pmid}</th>'
                       f'<th><a href={url_doi(pdoi)}>{pdoi}</th></tr>')
+
+    return render_table(records, HLN, DOI, PMID, ISBN, PDOI, '# annos')
     #out = '<pre>' + '\n'.join(output) + '</pre>'
     out = '<table>' + '\n'.join(output) + '</table>'
     #print(out)
@@ -99,7 +99,6 @@ def render_2col_table(dict_, h1, h2, uriconv=lambda a:a):  # FIXME this sucks an
 
 def render_table(rows, *headers):
     output = []
-    output.append(table_style)
     output.append('<tr><th>' + '</th><th>'.join(headers) + '</th><tr>')
     for row in rows:
         output.append('<tr><th>' + '</th><th>'.join(row) + '</th><tr>')
@@ -165,7 +164,7 @@ def make_app(annos):
     @app.route('/curation/citations', methods=['GET'])
     def route_citations():
         #tree, extra = citation_tree(annos)
-        tree, extra = citation_tree(protc)
+        tree, extra = citation_tree(protc, html_head=(titletag('citation tree'),))
         return extra.html
 
     @app.route('/curation/ast', methods=['GET'])
@@ -175,23 +174,31 @@ def make_app(annos):
 
     @app.route('/curation/papers', methods=['GET'])
     def route_papers():
-        return render_idents(papers(annos))
+
+        return htmldoc(render_idents(papers(annos), statistics(annos)),
+                       title='papers',
+                       styles=(table_style,))
 
     @app.route('/curation/annotations', methods=['GET'])
     def route_annotations():
         stats = statistics(annos)
         total = sum(stats.values())
-        rows = [[atag(hypothesis_local(hl), hl),
-                 atag(hutils.search_url(url=hypothesis_local(hl)), n)]
-                for hl, n in stats.items()]
-        return render_table(sorted(rows), f'HLN n={len(stats)}', f'Annotation count n={total}')
+        rows = []
+        for hl, count in stats.items():
+            if hl is None:
+                hl = 'None'
+            expanded = hypothesis_local(hl)
+            rows.append([atag(expanded, hl), atag(hutils.search_url(url=expanded), count)])
+        return htmldoc(render_table(sorted(rows), f'HLN n={len(stats)}', f'Annotation count n={total}'),
+                       title='annotations by paper',
+                       styles=(table_style,))
 
     @app.route('/curation/annotations/<id>', methods=['GET'])
     def route_annotations_star(id):
         return '<html>' ''.join((
             # repr(HypothesisHelper.byId(id)).replace('\n', '<br>\n'),
-            Hybrid.byId(id).__repr__(html=True).replace('\n', '<br>\n'),
-            protc.byId(id).__repr__(html=True).replace('\n', '<br>\n'),
+            Hybrid.byId(id).__repr__(html=True, number='').replace('\n', '<br>\n'),
+            protc.byId(id).__repr__(html=True, number='').replace('\n', '<br>\n'),
             )) + '</html>'
 
     @app.route('/curation/tags', methods=['GET'])
@@ -201,17 +208,18 @@ def make_app(annos):
             return uri
 
         ptags = {t:len([p for p in v if p.isAstNode]) for t, v in protc._tagIndex.items()}
-        def renderpt(tag, acount):
+        def renderprotct(tag, acount):
             count = ptags.get(tag, 0)
             sc = str(count)
+            link = atag(uriconv(tag + '/annotations'), sc) + '\u00A0' * (5 - len(sc))  # will fail with > 9999 annos (heh)
             if count > acount:
-                return  f'{sc:<5}'.replace(' ', '&nbsp;')  + '+'
+                return link + '+'
             elif count == acount:
-                return sc
+                return link
             elif not count:
                 return ''
             else:
-                return  f'{sc:<5}'.replace(' ', '&nbsp;')  + '-'
+                return link + '-'
         tag_docs = readTagDocs()
         def rendertagname(tag):
             if tag in tag_docs and tag_docs[tag].deprecated:
@@ -223,18 +231,20 @@ def make_app(annos):
         atags = {t:len(v) for t, v in Hybrid._tagIndex.items()}
         tags = [[atag(uriconv(t), rendertagname(t)),
                  atag(hutils.search_url(tag=t), d),
-                 renderpt(t, d)]
+                 renderprotct(t, d)]
                 for t, d in atags.items()
                 if all(p not in t for p in skip)]
 
         total = sum([c for t, c in atags.items() if all(p not in t for p in skip)])
         ptotal = sum([c for t, c in ptags.items() if all(p not in t for p in skip)])
 
-        return render_table(sorted(tags),
-                            f'Tags n={len(tags)}',
-                            #f'Count n={sum(int(v.split(">",1)[1].split("<")[0]) for _, v in tags)}'
-                            f'Count n={total}',
-                            f'Count n={ptotal}')
+        return htmldoc(render_table(sorted(tags),
+                                    f'Tags n={len(tags)}',
+                                    #f'Count n={sum(int(v.split(">",1)[1].split("<")[0]) for _, v in tags)}'
+                                    f'Count n={total}',
+                                    f'Count n={ptotal}'),
+                       title='Tags',
+                       styles=(table_style,))
 
     @app.route('/curation/tags/<tagname>', methods=['GET'])
     def route_tags_star(tagname):
@@ -246,11 +256,19 @@ def make_app(annos):
 
     @app.route('/curation/tags/<tagname>/annotations', methods=['GET'])
     def route_tags_star_annos(tagname):
+        HYB = request.url + '#Hybrids'
+        PTC = request.url + '#protcs'
         try:
-            return '<html>' ''.join(
-                [a.__repr__(html=True).replace('\n', '<br>\n') for a in  protc.byTags(tagname)] +
-                [a.__repr__(html=True).replace('\n', '<br>\n') for a in Hybrid.byTags(tagname)]
-                ) + '</html>'
+            return htmldoc(''.join(
+                [f'<a href="{HYB}" id="protcs"><b>protcs</b></a><br>\n'] +
+                [a.__repr__(html=True, number=n + 1).replace('\n', '<br>\n')
+                 for n, a in  enumerate(sorted(protc.byTags(tagname), key=lambda p: p.ast_updated, reverse=True))] +
+                [f'<br>\n<a href="{PTC}" id="Hybrids"><b>Hybrids</b></a><br>\n'] +
+                [a.__repr__(html=True, number=n + 1).replace('\n', '<br>\n')
+                 for n, a in  enumerate(sorted(Hybrid.byTags(tagname), key=lambda p: p.ast_updated, reverse=True))]
+                ),
+                           title=f'{tagname} annotations',
+                           styles=(table_style, monospace_body_style, details_style))
         except KeyError:
             return abort(404)
 
@@ -274,7 +292,7 @@ def main():
     get_annos, annos, stream_loop = annoSync('/tmp/protcur-server-annos.pickle',
                                              helpers=(Hybrid, protc,))
                                              #helpers=(HypothesisHelper, Hybrid, protc,))
-    stream_loop.start()
+    #stream_loop.start()
     #[HypothesisHelper(a, annos) for a in annos]
     [Hybrid(a, annos) for a in annos]
     [protc(a, annos) for a in annos]

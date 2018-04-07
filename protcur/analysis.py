@@ -121,7 +121,7 @@ def citation_triples(annos):
                     o = o if o else url
                     yield p, s, o
 
-def citation_tree(annos):
+def citation_tree(annos, html_head=''):
     t = citation_triples(annos)
     PREFIXES = {'protc':'https://protc.olympiangods.org/curation/tags/',
                 'hl':'https://hypothesis-local.olympiangods.org/'}
@@ -140,14 +140,19 @@ def citation_tree(annos):
         g.add_trip(su, 'rdfs:label', s)  # redundant
         g.add_trip(ou, 'rdfs:label', o)  # redundant
     ref_graph = g.make_scigraph_json(RFU, direct=True)
-    tree, extra = creatTree('hl:ma2015.pdf', RFU, 'OUTGOING', 10, json=ref_graph, prefixes=PREFIXES)
+    tree, extra = creatTree('hl:ma2015.pdf', RFU, 'OUTGOING', 10, json=ref_graph, prefixes=PREFIXES, html_head=html_head)
     return tree, extra
 
 def papers(annos):
     idents = {}
+
+    def hasTag(hl, tag):
+        return tag in idents[hl]
+
     def add_tag_text(hl, anno, tag):
         if tag in anno.tags:
             idents[hl][tag] = anno.text.strip()
+            return True
 
     for anno in annos:
         hl = get_hypothesis_local(getUri(anno))
@@ -160,9 +165,13 @@ def papers(annos):
             #print(anno.text)
             #print(anno.user)
             #print('---------------------')
-            add_tag_text(hl, anno, 'DOI:')
+
+            if add_tag_text(hl, anno, 'DOI:') and hasTag(hl, 'ISBN:'):
+                idents[hl].pop('ISBN:')
             add_tag_text(hl, anno, 'protc:parent-doi')
             add_tag_text(hl, anno, 'PMID:')
+            if not hasTag(hl, 'DOI:'):
+                add_tag_text(hl, anno, 'ISBN:')
 
     return idents
 
@@ -222,6 +231,13 @@ class Hybrid(HypothesisHelper):
         return (noneMembers(self._tags, *self.control_tags)
                 and all(noneMembers(tag, *self.prefix_skip_tags) for tag in self.tags)
                 and any(anyMembers(tag, *self.prefix_ast) for tag in self.tags))
+
+    @property
+    def ast_updated(self):
+        # FIXME hackish on the sort and -1
+        return sorted([self.updated] +
+                      [c.updated for c in self.children] +
+                      [r.updated for r in self.replies])[-1]
 
     @property
     def exact(self):
@@ -406,14 +422,15 @@ class Hybrid(HypothesisHelper):
                 child.hasAstParent = True  # FIXME called every time :/
                 yield child  # buildAst will have a much eaiser time operating on these single depth childs
 
-    def __repr__(self, depth=0, cycle=None, html=False):
+    def __repr__(self, depth=0, cycle=None, html=False, number='*'):
         if cycle == self:
             f'\n{" " * 4 * (depth + 1)}* {cycle.id} has a circular reference with this node {self.id}'
             return ''  # prevent loops
         elif cycle == None:
             cycle = self
         start = '|' if depth else ''
-        SPACE = '&nbsp;' if html else ' '
+        #SPACE = '&nbsp;' if html else ' '
+        SPACE = '\xA0' if html else ' '
         t = SPACE * 4 * depth + start
 
         parent_id =  f"\n{t}parent_id:    {self.parent.id} {self.__class__.__name__}.byId('{self.parent.id}')" if self.parent else ''
@@ -446,12 +463,19 @@ class Hybrid(HypothesisHelper):
                          # avoid accidental recursion with replies of depth 1 TODO WE NEED TO GO DEEPER
                          if c != self.parent)
                          #and not print(cycle.id, self.id, self.shareLink))
+        lenchilds = len(tuple(self.children)) + len(self.replies)
+        more = f' {lenchilds} ...' if lenchilds else ''
         childs_text = f'\n{t}children:{childs}' if childs else ''
 
         link = self.shareLink
         if html: link = atag(link, link)
-        return (f'\n{t.replace("|","")}*--------------------'
-                f"\n{t}{self.__class__.__name__ + ':':<14}{link} {self.__class__.__name__}.byId('{self.id}')"
+        startn = '\n' if not isinstance(number, int) or number > 1 else ''
+        details = '<details>' if html else ''
+        _details = '</details>' if html else ''
+        summary = '<summary>' if html else ''
+        _summary = f'{value_text}</summary>' if html else ''
+        return (f'{startn}{details}{summary}{t.replace("|","")}{number:-<10}{more:->10}'
+                f"\n{t}{self.__class__.__name__ + ':':<14}{link} {self.__class__.__name__}.byId('{self.id}'){_summary}"
                 f'\n{t}isAstNode:    {self.isAstNode}'
                 f'{parent_id}'
                 f'{exact_text}'
@@ -462,7 +486,7 @@ class Hybrid(HypothesisHelper):
                 f'{tc}'
                 f'{replies_text}'
                 f'{childs_text}'
-                f'\n{t}____________________')
+                f'\n{t}{"":_<20}{_details}')
 
 
 class AstGeneric(Hybrid):
@@ -553,7 +577,7 @@ class AstGeneric(Hybrid):
         #else:
             #return False
 
-    def __repr__(self, depth=1, nparens=1, plast=True, top=True, cycle=False, html=False):
+    def __repr__(self, depth=1, nparens=1, plast=True, top=True, cycle=False, html=False, number='*'):
         out = ''
         type_ = self.astType
         if type_ is None:
@@ -562,14 +586,15 @@ class AstGeneric(Hybrid):
                 out = f"'(circular-link no-type {cycle.id})" + ')' * nparens
                 type_ = 'None'
             else:
-                return super().__repr__(html=html)
+                return super().__repr__(html=html, number=number)
 
         self.linePreLen = self.indentDepth * (depth - 1) + len('(') + len(type_) +  len(' ')
         value = self.astValue
         self.linePreLen += self.indentDepth  # doing the children now we bump back up
         link = self.shareLink
         if html: link = atag(link, link)
-        SPACE = '&nbsp;' if html else ' '
+        #SPACE = '&nbsp;' if html else ' '
+        SPACE = '\xA0' if html else ' '
         comment = f'{SPACE}{SPACE}; {link}'
 
         children = list(self.children)  # better to run the generator once up here
