@@ -1,4 +1,7 @@
 ;; annotation-*: tags for immutable editing of annotations
+(tag-doc 'annotation-correction '(annotation-*:)
+         "replace both the text and the tags of the parent annotation")
+
 (tag-doc 'annotation-text:text '(annotation-*:)
          "text of the reply replaces the text of the parent annotation, semantics are left to the parser")
 (tag-doc 'annotation-text:exact '(annotation-*:)

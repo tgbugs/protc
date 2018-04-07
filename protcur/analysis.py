@@ -3,6 +3,7 @@
 import os
 import re
 import ast
+from pathlib import PurePath
 from collections import Counter
 from IPython import embed
 from protcur.core import atag, deltag
@@ -35,11 +36,11 @@ error_output = []
 
 def get_hypothesis_local(uri):
     if 'hypothesis-local' in uri:
-        return os.path.splitext(os.path.basename(uri))[0]
+        return PurePath(uri).stem
 
-HLPREFIX = 'http://hypothesis-local.olympiangods.org/' 
-def hypothesis_local(hln):
-    return HLPREFIX + hln + '.pdf'
+HLPREFIX = '://hypothesis-local.olympiangods.org/'
+def hypothesis_local(hln, s=True):
+    return ('https' if s else 'http') + HLPREFIX + hln + '.pdf'
 
 def extract_links_from_markdown(text):
     def doline(line):
@@ -104,10 +105,13 @@ def addDocLinks(base_url, doc):
 
 # stats
 
+def getUri(anno):
+    return anno._anno.uri if isinstance(anno, HypothesisHelper) else anno.uri
+
 def citation_triples(annos):
     p = RFU
     for anno in annos:
-        hl = get_hypothesis_local(anno.uri)
+        hl = get_hypothesis_local(getUri(anno))
         if hl:
             s = hl
             if p in anno.tags:
@@ -119,8 +123,8 @@ def citation_triples(annos):
 
 def citation_tree(annos):
     t = citation_triples(annos)
-    PREFIXES = {'protc':'http://protc.olympiangods.org/curation/tags/',
-                'hl':'http://hypothesis-local.olympiangods.org/'}
+    PREFIXES = {'protc':'https://protc.olympiangods.org/curation/tags/',
+                'hl':'https://hypothesis-local.olympiangods.org/'}
     PREFIXES.update(makePrefixes('rdfs'))
     g = makeGraph('', prefixes=PREFIXES)
     for p, s, o in t:
@@ -146,7 +150,7 @@ def papers(annos):
             idents[hl][tag] = anno.text.strip()
 
     for anno in annos:
-        hl = get_hypothesis_local(anno.uri)
+        hl = get_hypothesis_local(getUri(anno))
         if hl:
             if hl not in idents:
                 idents[hl] = {}
@@ -165,7 +169,7 @@ def papers(annos):
 def statistics(annos):
     stats = {}
     for anno in annos:
-        hl = str(get_hypothesis_local(anno.uri))
+        hl = get_hypothesis_local(getUri(anno))
         if hl not in stats:
             stats[hl] = 0
         stats[hl] += 1
@@ -309,7 +313,11 @@ class Hybrid(HypothesisHelper):
                 return [ctag] + list(self._cleaned_tags)
 
     def text_correction(self, suffix):  # also handles additions
-        ctag = 'annotation-text:' + suffix
+        if suffix == 'annotation-correction':
+            ctag = suffix
+        else:
+            ctag = 'annotation-text:' + suffix
+
         if ctag in self.tags:
             return self.text
         #elif suffix == 'children' and self.text.startswith('https://hyp.is'):
@@ -386,7 +394,7 @@ class Hybrid(HypothesisHelper):
             child = self.getObjectById(id_)
             if child is None:
                 print(f"WARNING: child of {self.__class__.__name__}.byId('{self.id}') {id_} does not exist!")
-                continue 
+                continue
             for reply in child.replies:
                 if 'protc:implied-aspect' in reply.tags:
                     self.hasAstParent = True  # FIXME called every time :/
@@ -459,7 +467,7 @@ class Hybrid(HypothesisHelper):
 
 class AstGeneric(Hybrid):
     """ Base class that implements the core methods needed for parsing various namespaces """
-    control_tags = 'annotation-correction', 'annotation-tags:replace', 'annotation-tags:add', 'annotation-tags:delete' 
+    control_tags = 'annotation-correction', 'annotation-tags:replace', 'annotation-tags:add', 'annotation-tags:delete'
     prefix_skip_tags = 'PROTCUR:', 'annotation-'
     text_tags = ('annotation-text:exact',
                  'annotation-text:text',
@@ -547,7 +555,7 @@ class AstGeneric(Hybrid):
 
     def __repr__(self, depth=1, nparens=1, plast=True, top=True, cycle=False, html=False):
         out = ''
-        type_ = self.astType 
+        type_ = self.astType
         if type_ is None:
             if cycle:
                 print('Circular link in', self.shareLink)
@@ -595,7 +603,7 @@ class AstGeneric(Hybrid):
                 cs.append(s)
             childs = comment + linestart + linestart.join(cs)
         else:
-            childs = ')' * nparens + comment  
+            childs = ')' * nparens + comment
 
         start = '\n(' if top else '('  # ))
         #print('|'.join(''.join(str(_) for _ in range(1,10)) for i in range(12)))
@@ -649,7 +657,7 @@ class protc(AstGeneric):
             if tuple_[0] in self.format_nl_long:
                 t1 = type(tuple_[1]) is tuple
                 t2 = type(tuple_[2]) is tuple
-                if t1 and t2: 
+                if t1 and t2:
                     if len(tuple_[1]) > 2 or len(tuple_[2]) > 2:
                         return True
                 elif t1 and len(tuple_[1]) > 3:
@@ -777,7 +785,7 @@ class protc(AstGeneric):
                 v = 'phosphate buffer'
             elif v == 'PBS':
                 v = 'phosphate buffered saline'
-            return v 
+            return v
         value = manual_corrections(value)
         return self._value_escape(value)
 
@@ -793,7 +801,18 @@ class protc(AstGeneric):
         return "'(\"" + '" "'.join(self.value.split('\n')) + '")'
 
     def references_for_use(self):
-        esc = r'\;'
+        esc_comment = r'\;'
+        quote = "'"
+
+        to_join = []
+        for i, link in enumerate(sorted(extract_links_from_markdown(self.value))):
+            link = link.replace(';', esc_comment)
+            qlink = quote + link
+            record = ((' ' * self.linePreLen if i else '') + (qlink if HLPREFIX in link else "(TODO " + qlink + ")"))
+            to_join.append(record)
+
+        return '\n'.join(to_join)
+
         return '\n'.join(f'''{" " * self.linePreLen if i else ""}{"'" + link.replace(";", esc) if HLPREFIX in link else "(TODO '" + link.replace(";", esc) + ")"}'''
                          for i, link in enumerate(sorted(extract_links_from_markdown(self.value))))
     #def implied_input(self): return value
@@ -963,7 +982,7 @@ def _more_main():
             return requests.get(url)
 
         res = [(t, getBiop(t)) for t in test_inputs]
-        jsons = [(t, r.json()) for t, r in res if r.ok] 
+        jsons = [(t, r.json()) for t, r in res if r.ok]
 
         def chebis(j):
             return set((c['@id'], c['prefLabel'] if 'prefLabel' in c else tuple(c['synonym']))

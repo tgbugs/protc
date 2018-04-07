@@ -118,13 +118,18 @@ def space_to_nbsp(match):
 match_comment = re.compile(r'(<span class="comment">; )(.+)(</span>)')
 def comment_to_atag(match):
     return match.group(1) + atag(match.group(2), match.group(2), new_tab=True) + match.group(3)
+
+match_quote = re.compile(r"(\n)(\ +)('|<)")
+def quote_fix(match):
+    return '<br>' + match.group(1) + match.group(2).replace(' ', '\u00A0') + match.group(3)
     
 def correct_colorized(html):
     html1 = html.replace('\n</span>', '</span><br>\n')
     html2 = html1.replace('</span>\n', '</span><br>\n')
     html3 = match_span.sub(space_to_nbsp, html2)
     html4 = match_comment.sub(comment_to_atag, html3)
-    return html4
+    html5 = match_quote.sub(quote_fix, html4)
+    return html5
 
 colorizer_command = THIS_FILE.parent / 'colorizer.lisp'
 ast_file = Path(f'/tmp/{UID}-protc-ast-render.rkt')
@@ -159,7 +164,8 @@ def make_app(annos):
 
     @app.route('/curation/citations', methods=['GET'])
     def route_citations():
-        tree, extra = citation_tree(annos)
+        #tree, extra = citation_tree(annos)
+        tree, extra = citation_tree(protc)
         return extra.html
 
     @app.route('/curation/ast', methods=['GET'])
@@ -265,7 +271,7 @@ def make_app(annos):
 
 def main():
     from core import annoSync
-    get_annos, annos, stream_loop = annoSync('/tmp/protcure-server-annos.pickle',
+    get_annos, annos, stream_loop = annoSync('/tmp/protcur-server-annos.pickle',
                                              helpers=(Hybrid, protc,))
                                              #helpers=(HypothesisHelper, Hybrid, protc,))
     stream_loop.start()

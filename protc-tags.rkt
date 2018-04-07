@@ -155,3 +155,5 @@
          "")
 (tag-doc 'protc:version '(ilxtr:identifier)
          "The version of a piece of software or an edition of an atlas or a book.")
+(tag-doc 'protc:same-reference '(ilxtr:citationTag)
+         "")
