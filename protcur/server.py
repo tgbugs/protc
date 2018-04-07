@@ -1,5 +1,8 @@
 #!/usr/bin/env python3.6
 import os
+import re
+import subprocess
+from pathlib import Path
 from datetime import date
 from markdown import markdown
 from hyputils.hypothesis import HypothesisUtils
@@ -8,6 +11,10 @@ from protcur.analysis import hypothesis_local, get_hypothesis_local, url_doi, ur
 from protcur.analysis import citation_tree, papers, statistics, readTagDocs, justTags, addDocLinks, Hybrid, protc
 from IPython import embed
 from flask import Flask, url_for, redirect, request, render_template, render_template_string, make_response, abort 
+
+PID = os.getpid()
+UID = os.getuid()
+THIS_FILE = Path(__file__).absolute()
 
 hutils = HypothesisUtils(username='')
 
@@ -37,7 +44,6 @@ def export_json_impl(annos):
     output_json = [anno.__dict__ for anno in annos]
     DATE = date.today().strftime('%Y-%m-%d')
     return output_json, DATE
-
 
 # rendering
 
@@ -101,6 +107,50 @@ def render_table(rows, *headers):
     out = '<table>' + '\n'.join(output) + '</table>'
     return out
 
+#asdf = re.compile(r'>\ +<')
+#asdf = re.compile(r'>\n\ +<')
+match_span = re.compile(r'(>\ +<)|(>\n\ +<)')
+def space_to_nbsp(match):
+    # return match.group().replace(' ', '&nbsp;')  # keep around for debug viewing
+    return match.group().replace(' ', '\u00A0')
+
+#match_http = re.compile(r'(http.+)(</span>){1}')  # doesn't work right
+match_comment = re.compile(r'(<span class="comment">; )(.+)(</span>)')
+def comment_to_atag(match):
+    return match.group(1) + atag(match.group(2), match.group(2), new_tab=True) + match.group(3)
+    
+def correct_colorized(html):
+    html1 = html.replace('\n</span>', '</span><br>\n')
+    html2 = html1.replace('</span>\n', '</span><br>\n')
+    html3 = match_span.sub(space_to_nbsp, html2)
+    html4 = match_comment.sub(comment_to_atag, html3)
+    return html4
+
+colorizer_command = THIS_FILE.parent / 'colorizer.lisp'
+ast_file = Path(f'/tmp/{UID}-protc-ast-render.rkt')
+ast_html_file = Path(f'/tmp/{UID}-protc-ast-render.html')
+if ast_html_file.exists(): os.remove(ast_html_file.as_posix())  # cleanup at startup
+html_holder = ['']
+def render_ast():
+    new_raw = protc.parentless()
+    old_raw = None
+    if ast_file.exists():
+        with open(ast_file.as_posix(), 'rt') as f:
+            old_raw = f.read()
+    else:
+        with open(ast_file.as_posix(), 'wt') as f:
+            f.write(new_raw)
+
+    if not ast_html_file.exists() or old_raw != new_raw:
+        subprocess.check_output([colorizer_command, ast_file.as_posix()])
+
+        with open(ast_html_file.as_posix(), 'rt') as f:
+            html_uncorrected = f.read()
+
+        html_holder[0] = correct_colorized(html_uncorrected)
+
+    return html_holder[0]
+
 def make_app(annos):
     app = Flask('protc curation id service')
 
@@ -113,7 +163,8 @@ def make_app(annos):
 
     @app.route('/curation/ast', methods=['GET'])
     def route_ast():
-        return '<pre>' + protc.parentless() + '</pre>'
+        #return '<pre>' + protc.parentless() + '</pre>'
+        return render_ast()
 
     @app.route('/curation/papers', methods=['GET'])
     def route_papers():

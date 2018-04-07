@@ -14,10 +14,11 @@ def annoSync(memoization_file='/tmp/protc-annotations.pickle', helpers=tuple()):
     stream_loop = AnnotationStream(annos, prefilter, helperSyncHandler)()
     yield stream_loop
 
-def atag(href, value=None):
+def atag(href, value=None, new_tab=False):
+    target = ' target="_blank"' if new_tab else ''
     if value is None:
         value = href
-    return f'<a href={href}>{value}</a>'
+    return f'<a href="{href}"{target}>{value}</a>'
 
 def deltag(text):
     return f'<del>{text}</del>'
