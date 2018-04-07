@@ -137,7 +137,8 @@ def render_ast():
     if ast_file.exists():
         with open(ast_file.as_posix(), 'rt') as f:
             old_raw = f.read()
-    else:
+
+    if old_raw != new_raw:
         with open(ast_file.as_posix(), 'wt') as f:
             f.write(new_raw)
 
