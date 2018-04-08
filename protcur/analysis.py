@@ -453,8 +453,8 @@ class Hybrid(HypothesisHelper):
         _replies = [r for r in self.replies if r not in children]
         lenchilds = len(children) + len(_replies)
         more = f' {lenchilds} ...' if lenchilds else ' ...'
-        childs = ''.join(c.__repr__(depth + 1, cycle=cycle, html=html) for c in children
-                         if not print(c.id))
+        childs = ''.join(c.__repr__(depth + 1, cycle=cycle, html=html) for c in children)
+                         #if not print(c.id))
         #if childs: childs += '\n'
         prefixes = {f'{self.classn}:':True,
                     'parent:':self.parent,
@@ -627,13 +627,13 @@ class AstGeneric(Hybrid):
         #else:
             #return False
 
-    def __repr__(self, depth=1, nparens=1, plast=True, top=True, cycle=False, html=False, number='*'):
+    def __repr__(self, depth=1, nparens=1, plast=True, top=True, cycle=tuple(), html=False, number='*'):
         out = ''
         type_ = self.astType
         if type_ is None:
             if cycle:
                 print('Circular link in', self.shareLink)
-                out = f"'(circular-link no-type {cycle.id})" + ')' * nparens
+                out = f"'(circular-link no-type {cycle[0].id})" + ')' * nparens
                 type_ = 'None'
             else:
                 return super().__repr__(html=html, number=number)
@@ -664,7 +664,7 @@ class AstGeneric(Hybrid):
                     if self in c.children:  # FIXME cannot detect longer cycles
                         if cycle:
                             print('Circular link in', self.shareLink)
-                            s = f"'(circular-link {cycle.id})" + ')' * nparens
+                            s = f"'(circular-link {cycle[0].id})" + ')' * nparens
                         else:
                             s = c.__repr__(depth + 1, new_nparens, new_plast, False, self, html=html)
                     else:
