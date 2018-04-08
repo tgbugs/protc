@@ -430,7 +430,7 @@ class Hybrid(HypothesisHelper):
         #SPACE = '&nbsp;' if html else ' '
         SPACE = '\xA0' if html else ' '
         if self in cycle:
-            print(tc.red('CYCLE DETECTED'), self._repr)
+            print(tc.red('CYCLE DETECTED'), self.shareLink, self._repr)
             return f'\n{SPACE * ind * (depth + 1)}* {cycle[0].id} has a circular reference with this node {self.id}'
             return ''  # prevent loops
         else:
@@ -629,16 +629,16 @@ class AstGeneric(Hybrid):
 
     def __repr__(self, depth=1, nparens=1, plast=True, top=True, cycle=tuple(), html=False, number='*'):
         out = ''
-        type_ = self.astType
-        if type_ is None:
-            if cycle:
-                print('Circular link in', self.shareLink)
-                out = f"'(circular-link no-type {cycle[0].id})" + ')' * nparens
-                type_ = 'None'
+        if self.astType is None:
+            if self in cycle:
+                cyc = ' '.join(c.id for c in cycle)
+                print('Circular link in', self._repr, 'cycle', cyc)
+                out = f"'(circular-link no-type (cycle {cyc}))" + ')' * nparens
+                return out
             else:
                 return super().__repr__(html=html, number=number)
 
-        self.linePreLen = self.indentDepth * (depth - 1) + len('(') + len(type_) +  len(' ')
+        self.linePreLen = self.indentDepth * (depth - 1) + len('(') + len(str(self.astType)) +  len(' ')
         value = self.astValue
         self.linePreLen += self.indentDepth  # doing the children now we bump back up
         link = self.shareLink
@@ -661,20 +661,25 @@ class AstGeneric(Hybrid):
                 else:
                     new_nparens = 1  # new children start their own tree, nparens only tracks the last node
                 try:
-                    if self in c.children:  # FIXME cannot detect longer cycles
-                        if cycle:
-                            print('Circular link in', self.shareLink)
-                            s = f"'(circular-link {cycle[0].id})" + ')' * nparens
-                        else:
-                            s = c.__repr__(depth + 1, new_nparens, new_plast, False, self, html=html)
+                    if self not in cycle:
+                        s = c.__repr__(depth=depth + 1,
+                                       nparens=new_nparens,
+                                       plast=new_plast,
+                                       top=False,
+                                       cycle=cycle + (self,),
+                                       html=html)
                     else:
-                        s = c.__repr__(depth + 1, new_nparens, new_plast, False, html=html)
+                        #print('Circular link in', self.shareLink)
+                        cyc = ' '.join(c.id for c in cycle)
+                        print('Circular link in', self._repr, 'cycle', cyc)
+                        s = f"'(circular-link no-type (cycle {cyc}))" + ')' * nparens
+                        #s = f"'(circular-link {cycle[0].id})" + ')' * nparens
                 except TypeError as e:
                     # do not remove or bypass this error, it means that one of your
                     # dicts like _replies or objects has members of some other class
                     # and is actually probably being inherited from that class
                     # you should give this class its own dictionary for that
-                    raise TypeError(f'{c} is not an {self.classn}') from e
+                    raise TypeError(f'{c} is not an {self.classn}') from e  # XXX
                 cs.append(s)
             childs = comment + linestart + linestart.join(cs)
         else:
@@ -682,7 +687,7 @@ class AstGeneric(Hybrid):
 
         start = '\n(' if top else '('  # ))
         #print('|'.join(''.join(str(_) for _ in range(1,10)) for i in range(12)))
-        return f'{start}{type_} {value}{childs}'
+        return f'{start}{self.astType} {value}{childs}'
 
 
 class protc(AstGeneric):
