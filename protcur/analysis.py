@@ -413,7 +413,7 @@ class Hybrid(HypothesisHelper):
         for id_ in self._children_ids:
             child = self.getObjectById(id_)
             if child is None:
-                print(f"WARNING: child of {self.__class__.__name__}.byId('{self.id}') {id_} does not exist!")
+                print(f"WARNING: child of {self._repr} {id_} does not exist!")
                 continue
             for reply in child.replies:
                 if 'protc:implied-aspect' in reply.tags:
@@ -426,15 +426,15 @@ class Hybrid(HypothesisHelper):
                 child.hasAstParent = True  # FIXME called every time :/
                 yield child  # buildAst will have a much eaiser time operating on these single depth childs
 
-    def __repr__(self, depth=0, cycle=None, html=False, number='*', ind=4):
+    def __repr__(self, depth=0, cycle=tuple(), html=False, number='*', ind=4):
         #SPACE = '&nbsp;' if html else ' '
         SPACE = '\xA0' if html else ' '
-        if cycle == self:
-            f'\n{SPACE * ind * (depth + 1)}* {cycle.id} has a circular reference with this node {self.id}'
-            print(tc.red('CYCLE DETECTED'))
+        if self in cycle:
+            print(tc.red('CYCLE DETECTED'), self._repr)
+            return f'\n{SPACE * ind * (depth + 1)}* {cycle[0].id} has a circular reference with this node {self.id}'
             return ''  # prevent loops
-        elif cycle == None:
-            cycle = self
+        else:
+            cycle += self,
         start = '|' if depth else ''
         #t = SPACE * ind * depth + start
         t = ((SPACE * ind) + start) * depth
@@ -453,10 +453,10 @@ class Hybrid(HypothesisHelper):
         _replies = [r for r in self.replies if r not in children]
         lenchilds = len(children) + len(_replies)
         more = f' {lenchilds} ...' if lenchilds else ' ...'
-        childs = ''.join(c.__repr__(depth + 1, cycle=cycle, html=html) for c in children)
+        childs = ''.join(c.__repr__(depth + 1, cycle=cycle, html=html) for c in children
+                         if not print(c.id))
         #if childs: childs += '\n'
-        classn = self.__class__.__name__
-        prefixes = {f'{classn}:':True,
+        prefixes = {f'{self.classn}:':True,
                     'parent:':self.parent,
                     'value:':self.value,
                     'AstN?:':True,
@@ -487,13 +487,13 @@ class Hybrid(HypothesisHelper):
         value_text = row('value:', lambda:linewrap(self.value, align, space=SPACE, depth=depth, ind=ind))
 
         parent_id = row('parent:',
-                        lambda:f"{'' if html else self.parent.id + SPACE}{classn}.byId('{self.parent.id}')")
+                        lambda:f"{'' if html else self.parent.id + SPACE}{self.parent._repr}')")
 
 
         startbar = f'{startn}{SPACE * (((ind + len(start)) * depth) - 1)}{number:-<10}{more:->10}'
 
         link = atag(self.shareLink, self.id, new_tab=True) if html else self.shareLink
-        title_text = row(f'{classn}:', lambda:f"{link}{SPACE}{classn}.byId('{self.id}')")
+        title_text = row(f'{self.classn}:', lambda:f"{link}{SPACE}{self._repr}")
 
         #ast_text = '' if html else row('AstN?:', lambda:str(self.isAstNode))[1:]
 
@@ -511,7 +511,7 @@ class Hybrid(HypothesisHelper):
         replies = ''.join(r.__repr__(depth + 1, cycle=cycle, html=html)
                           for r in _replies)
                           #if not print(cycle.id, self.id, self.shareLink))
-        rep_ids = row('replies:', lambda:' '.join(f"{classn}.byId('{r.id}')" for r in _replies))
+        rep_ids = row('replies:', lambda:' '.join(r._repr for r in _replies))
         replies_text = row('replies:', lambda:replies) if self.reprReplies else rep_ids
 
         childs_text = row('children:', lambda:childs)
@@ -567,7 +567,7 @@ class AstGeneric(Hybrid):
             raise TypeError(f'Cannot dispatch on NoneType!\n{super().__repr__()}')
         namespace, dispatch_on = type_.split(':', 1)
         if namespace != self.__class__.__name__:
-            raise TypeError(f'{self.__class__.__name__} does not dispatch on types from '
+            raise TypeError(f'{self.classn} does not dispatch on types from '
                             f'another namespace ({namespace}).')
         dispatch_on = dispatch_on.replace('*', '').replace('-', '_')
         return getattr(self, dispatch_on, inner)()
@@ -674,7 +674,7 @@ class AstGeneric(Hybrid):
                     # dicts like _replies or objects has members of some other class
                     # and is actually probably being inherited from that class
                     # you should give this class its own dictionary for that
-                    raise TypeError(f'{c} is not an {self.__class__.__name__}') from e
+                    raise TypeError(f'{c} is not an {self.classn}') from e
                 cs.append(s)
             childs = comment + linestart + linestart.join(cs)
         else:
