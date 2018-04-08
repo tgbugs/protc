@@ -292,7 +292,7 @@ def main():
     get_annos, annos, stream_loop = annoSync('/tmp/protcur-server-annos.pickle',
                                              helpers=(Hybrid, protc,))
                                              #helpers=(HypothesisHelper, Hybrid, protc,))
-    #stream_loop.start()
+    stream_loop.start()
     #[HypothesisHelper(a, annos) for a in annos]
     [Hybrid(a, annos) for a in annos]
     [protc(a, annos) for a in annos]

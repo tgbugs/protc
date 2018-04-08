@@ -8,7 +8,7 @@ from collections import Counter
 from IPython import embed
 from protcur.core import atag, deltag, linewrap
 from pyontutils.hierarchies import creatTree
-from pyontutils.utils import async_getter, noneMembers, allMembers, anyMembers
+from pyontutils.utils import async_getter, noneMembers, allMembers, anyMembers, TermColors as tc
 from pyontutils.core import makeGraph, makePrefixes
 from pyontutils.scigraph_client import Vocabulary
 from pysercomb import parsing
@@ -431,6 +431,7 @@ class Hybrid(HypothesisHelper):
         SPACE = '\xA0' if html else ' '
         if cycle == self:
             f'\n{SPACE * ind * (depth + 1)}* {cycle.id} has a circular reference with this node {self.id}'
+            print(tc.red('CYCLE DETECTED'))
             return ''  # prevent loops
         elif cycle == None:
             cycle = self
@@ -449,7 +450,8 @@ class Hybrid(HypothesisHelper):
             #print(f'WARNING {self.shareLink} is its own child what is going on?!')
             #children.remove(self)
             #f'\n{SPACE * ind * (depth + 1)}* {c.id} has a circular reference with this node {self.id}'  # avoid recursion
-        lenchilds = len(children) + len([r for r in self.replies if r not in children])
+        _replies = [r for r in self.replies if r not in children]
+        lenchilds = len(children) + len(_replies)
         more = f' {lenchilds} ...' if lenchilds else ' ...'
         childs = ''.join(c.__repr__(depth + 1, cycle=cycle, html=html) for c in children)
         #if childs: childs += '\n'
@@ -464,7 +466,7 @@ class Hybrid(HypothesisHelper):
                     'cleaned tags:':(self.references and lct and lct != self.tags),
                     'tag_corrs:':self.tag_corrections,
                     'children:':childs,
-                    'replies:':self.replies,}
+                    'replies:':_replies,}
         spacing = max(len(p) for p, test in prefixes.items() if test) + 1
         align = (ind + len(start)) * depth + spacing  # TODO max(len(things)) instead of 14 hardcoded
         def align_prefix(prefix):
@@ -504,12 +506,12 @@ class Hybrid(HypothesisHelper):
 
         ct = row('cleaned tags:', lambda:str(lct))
 
-        tc = row('tag_corrs:', lambda:str(self.tag_corrections))
+        tagcor = row('tag_corrs:', lambda:str(self.tag_corrections))
 
         replies = ''.join(r.__repr__(depth + 1, cycle=cycle, html=html)
-                          for r in self.replies)
+                          for r in _replies)
                           #if not print(cycle.id, self.id, self.shareLink))
-        rep_ids = row('replies:', lambda:' '.join(f"{classn}.byId('{r.id}')" for r in self.replies))
+        rep_ids = row('replies:', lambda:' '.join(f"{classn}.byId('{r.id}')" for r in _replies))
         replies_text = row('replies:', lambda:replies) if self.reprReplies else rep_ids
 
         childs_text = row('children:', lambda:childs)
@@ -530,7 +532,7 @@ class Hybrid(HypothesisHelper):
                              text_text,
                              tag_text,
                              ct,
-                             tc,
+                             tagcor,
                              replies_text,
                              childs_text,
                              endbar,
@@ -983,7 +985,6 @@ def main():
     from time import sleep, time
     from core import annoSync
     import requests
-    embed()
 
     global annos  # this is now only used for making embed sane to use
     get_annos, annos, stream_loop = annoSync('/tmp/protcur-analysis-annos.pickle',
