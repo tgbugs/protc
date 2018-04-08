@@ -210,6 +210,7 @@ class Hybrid(HypothesisHelper):
     objects = {}  # TODO updates
     _tagIndex = {}
     _replies = {}
+    _astParentIndex = {}
 
     def __init__(self, anno, annos):
         super().__init__(anno, annos)
@@ -217,6 +218,8 @@ class Hybrid(HypothesisHelper):
             # populate annotation links from the text field to catch issues early
             printD(f'populating children {anno.id}')  # share link many not exist
             [c for p in self.objects.values() for c in p.children]
+            [p._addAstParent() for p in self.objects.values() if tuple(p.children)]  # handles updates
+            # TODO deletes still an issue as always
 
     def _fix_implied_input(self):
         if ': ' in self.text and 'hyp.is' in self.text:
@@ -415,7 +418,7 @@ class Hybrid(HypothesisHelper):
             if child is None:
                 print(f"WARNING: child of {self._repr} {id_} does not exist!")
                 continue
-            for reply in child.replies:
+            for reply in child.replies:  # because we cannot reference replies directly in the client >_<
                 if 'protc:implied-aspect' in reply.tags:
                     self.hasAstParent = True  # FIXME called every time :/
                     yield reply
@@ -425,6 +428,26 @@ class Hybrid(HypothesisHelper):
             if child is not None: # sanity
                 child.hasAstParent = True  # FIXME called every time :/
                 yield child  # buildAst will have a much eaiser time operating on these single depth childs
+
+    def _addAstParent(self):
+        if self.isAstNode:
+            for child in self.children:
+                if child.id not in self.__class__._astParentIndex:
+                    self.__class__._astParentIndex[child.id] = set()
+                self.__class__._astParentIndex[child.id].add(self)
+
+    def _delAddParent(self):
+        if self.isAstNode:
+            for child in self.children:
+                self.__class__._astParentIndex[child.id].remove(self)
+
+    @property
+    def astParents(self):
+        # note that all children have to be run first so that the connections are present
+        if self.isAstNode:
+            # TODO handle cases where non-top forms have no parent
+            # should probably warn
+            return self.__class__._astParentIndex[self.id]
 
     def __repr__(self, depth=0, cycle=tuple(), html=False, number='*', ind=4):
         #SPACE = '&nbsp;' if html else ' '
@@ -487,7 +510,7 @@ class Hybrid(HypothesisHelper):
         value_text = row('value:', lambda:linewrap(self.value, align, space=SPACE, depth=depth, ind=ind))
 
         parent_id = row('parent:',
-                        lambda:f"{'' if html else self.parent.id + SPACE}{self.parent._repr}')")
+                        lambda:f"{'' if html else self.parent.id + SPACE}{self.parent._repr}")
 
 
         startbar = f'{startn}{SPACE * (((ind + len(start)) * depth) - 1)}{number:-<10}{more:->10}'
@@ -696,6 +719,7 @@ class protc(AstGeneric):
     objects = {}  # TODO updates
     _tagIndex = {}
     _replies = {}  # without this Hybrid replies will creep in
+    _astParentIndex = {}
     _order = (  # ordered based on dependence and then by frequency of occurence for performance (TODO tagdefs stats automatically)
               'structured-data-record',  # needs to come first since record contents also have a type (e.g. protc:parameter*)
               'parameter*',
@@ -720,6 +744,7 @@ class protc(AstGeneric):
               'structured-data-header',
               'telos',
               'executor-verb',
+              'var',
             )
     _topLevel = tuple('protc:' + t for t in ('input',
                                              'output',
