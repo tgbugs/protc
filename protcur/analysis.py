@@ -6,7 +6,7 @@ import ast
 from pathlib import PurePath
 from collections import Counter
 from IPython import embed
-from protcur.core import atag, deltag
+from protcur.core import atag, deltag, linewrap
 from pyontutils.hierarchies import creatTree
 from pyontutils.utils import async_getter, noneMembers, allMembers, anyMembers
 from pyontutils.core import makeGraph, makePrefixes
@@ -215,7 +215,7 @@ class Hybrid(HypothesisHelper):
         super().__init__(anno, annos)
         if len(self.objects) == len(self._annos):  # all loaded
             # populate annotation links from the text field to catch issues early
-            printD('populating children')
+            printD(f'populating children {anno.id}')  # share link many not exist
             [c for p in self.objects.values() for c in p.children]
 
     def _fix_implied_input(self):
@@ -403,6 +403,10 @@ class Hybrid(HypothesisHelper):
 
     @property
     def children(self):  # TODO various protc:implied- situations...
+        #if anyMembers(self.tags, *('protc:implied-' + s for s in ('input', 'output', 'aspect'))):  # FIXME hardcoded fix
+            #if self.parent is None:
+                #embed()
+                #raise ValueError(f'protc:implied-* does not have a parrent? Did you mistag?')
         if 'protc:implied-aspect' in self.tags:
             yield self.parent
             return
@@ -422,71 +426,115 @@ class Hybrid(HypothesisHelper):
                 child.hasAstParent = True  # FIXME called every time :/
                 yield child  # buildAst will have a much eaiser time operating on these single depth childs
 
-    def __repr__(self, depth=0, cycle=None, html=False, number='*'):
+    def __repr__(self, depth=0, cycle=None, html=False, number='*', ind=4):
+        #SPACE = '&nbsp;' if html else ' '
+        SPACE = '\xA0' if html else ' '
         if cycle == self:
-            f'\n{" " * 4 * (depth + 1)}* {cycle.id} has a circular reference with this node {self.id}'
+            f'\n{SPACE * ind * (depth + 1)}* {cycle.id} has a circular reference with this node {self.id}'
             return ''  # prevent loops
         elif cycle == None:
             cycle = self
         start = '|' if depth else ''
-        #SPACE = '&nbsp;' if html else ' '
-        SPACE = '\xA0' if html else ' '
-        t = SPACE * 4 * depth + start
+        #t = SPACE * ind * depth + start
+        t = ((SPACE * ind) + start) * depth
 
-        parent_id =  f"\n{t}parent_id:    {self.parent.id} {self.__class__.__name__}.byId('{self.parent.id}')" if self.parent else ''
-        exact_text = f'\n{t}exact:        {self.exact}' if self.exact else ''
-
-        text_align = 'text:         '
-        lp = f'\n{t}'
-        text_line = lp + ' ' * len(text_align)
-        text_text = lp + text_align + self.text.replace('\n', text_line) if self.text else ''
-
-
-        value_text = f'\n{t}value:        {self.value}'
-        tag_text =   f'\n{t}tags:         {self.tags}' if self.tags else ''
-
+        # prefix test
         lct = list(self._cleaned_tags)
-        ct = f'\n{t}cleaned tags: {lct}' if self.references and lct and lct != self.tags else ''
-        tc = f'\n{t}tag_corrs:    {self.tag_corrections}' if self.tag_corrections else ''
+
+        children = sorted(self.children)
+        #children = set(c for c in self.children if c != self.parent)
+        # avoid accidental recursion with replies of depth 1 TODO WE NEED TO GO DEEPER
+        #and not print(cycle.id, self.id, self.shareLink))
+        #if self in children:
+            #print(f'WARNING {self.shareLink} is its own child what is going on?!')
+            #children.remove(self)
+            #f'\n{SPACE * ind * (depth + 1)}* {c.id} has a circular reference with this node {self.id}'  # avoid recursion
+        lenchilds = len(children) + len([r for r in self.replies if r not in children])
+        more = f' {lenchilds} ...' if lenchilds else ' ...'
+        childs = ''.join(c.__repr__(depth + 1, cycle=cycle, html=html) for c in children)
+        #if childs: childs += '\n'
+        classn = self.__class__.__name__
+        prefixes = {f'{classn}:':True,
+                    'parent:':self.parent,
+                    'value:':self.value,
+                    'AstN?:':True,
+                    'exact:':self.exact,
+                    'text:':self.text,
+                    'tags:':self.tags,
+                    'cleaned tags:':(self.references and lct and lct != self.tags),
+                    'tag_corrs:':self.tag_corrections,
+                    'children:':childs,
+                    'replies:':self.replies,}
+        spacing = max(len(p) for p, test in prefixes.items() if test) + 1
+        align = (ind + len(start)) * depth + spacing  # TODO max(len(things)) instead of 14 hardcoded
+        def align_prefix(prefix):
+            return '\n' + t + prefix + SPACE * (spacing - len(prefix))
+        #parent_id =  (f"\n{t}parent_id:{SPACE * (spacing - len('parent_id:'))}"
+        def row(prefix, rest):
+            # if thunking this works for deferring if it will be a miracle
+            return (align_prefix(prefix) + rest()) if prefixes[prefix] else ''
+
+        startn = '\n' if not isinstance(number, int) or number > 1 else ''
+
+        details = '<details>' if html else ''
+        _details = '</details>' if html else ''
+
+        summary = '<summary>' if html else ''
+        _summary = f'</summary>' if html else '\n'  # </summary> has an implicit <br> for reasons know only to w3c
+
+        value_text = row('value:', lambda:linewrap(self.value, align, space=SPACE, depth=depth, ind=ind))
+
+        parent_id = row('parent:',
+                        lambda:f"{'' if html else self.parent.id + SPACE}{classn}.byId('{self.parent.id}')")
+
+
+        startbar = f'{startn}{SPACE * (((ind + len(start)) * depth) - 1)}{number:-<10}{more:->10}'
+
+        link = atag(self.shareLink, self.id, new_tab=True) if html else self.shareLink
+        title_text = row(f'{classn}:', lambda:f"{link}{SPACE}{classn}.byId('{self.id}')")
+
+        #ast_text = '' if html else row('AstN?:', lambda:str(self.isAstNode))[1:]
+
+        exact_text = row('exact:', lambda:linewrap(self.exact, align, space=SPACE, depth=depth, ind=ind))
+        #exact_text = exact_text[1:] if html else exact_text  # switching places with ast_text -> no \n
+
+        text_text = row('text:', lambda:linewrap(self.text, align, space=SPACE, depth=depth, ind=ind))
+
+        tag_text = row('tags:', lambda:str(self.tags))
+
+        ct = row('cleaned tags:', lambda:str(lct))
+
+        tc = row('tag_corrs:', lambda:str(self.tag_corrections))
 
         replies = ''.join(r.__repr__(depth + 1, cycle=cycle, html=html)
                           for r in self.replies)
                           #if not print(cycle.id, self.id, self.shareLink))
-        rep_ids = f'\n{t}replies:      ' + ' '.join(f"{self.__class__.__name__}.byId('{r.id}')"
-                                                    for r in self.replies)
-        replies_text = (f'\n{t}replies:{replies}' if self.reprReplies else rep_ids) if replies else ''
+        rep_ids = row('replies:', lambda:' '.join(f"{classn}.byId('{r.id}')" for r in self.replies))
+        replies_text = row('replies:', lambda:replies) if self.reprReplies else rep_ids
 
-        childs = ''.join(c.__repr__(depth + 1, cycle=cycle, html=html)
-                         if c != self else
-                         f'\n{" " * 4 * (depth + 1)}* {c.id} has a circular reference with this node {self.id}'  # avoid recursion
-                         for c in self.children
-                         # avoid accidental recursion with replies of depth 1 TODO WE NEED TO GO DEEPER
-                         if c != self.parent)
-                         #and not print(cycle.id, self.id, self.shareLink))
-        lenchilds = len(tuple(self.children)) + len(self.replies)
-        more = f' {lenchilds} ...' if lenchilds else ''
-        childs_text = f'\n{t}children:{childs}' if childs else ''
+        childs_text = row('children:', lambda:childs)
 
-        link = self.shareLink
-        if html: link = atag(link, link)
-        startn = '\n' if not isinstance(number, int) or number > 1 else ''
-        details = '<details>' if html else ''
-        _details = '</details>' if html else ''
-        summary = '<summary>' if html else ''
-        _summary = f'{value_text}</summary>' if html else ''
-        return (f'{startn}{details}{summary}{t.replace("|","")}{number:-<10}{more:->10}'
-                f"\n{t}{self.__class__.__name__ + ':':<14}{link} {self.__class__.__name__}.byId('{self.id}'){_summary}"
-                f'\n{t}isAstNode:    {self.isAstNode}'
-                f'{parent_id}'
-                f'{exact_text}'
-                f'{text_text}'
-                f'{value_text}'
-                f'{tag_text}'
-                f'{ct}'
-                f'{tc}'
-                f'{replies_text}'
-                f'{childs_text}'
-                f'\n{t}{"":_<20}{_details}')
+        endbar = f'\n{t:_<80}\n'
+
+        def rm_n(*args):
+            return ''.join(args).strip('\n')
+
+        return ''.join((details, summary,
+                        startbar,
+                        title_text,
+                        parent_id,
+                        value_text,
+                        _summary,
+                        #ast_text,  # not used in hybrid and not useful in protc anymore
+                        rm_n(exact_text,
+                             text_text,
+                             tag_text,
+                             ct,
+                             tc,
+                             replies_text,
+                             childs_text,
+                             endbar,
+                             _details)))
 
 
 class AstGeneric(Hybrid):
@@ -597,7 +645,7 @@ class AstGeneric(Hybrid):
         SPACE = '\xA0' if html else ' '
         comment = f'{SPACE}{SPACE}; {link}'
 
-        children = list(self.children)  # better to run the generator once up here
+        children = sorted(self.children)  # better to run the generator once up here
         if children:
             indent = SPACE * self.indentDepth * depth
             linestart = '\n' + indent
@@ -935,6 +983,7 @@ def main():
     from time import sleep, time
     from core import annoSync
     import requests
+    embed()
 
     global annos  # this is now only used for making embed sane to use
     get_annos, annos, stream_loop = annoSync('/tmp/protcur-analysis-annos.pickle',

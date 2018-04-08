@@ -16,6 +16,34 @@ def annoSync(memoization_file='/tmp/protc-annotations.pickle', helpers=tuple()):
     stream_loop = AnnotationStream(annos, prefilter, helperSyncHandler)()
     yield stream_loop
 
+def linewrap(text, start, end=80, sep='|', space=' ', ind=4, depth=0):
+    text = text.replace('\n', ' ')
+    if depth:
+        pre = ''.join((space * ind) + sep for _ in range(depth))
+        post = space * (start - depth * (ind + len(sep)))
+        t = pre + post
+    else:
+        t = space * start
+    clen = start - 1
+    output = []
+    cline = []
+    for token in text.split(' '):
+        lt = len(token)
+        if clen + lt >= end:
+            cline.append(token)
+            output.append(space.join(cline))
+            clen = start
+            cline = []
+        else:
+            clen += lt + 1
+            cline.append(token)
+
+    if cline:
+        output.append(space.join(cline))
+
+    out = f'\n{t}'.join(output)
+    return out
+
 def tag(_tag, n=False):
     nl = '\n' if n else ''
     s = f'<{_tag}>{nl}'
@@ -49,5 +77,3 @@ def htmldoc(body, title='Spooky Nameless Page', styles=tuple(), scripts=tuple())
     scripts = '\n'.join((scripts(s) for s in scripts))
     head = headtag('\n'.join((titletag(title), '<meta charset="UTF-8">', styles, scripts)))
     return header + htmltag('\n'.join((head, bodytag(body))))
-
-
