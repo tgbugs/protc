@@ -50,6 +50,8 @@ def export_json_impl(annos):
 monospace_body_style = 'body { font-family: Dejavu Sans Mono; font-size: 11pt }'
 
 table_style = ('th { text-align: left; padding-right: 20px; }'
+               'tr { vertical-align: top;  }'
+               'tr:hover { background-color: #fcfcfc;  }'
                'table { font-family: Dejavu Sans Mono; }'
                'a:link { color: black; }'
                'a:visited { color: grey; }'
