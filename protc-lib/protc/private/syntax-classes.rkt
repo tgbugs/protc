@@ -38,6 +38,8 @@ This is very useful for specifying a new actulization procedure and also for say
 The two ways that this could go are (:* my-actualization-procedure g) or (: my-actualization-procedure)
 or even just (:* my-actualization-procedure) though that is unlikely to work in cases where there is more than
 one thing that has aspect grams.
+
+All actualize sections should specify a variable name that will be used in inheriting sections.
 "
     (syntax-parse stx
       [(_ actualize-name:id aspect:id)
@@ -82,11 +84,26 @@ one thing that has aspect grams.
 (define-syntax-class asp
   #:description "(: thing:id lonely-aspect:id ... ([aspect:id value] ...))"
   #:literals (:)
+  ; TODO get this right...
+  ;(pattern (: thing:id -aspect:id ... ([aspect-value:id value] ...))
+
+  ;(pattern (: thing:id -aspect:id ...)  ; FIXME consumes ....
+           ;#:attr aspects #'(list -aspect ...)
+           ;#:attr values #'()
+           ;)
+  ;(~and (~not ....))
   (pattern (: thing:id -aspect:id ... (~optional ([aspect-value:id value] ...)))
            ; switch order to allow the values to line up
            ;#:attr aspect-value #`(list #,(if (attribute -aspect-value) #'-aspect-value null) ...)
-           #:attr aspects #'(list aspect-value ... -aspect ...)
-           #:attr values #'(list value ...))
+           #:attr aspects (if (attribute aspect-value)
+                              #'(list aspect-value ... -aspect ...)
+                              #'(list -aspect ...))
+           #:attr values (if (attribute value)
+                             #'(list value ...)
+                             #'()))
+  ;(pattern (: thing:id (~or* -aspect:id [-aspect-value value]) ...)
+           ;#:attr aspects #'(list aspect-value ... -aspect ...)
+           ;#:attr values #'(list value ...))
   ;(pattern (: thing:id aspect-value:id value))  ; normally only want (t a v) but (t a a a a v) is more consistent
   ;(pattern (: thing:id aspect-l:id ...))
   ;(pattern (: thing:id (~optional aspect:id ...) (~optional ([aspect-value:id value] ...))))

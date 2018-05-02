@@ -289,6 +289,15 @@
                ;[g/mol 58.4]  ; TODO
                [kg 10])))
 
+(define (test-quants-will-fail)
+  ; the fact that this errors when not qualified is great
+  (let-quants ([g ?] [kg 10])))
+
+'(define (test-quants-qualified)
+   ; not working right due to the exactness of units problem
+  (let-quants ([mg:ketamine-xylazine ?]
+               [kg:mouse 0.04])))
+
 (define (if-number-exact? maybe-number)
   (when (racket:number? maybe-number)
     (when (inexact? maybe-number)

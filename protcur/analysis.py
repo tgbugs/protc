@@ -12,7 +12,7 @@ from pyontutils.utils import async_getter, noneMembers, allMembers, anyMembers, 
 from pyontutils.core import makeGraph, makePrefixes
 from pyontutils.scigraph_client import Vocabulary
 from pysercomb import parsing
-from pysercomb import parsing_parsec
+#from pysercomb import parsing_parsec
 from hyputils.hypothesis import HypothesisAnnotation, HypothesisHelper, idFromShareLink, shareLinkFromId
 from desc.prof import profile_me
 

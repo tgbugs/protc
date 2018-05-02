@@ -38,7 +38,9 @@
          ; for utility, should not be required by base... probably need to reorganize
          :* *: **
          actualize measure make
+         define-message
          ;(for-syntax name-join)
+         (for-syntax (all-from-out racket/base))
          )
 
 (module+ other
@@ -298,7 +300,8 @@
     #:literals (begin
                 pattern
                 define-syntax-class)
-    [(_ mess:message-struct-sc body-syntax-template)
+    [(_ mess:message-struct-sc (~optional doc) body-syntax-template)
+     (println `(help!: ,(syntax->datum #'(mess.body-pattern ...))))
      #'(begin
          (define-syntax-class mess.sc-name
            ; TODO add the dot out front ala .message-name
@@ -306,6 +309,7 @@
          ;(impl-spec-add-message message-name #'local-sc-name)  ; TODO more args here
          (define-syntax (mess.name stx-i)
            (syntax-parse stx-i
+             #:literals (....) ; FIXME
              [(_ mess.body-pattern ...)
               ; can't use the syntax class from above
               ; because then the references would be mymess.thing-defined-template
@@ -330,6 +334,16 @@
            (println (list local-name ... aspect-expr.thing ...))
            (void)))
 
+(define-message (outputs defined-name:id ... aspect-expr:asp ... (~optional ....))
+  "This is not an actual output in the sense that it is not 'returned' by the function.
+Rather, it is a way to say what _should_ be output, and to place constraints on those
+outputs. Specifically when actualizing something like concentration we need to know
+how what it is bound to because it could be bound as a constraint on an input.
+"
+  #'(λ () "TODO need to figure out how to push these constraints into rosette
+and how to combine them in an impl section" (void))
+  )
+
 (define-message (invariant body:expr)
   #''(rosette-assert body))
 
@@ -337,6 +351,7 @@
   #'(list step ...))
 
 (define-message (order+ step ...)
+  "Order steps and link the output of one step to the inputs of the next"
   #'(list 'compose step ...))  ; TODO
 
 (define-message (identifier (~seq type ident) ...)
@@ -407,7 +422,7 @@
     ;(define/public (.input name [aspect null] [value null]) -name)  ; atomic structure of the message? ick
     (define/public (.vars . things) (void))  ; atomic structure of the message? ick
     (define/public (.inputs input-struct) (set! -inputs (cons input-struct -inputs)))  ; atomic structure of the message? ick
-    (define/public (.output do-not-want) (void))  ; maybe we want this as a concise way to bind things
+    (define/public (.outputs do-not-want) (void))  ; maybe we want this as a concise way to bind things
     (define/public (.invariant . things) (void))  ; copy me to make more! TODO this cannot be allowed in the impl section...
     (define/public (.parameter . things) (void))  ; not clear if we actually need this?
     (define/public (.order . things)  ; order on making inputs and/or on individual actions, practical deps should resolve automatically
@@ -481,7 +496,7 @@
            (define aspect-expression.thing 'should-be-a-class?) ...
            (void))]))
 
-  (define-syntax (#%.output stx) (pw stx) #''output)  ; FIXME probably should not be done the way that requires this... the name in the make should be the output...
+  (define-syntax (#%.outputs stx) (pw stx) #''output)  ; FIXME probably should not be done the way that requires this... the name in the make should be the output...
 
   (define-syntax (#%.invariant stx) (pw stx) #''invariants)
 
@@ -786,6 +801,7 @@ For example use @(def solution (a+b solute solvent))."
   (define mL ml)
   (define g (aspect 'g 'grams "SI unit of weight" mass))
 
+  (define concentration (aspect 'concentration 'concentration "concentration" '(/ count volume)))
   (define M (aspect 'M 'molarity "SI unit of concentration" '(/ mol L)))  ; FIXME HRM... mol/volume vs mol/liter how to support...
   (define mM (aspect 'mM 'milli-molarity "SI unit of weight" '(* _m M)))  ; TODO auto prefix conversion because this is icky
   )
