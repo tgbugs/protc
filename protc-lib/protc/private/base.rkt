@@ -295,6 +295,7 @@
            [(_ spec)
             #'()]))]))
 
+(define .... 'blank)
 (define-syntax (define-message stx)
   (syntax-parse stx
     #:literals (begin
@@ -302,22 +303,28 @@
                 define-syntax-class)
     [(_ mess:message-struct-sc (~optional doc) body-syntax-template)
      (println `(help!: ,(syntax->datum #'(mess.body-pattern ...))))
+     (let ([output
      #'(begin
          (define-syntax-class mess.sc-name
+           #:literals (....) ; FIXME
            ; TODO add the dot out front ala .message-name
            (pattern ((mess.name mess.body-pattern ...))))
          ;(impl-spec-add-message message-name #'local-sc-name)  ; TODO more args here
          (define-syntax (mess.name stx-i)
            (syntax-parse stx-i
              #:literals (....) ; FIXME
-             [(_ mess.body-pattern ...)
+             [(_ mess.body-pattern ...)  ; pat
+              ; #:declare pat mess.sc-name
               ; can't use the syntax class from above
               ; because then the references would be mymess.thing-defined-template
               ; and we don't want to have to write #'(mymess.thing) in the template
               body-syntax-template
               ]))
          (provide mess.name mess.sc-name)
-         )]))
+         )])
+       (pretty-write `(define-message: ,(syntax->datum output)))
+       output
+       )]))
 
 (define-message (vars free-variable:id ...)
   ; and then we can use write a macro that wraps parameterize
@@ -358,6 +365,11 @@ and how to combine them in an impl section" (void))
   ; FIXME figure out the best syntax and move on
   ; KISS for these things, no alternate forms
   #''((type . ident) ...))
+
+(define-message (test thing:id ... (~optional ....))
+  #'(λ () "HELLO THERE"))
+
+((.test hello there ....))
 
 (define dc-list '())
 
@@ -484,11 +496,11 @@ and how to combine them in an impl section" (void))
 
   (define .... 'more-to-come)
   (define-syntax (#%.inputs stx)
-    ;(pw stx)
+    (pw stx)
     (syntax-parse stx
       #:literals (....)  ; FIXME ... not ....
       [;(_ local-name:id ... [local-name-inv:id invariant:expr] ... .... )  ; FIXME this needs its own syntax class
-       (_ local-name:id ... aspect-expression:asp ...)
+       (_ local-name:id ... aspect-expression:asp ... (~optional ....)) ; FIXME this fights with define-message
        #'(λ ()  ; FIXME we need to be able to inject these names into a closure
            ; FIXME messages probably need to be syntax classes
            ; so that input.name ... can be accessed from outside
