@@ -108,21 +108,21 @@ def addDocLinks(base_url, doc):
 def getUri(anno):
     return anno._anno.uri if isinstance(anno, HypothesisHelper) else anno.uri
 
-def citation_triples(annos):
+def citation_triples(annos, all=False):
     p = RFU
     for anno in annos:
         hl = get_hypothesis_local(getUri(anno))
         if hl:
             s = hl
-            if p in anno.tags:
+            if p in anno.tags or all and any('protc:references-for-' in t for t in anno.tags):
                 urls = extract_links_from_markdown(anno.text)
                 for url in urls:
                     o = get_hypothesis_local(url)
                     o = o if o else url
                     yield p, s, o
 
-def citation_tree(annos, html_head=''):
-    t = citation_triples(annos)
+def citation_tree(annos, html_head='', all=False):
+    t = citation_triples(annos, all)
     PREFIXES = {'protc':'https://protc.olympiangods.org/curation/tags/',
                 'hl':'https://hypothesis-local.olympiangods.org/'}
     PREFIXES.update(makePrefixes('rdfs'))
@@ -353,7 +353,7 @@ class Hybrid(HypothesisHelper):
         for reply in self.replies:
             _correction = reply.text_correction('children')
             if _correction is not None:
-                correction = _correction
+                correction += '\n' + _correction
         if correction:
             return correction
 
@@ -447,7 +447,12 @@ class Hybrid(HypothesisHelper):
         if self.isAstNode:
             # TODO handle cases where non-top forms have no parent
             # should probably warn
-            return self.__class__._astParentIndex[self.id]
+            if self.id in self.__class__._astParentIndex:
+                return self.__class__._astParentIndex[self.id]
+
+    @property
+    def needsParent(self):
+        return self.isAstNode and not self.hasAstParent and self.astType in self._needParent
 
     def __repr__(self, depth=0, cycle=tuple(), html=False, number='*', ind=4):
         #SPACE = '&nbsp;' if html else ' '
@@ -609,6 +614,11 @@ class AstGeneric(Hybrid):
         return ''.join(sorted(repr(o) for o in cls.objects.values()
                               if o is not None and o.isAstNode and not o.hasAstParent))
 
+    @classmethod
+    def parentneed(cls):
+        return ''.join(sorted(repr(o) for o in cls.objects.values()
+                              if o is not None and o.needsParent))
+
     @property
     def astType(self):
         if self.isAstNode:
@@ -726,6 +736,8 @@ class protc(AstGeneric):
               'input',
               'invariant',
               'references-for-use',
+              'references-for-data',
+              'references-for-evidence',
               'aspect',
               'black-box-component',
               '*measure',  # under represented
@@ -747,6 +759,9 @@ class protc(AstGeneric):
               'var',
             )
     _topLevel = tuple('protc:' + t for t in ('input',
+                                             # FIXME pretty sure that inputs should have parents?
+                                             # but they should also have their own sections where they are
+                                             # specced independently
                                              'output',
                                              'implied-input',
                                              'implied-output',
@@ -754,6 +769,13 @@ class protc(AstGeneric):
                                              'symbolic-measure',
                                              'black-black-component',
                                             ))
+    _needParent = tuple('protc:' + t for t in ('aspect',
+                                               'black-box-component',
+                                               'parameter*',
+                                               'invariant',
+                                               'telos',
+                                               #TODO we need more here...
+                                               ))
     format_nl =  '*', '/', 'range', 'plus-or-minus', 'param:dimensions'
 
     format_nl_long =  '^'
@@ -1057,6 +1079,8 @@ def main():
         with open('/tmp/top-protcur.rkt', 'wt') as f: f.write(tl)
         pl = protc.parentless()
         with open('/tmp/pl-protcur.rkt', 'wt') as f: f.write(pl)
+        pn = protc.parentneed()
+        with open('/tmp/pn-protcur.rkt', 'wt') as f: f.write(pn)
     more()
     def update():
         protc.objects = {}
