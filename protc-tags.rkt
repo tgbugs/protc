@@ -38,16 +38,24 @@
          "Detailed description involving the desired outcome, probably should be `protc:objective*`.")
 (tag-doc 'mo:technique 'ilxtr:technique
          "Simple, concise verbs describing procedure (that you can learn)")
+(tag-doc 'protc:*check '(ilxtr:deprecatedTag ilxtr:measure)
+         "conflation of a *measure and a check against some logical condition, this may come back at some point")
 (tag-doc 'protc:*make* '(ilxtr:deprecatedTag ilxtr:participant)
          "Descriptions of how to set up the lab environment (microscope, etc) or a specific input. See also `protc:output`, `protc:input` [3-15-18 This is an old usage, should be replaced by protc:output and protc:input if it is also used within the protocol (it usually is).]")
 (tag-doc 'protc:*measure '(ilxtr:measure ilxtr:aspect)
          "Takes `protc:input`s. Returns a `protc:symbolic-output`. The name of the subset of the world that we are interested in producing a number about?? [stick to the function name version of this?] [3-15-18: The actual text of most of these are aspects. From the text it is clear that they are aspects that are intended to be measured. The correct way to model these is probably with protc:aspect + protc:*measure] ")
-(tag-doc 'protc:ambiguous-error 'protc:error
-         "error: steps are not spelled out clearly enough or may be confusing with previous information, this indicates that we as curators are explicitly marking where we will interpret no further")
+(tag-doc 'protc:actualize 'ilxtr:actualizing
+         "actualizen node, normally associated with spec")
 (tag-doc 'protc:ambigious-error '(typo)
          "typo do not display in list")
+(tag-doc 'protc:ambiguous-error 'protc:error
+         "Cases where it is not clear how two or more pieces of text are related, for example ambiguity about which one of two solutions was used.")
+(tag-doc 'protc:ambiguous-error 'protc:error
+         "error: steps are not spelled out clearly enough or may be confusing with previous information, this indicates that we as curators are explicitly marking where we will interpret no further")
 (tag-doc 'protc:aspect  'ilxtr:aspect
          "Descriptions involving the current state (size, location, composition), [these could almost be black box components]")
+(tag-doc 'protc:assertion '(TODO)
+         "TODO rationale for why something was or was not done")
 (tag-doc 'protc:black-box 'ilxtr:participant
          "The whole 'containing' spatial and temporal scope for part of a protocol, e.g. a mouse from P0 to P14 (what’s the difference between all the black boxes?)")
 (tag-doc 'protc:black-box-component 'ilxtr:participant
@@ -60,14 +68,20 @@
          "Similar to `protc:executor-verb` but usually operating at a higher level, instructions given without enough background or context since the executor is expected to know what they mean")
 (tag-doc 'protc:executor-verb 'ilxtr:executorSemantics
          "error: actions without enough detailed instructions to be executed, might be described elsewhere, however the person running the protocol is expected to know what this means.")
+(tag-doc 'protc:experiment-logic '(ilxtr:deprecatedTag)
+         "the idea was correct, but these probably should just be symbolic measures, since it sounds warm and fuzzy to say 'we controlled for this by' when in fact there was really no choice, cold hard logic said that you couldn't interpret your results if you didn't do this. Therefore it is not a goal, controls are not aspirational. protc:objective* also does not work because in this case you aren't trying to induce a state of 'controlledness' on the world (in other cases you might do certain things to reduce/manage/control variance). Instead you are trying to make sure that the transformations you have to impose are not inducing your results.")
 (tag-doc 'protc:function '(ilxtr:deprecatedTag ilxtr:aspect)
          "Prefer `protc:symbolic-measure` which makes more sense in the context of `protc:*measure`. Usually an analysis function that converts data -> data. [3-15-18: The text that these target are usually apsects, often complex aspects that must be measured on symbolic inputs. The proper way to tag them is probably as protc:aspect ilxtr:hasInformationInput with the text box holding links to the intput?]")
+(tag-doc 'protc:has-part '()
+         "used for asserting has part relationships for participants (black boxes)")
 (tag-doc 'protc:how '(ilxtr:implementation ilxtr:compoundTechnique)
          "Specific details and descriptions of ways to perform each step.")
 (tag-doc 'protc:i-have-no-idea 'ilxtr:executorSemantics
          "I understand what is going on, but I have no idea how to break it down into its parts, often VERY dense text that contains tons of information, may imply `protc:delegated-instructions` or `protc:executor-verb`.")
 (tag-doc 'protc:impl 'protc:control-flow
          "protc:impl indicates that the text in question, or its translation into protc sould be contained in an impl section.")
+(tag-doc 'protc:implementation-note '(TODO)
+         "")
 (tag-doc 'protc:implied-aspect 'ilxtr:aspect
          "Use this tag only in a reply to an annotation where there is an implied `protc:aspect` that has no annotateable reference in the text.")
 (tag-doc 'protc:implied-input 'ilxtr:participant
@@ -76,15 +90,31 @@
          "Use this tag only in a reply to an annotation where there is an implied `protc:output` that has no annotateable reference or anchor in the text.")
 (tag-doc 'protc:input 'ilxtr:participant
          "Equipment used in the lab, tools, chemical solutions, research subjects, anything that is an input to a step that you need to retrieve or refer to for any reason.")
+(tag-doc 'protc:input-instance '(ilxtr:participant)
+         "Used to refer to inputs in contexts where there is a generic input such as 'video camera' along with the execution trace information about the exact input. It is not clear whether these should simply be treated as inputs for unabstracted protocols, or whether they should be treated as provenance information in the context of a paper. e.g. as protc-prov:input which seems like a better option, but would probably complicate the parsing. Regardless we need a way to bind protc:input -> protc:prov:input for the purposes of the tagging workflow.")
+(tag-doc 'protc:internal-step 'ilxtr:deprecatedTag
+         "The distinction between internal and top level steps is not meaningful when you can call functions inside other functions.")
 (tag-doc 'protc:invariant 'ilxtr:parameter
          "Numbers dependent on the procedure, mostly ratios/percentages, not directly measureable. Actualizing an invariant is more complex than actualizing a `protc:parameter*` and will generally involve the construction of a number of `protc:parameter*`s")
+(tag-doc 'protc:measure '()
+         "")
+(tag-doc 'protc:missing-input '(ilxtr:deprecatedTag)
+         "This was an old way of dealing with cases of protc:implied-input which is technically an error but not always one that we will be able to detect because 'common sense' notions that liquids must be kept in containers won't always be encoded in the system")
+(tag-doc 'protc:missing-reference-error '(protc:error)
+         "Pervious work is mentioned but there is no obvious reference to said work.")
+(tag-doc 'protc:name 'ilxtr:name
+         "The variable name for a spec section")
+(tag-doc 'protc:no-how-details-error '(ilxtr:deprecatedTag)
+         "this tag doesn't really exist, should use no how error, the single usage that this had was mistagged")
 (tag-doc 'protc:no-how-error 'protc:error
          "Mistake missing explanation where the instructions are too vague or missing steps")
 (tag-doc 'protc:no-parameters-error 'protc:error
          "error: steps given without specific parameters/measurements")
 (tag-doc 'protc:no-what-error 'protc:error
          "error: no criteria defined, the referent is nowhere to be found in the paper")
-(tag-doc 'protc:objective* '(ilxtr:parameter ilxtr:goal)
+(tag-doc 'protc:objective '(typo)
+         "typo do not display in list")
+(tag-doc 'protc:objective* '(ilxtr:parameter ilxtr:intention ilxtr:goal)
          "An ill-defined parameter. Goal of the steps outlined [compare 'cryoprotectant' with 'bath changing times were minimized' >> maybe we need to distinguish instructions from goals? how vs nature of what?]")
 (tag-doc 'protc:operator '(ilxtr:symbolicFunction)
          "Steps involving addition, division, subtraction, multiplication.")
@@ -94,55 +124,28 @@
          "What is obtained from the procedure, specifically physical objects")
 (tag-doc 'protc:output-spec '(ilxtr:deprecatedTag)
          "Description of the structure of the information to be saved (e.g. neurolucida in (x, y, z, d) out) [THIS IS CONFUSING BECAUSE IT IS FOR NUMBERS NOT PHYSICAL OBJECTS?] [3-16-18: replace with protc:aspect or protc:parameter or protc:result]")
-(tag-doc 'protc:parameter* 'ilxtr:parameter
-         "Numbers or specific measurements/locations used for lab settings, directly measureable. Often have units or are 'counts' of things")
-(tag-doc 'protc:references-for-use 'ilxtr:citationTag
-         "Citations of other literature or research papers (author and year) that are explicitly referenced in a methods section as documentation for a protocol.")
-(tag-doc 'protc:repeat 'protc:control-flow
-         "Repeat commands or computations for a specific set of varying inputs (i.e. there should be an associated annotation that enumerates said inputs), related to `protc:substitute-input`.")
-(tag-doc 'protc:result 'ilxtr:informationArtifact
-         "A number generated as the result of a `protc:*measure`.")
-(tag-doc 'protc:substitute-input 'protc:control-flow
-         "What steps/materials should be replaced in order to conduct a slightly different procedure e.g. a control experiment, should refer back to the original *make* or *measure function")
-(tag-doc 'protc:symbolic-input 'ilxtr:informationArtifact
-         "The input to a `protc:symbolic-measure`. Should be a symbolic entity such as a data file, number, or other symbol. Not a physical input which should be annotated with `protc:input`. These are distinguished from `protc:parameter*` by the fact that they often exist without the intention or knowledge of how to bind them to a physical entite. In some abstract sense they are parameters but there is no intention to act on them, and often one cannot do so easily (e.g. changing the conversion efficiency of a particular GFP protein requires extensive engineering). There are cases in closed loop systems where these can be the symbolic inputs to a `protc:parameter*` which will then be actualized.")
-(tag-doc 'protc:symbolic-measure 'ilxtr:symbolicFunction
-         "A measurement that takes symbolic input, specifically `protc:symbolic-input` or `protc:symbolic-output` which correspond to their physical versions `protc:input` and `protc:output`")
-(tag-doc 'protc:symbolic-output 'ilxtr:informationArtifact
-         "The output of a `protc:*measure` or `protc:symbolic-measure` these probably don't need to be tagged explicitly during curation. Should be a data file, number, or symbol. Not a physical object.")
-(tag-doc 'protc:telos 'ilxtr:goal
-         "Explaining the purpose of a specific step. Differes from `protc:objective*` in that it may not be directly relevant for determining whether the goal of the current step has been achieved.")
-(tag-doc 'protc:*check '(ilxtr:deprecatedTag ilxtr:measure)
-         "conflation of a *measure and a check against some logical condition, this may come back at some point")
-(tag-doc 'protc:ambiguous-error 'protc:error
-         "Cases where it is not clear how two or more pieces of text are related, for example ambiguity about which one of two solutions was used.")
-(tag-doc 'protc:assertion '(TODO)
-         "TODO rationale for why something was or was not done")
-(tag-doc 'protc:experiment-logic '(ilxtr:deprecatedTag)
-         "the idea was correct, but these probably should just be symbolic measures, since it sounds warm and fuzzy to say 'we controlled for this by' when in fact there was really no choice, cold hard logic said that you couldn't interpret your results if you didn't do this. Therefore it is not a goal, controls are not aspirational. protc:objective* also does not work because in this case you aren't trying to induce a state of 'controlledness' on the world (in other cases you might do certain things to reduce/manage/control variance). Instead you are trying to make sure that the transformations you have to impose are not inducing your results.")
-(tag-doc 'protc:implementation-note '(TODO)
-         "")
-(tag-doc 'protc:input-instance '(ilxtr:participant)
-         "Used to refer to inputs in contexts where there is a generic input such as 'video camera' along with the execution trace information about the exact input. It is not clear whether these should simply be treated as inputs for unabstracted protocols, or whether they should be treated as provenance information in the context of a paper. e.g. as protc-prov:input which seems like a better option, but would probably complicate the parsing. Regardless we need a way to bind protc:input -> protc:prov:input for the purposes of the tagging workflow.")
-(tag-doc 'protc:internal-step 'ilxtr:deprecatedTag "The distinction between internal and top level steps is not meaningful when you can call functions inside other functions.")
-(tag-doc 'protc:missing-input '(ilxtr:deprecatedTag)
-         "This was an old way of dealing with cases of protc:implied-input which is technically an error but not always one that we will be able to detect because 'common sense' notions that liquids must be kept in containers won't always be encoded in the system")
-(tag-doc 'protc:missing-reference-error '(protc:error)
-         "Pervious work is mentioned but there is no obvious reference to said work.")
-(tag-doc 'protc:no-how-details-error '(ilxtr:deprecatedTag)
-         "this tag doesn't really exist, should use no how error, the single usage that this had was mistagged")
-(tag-doc 'protc:objective '(typo)
-         "typo do not display in list")
 (tag-doc 'protc:parameter '(ilxtr:deprecatedTag)
          "Use protc:symbolic-measure instead.")
-(tag-doc 'protc:measure '()
-         "")
+(tag-doc 'protc:parameter* 'ilxtr:parameter
+         "Numbers or specific measurements/locations used for lab settings, directly measureable. Often have units or are 'counts' of things")
 (tag-doc 'protc:parameterized-values '()
          "")
 (tag-doc 'protc:parent-doi '()
          "")
 (tag-doc 'protc:referenced-for-use-by '()
          "")
+(tag-doc 'protc:references-for-evidence 'ilxtr:citationTag
+         "Citations of other literature referenced as evidence for a claim.")
+(tag-doc 'protc:references-for-use 'ilxtr:citationTag
+         "Citations of other literature or research papers (author and year) that are explicitly referenced in a methods section as documentation for a protocol.")
+(tag-doc 'protc:repeat 'protc:control-flow
+         "Repeat commands or computations for a specific set of varying inputs (i.e. there should be an associated annotation that enumerates said inputs), related to `protc:substitute-input`.")
+(tag-doc 'protc:result 'ilxtr:informationArtifact
+         "A number generated as the result of a `protc:*measure`.")
+(tag-doc 'protc:same-reference '(ilxtr:citationTag)
+         "")
+(tag-doc 'protc:spec '()
+         "spec section node")
 (tag-doc 'protc:specification '()
          "")
 (tag-doc 'protc:structured-data '()
@@ -151,9 +154,17 @@
          "")
 (tag-doc 'protc:structured-data-record '()
          "")
+(tag-doc 'protc:substitute-input 'protc:control-flow
+         "What steps/materials should be replaced in order to conduct a slightly different procedure e.g. a control experiment, should refer back to the original *make* or *measure function")
+(tag-doc 'protc:symbolic-input 'ilxtr:informationArtifact
+         "The input to a `protc:symbolic-measure`. Should be a symbolic entity such as a data file, number, or other symbol. Not a physical input which should be annotated with `protc:input`. These are distinguished from `protc:parameter*` by the fact that they often exist without the intention or knowledge of how to bind them to a physical entite. In some abstract sense they are parameters but there is no intention to act on them, and often one cannot do so easily (e.g. changing the conversion efficiency of a particular GFP protein requires extensive engineering). There are cases in closed loop systems where these can be the symbolic inputs to a `protc:parameter*` which will then be actualized.")
+(tag-doc 'protc:symbolic-measure 'ilxtr:symbolicFunction
+         "A measurement that takes symbolic input, specifically `protc:symbolic-input` or `protc:symbolic-output` which correspond to their physical versions `protc:input` and `protc:output`")
+(tag-doc 'protc:symbolic-output 'ilxtr:informationArtifact
+         "The output of a `protc:*measure` or `protc:symbolic-measure` these probably don't need to be tagged explicitly during curation. Should be a data file, number, or symbol. Not a physical object.")
+(tag-doc 'protc:telos '(ilxtr:intention ilxtr:goal)
+         "Explaining the purpose of a specific step. Differes from `protc:objective*` in that it may not be directly relevant for determining whether the goal of the current step has been achieved.")
 (tag-doc 'protc:textual-location-spec '()
          "")
 (tag-doc 'protc:version '(ilxtr:identifier)
          "The version of a piece of software or an edition of an atlas or a book.")
-(tag-doc 'protc:same-reference '(ilxtr:citationTag)
-         "")
