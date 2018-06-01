@@ -9,6 +9,7 @@
                      syntax/parse)
          (except-in racket/base time)  ; FIXME how to address this?
          (prefix-in racket: (only-in racket/base time))
+         racket/pretty
          racket/class
          racket/syntax
          racket/string
@@ -383,7 +384,29 @@ and how to combine them in an impl section" (void))
   ; TODO heh
   curie)
 
-(provide delegated-concepts ont-term)
+
+(define (make-idents)
+  (define ident-equivs '())
+  (define (add-identifiers alist)
+    (set! ident-equivs (append alist ident-equivs)))
+  (define (show-identifiers)
+    ident-equivs)
+  (values add-identifiers show-identifiers))
+
+(define-values (add-identifiers show-identifiers) (make-idents))
+
+(define-syntax (identifiers stx)
+  (syntax-parse stx
+    [(_ (~seq local-name:id global-name:string) ...)
+     #'(add-identifiers (list '(local-name . global-name) ...))]))
+
+(define-syntax (get-id stx)
+  (syntax-parse stx
+    [(_ local-name:id)
+     #'(dict-ref (show-identifiers) 'local-name)])
+  )
+
+(provide delegated-concepts ont-term identifiers show-identifiers)
 
 (define-message (delegate (~seq concept (~optional ident)) ...)
   ; FIXME executor
