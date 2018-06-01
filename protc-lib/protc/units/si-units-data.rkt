@@ -35,6 +35,9 @@
   (Ω . ohms) ; b'\xce\xa9'
   (Ω . ohms) ; b'\xe2\x84\xa6'
   (R . ohms) ; R also accepted per the note on wikipedia and brit standard
+  (Ohms . ohms) ; FIXME this is a horrible way to implement normalization
+  (Ohm . ohms)
+  (ohm . ohms)
   (S . siemens)
   (Wb . webers)
   (T . teslas)
