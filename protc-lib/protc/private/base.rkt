@@ -372,6 +372,42 @@ and how to combine them in an impl section" (void))
 
 ((.test hello there ....))
 
+;;; other operations that could be messages but don't really pass to anything other than the general store of knowledge
+;;; the issue being that they really only work where a name has already been bound to something
+;;; usually only inside a spec or impl section? and specifically on participants
+;;; it may still be useful to scope these to a given protocol to prevent naming conflicts and to make it
+;;; easier to pull in a specification of a number of partonomies using (.uses my-black-box-description) or similar
+;(define-message (has-part parent children ...)
+  ;#'(list 'in-the-context-of-this-usage-ofthis-term parent children ...))
+
+;(define-message (part-of child parent)
+  ;#'(list 'in-the-context-of-this-usage-ofthis-term parent children ...))
+
+(define (has-part parent . children) ;; >> 
+  "TODO"
+  (void))
+
+(define (part-of parent . children) ; << 
+  "TODO"
+  (void))
+
+(define (part-chain head . tails)
+  "TODO allow specification of a part chain, expands to (has-part head tail0) (has-part tail0 tail1) ..."
+  (void))
+
+;(require pict/tree-layout)
+;(naive-layered (tree-layout))
+;(define-syntax (part-tree stx)
+; TODO need a way to parse recursive patterns eg https://gist.github.com/iitalics/fb83780fd4cd6731d6fc046fb2dbac92
+  ;(syntax-parse stx
+    ;[(_ (tree ...))
+     ;#'()])
+  ;)
+
+(define (part-tree tree)
+  "TODO this should really be syntax"
+  (void))
+
 (define dc-list '())
 
 (define (delegated-concepts . rest)
