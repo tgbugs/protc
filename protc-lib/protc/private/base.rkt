@@ -146,14 +146,14 @@
         (.symret _ :g)  ; symbolic return should automatically be lifted to 'collect' or 'measure'
         )
 
-#'(spec (_ :aspect*)  ; remember in our evaluation model we have to wait until we bind the world... so (_ may not be relevant?
+#;(spec (_ :aspect*)  ; remember in our evaluation model we have to wait until we bind the world... so (_ may not be relevant?
         ; sections of this form actually seem kind of useless
         ; whey they don't have real values...
         (.input _ :aspect -_-))
-#'(spec :aspact*
+#;(spec :aspact*
         (.input _ :aspect value))
 ; and once you figure it out, the symmetry is perfect
-#'(spec (:aspact* value)
+#;(spec (:aspact* value)
         (.input _ :aspect value))
 ; OR we use :aspect* to specify how .inputs name :aspect1 value :aspect2 value2 are individual to be actualized...
 ; because that is nice shorthand for (.parameter* name :aspect value)
@@ -162,21 +162,21 @@
 ; specific spec :aspect* definitely do for precision of the final result etc...
 ; actually wait... NO still not the case, because we have syntax
 ; for that in the (spec *being*) form... except in the generic case...
-#'(spec ((actualize :aspect) spec-name)
+#;(spec ((actualize :aspect) spec-name)
         (.parameter :aspect (range 0 1))  ; functional parameter on the returned measurements
         )
-#'(spec :ug* NIST-accurate-ug
+#;(spec :ug* NIST-accurate-ug
         (.invariant (<= (error *:ug) 0.001)))  ; when an actual value is present it needs to be scaled if the prefix changes
-#'(spec drug-micro-dose
+#;(spec drug-micro-dose
         (.inputs drug-powder :NIST-accurate-ug 10
                  a-tiny-robot
                  ))
-'(impl (_ *:g weigh-with-scale)  ; vs (impl *:g weigh-with-scale because the primary input is the same as the output
+#;(impl (_ *:g weigh-with-scale)  ; vs (impl *:g weigh-with-scale because the primary input is the same as the output
                                   ; *-:g  destructive measure  *':g modifying measure
         (.inputs scale ...)
         (.outputs scale ...) ; conserved inputs
         (.symret _ :g))
-'(impl _ generic-weigh (.uses weigh-with-scale)  ; this is a generic implementation, the output name is _ so the impl can be applied
+#;(impl _ generic-weigh (.uses weigh-with-scale)  ; this is a generic implementation, the output name is _ so the impl can be applied
         (.inputs thing-input weigh-boat)
         (a-on-b weigh-boat scale)  ; we can skip put or can translate directly
         (part-of zero-button scale)  ; executors need to know what push means or we just button as a verb directly or just 'use'
@@ -185,7 +185,7 @@
         (subset/made-up-of ([t thing-input] #:when (a-on-b? t weigh-boat)) t)
         (.outputs thing-input' ...))
 
-#'(impl drug-micro-dose the-dumb-way (.uses weight-with-scale)
+#;(impl drug-micro-dose the-dumb-way (.uses weight-with-scale)
         ; black box name constructor functions are the only way to get local names without defining them
         ; as inputs because they may be implementation dependent and they will be lifted to inputs
         (.inputs weight-boat)
@@ -215,9 +215,9 @@
 (define-syntax (subset stx)
   #'(subset/rule ([t thing] #:when (predicate? t other-thing)) ))
 
-#'(impl (_ :aspect* value-spec))
-#'(impl (:aspect* impl-name #:restrictions 'my-restrictions) messages)  ; arent restrictions the spec? also (.applies-when 'condition)
-#'(impl ((actualize (aspect aspect-name)) name
+#;(impl (_ :aspect* value-spec))
+#;(impl (:aspect* impl-name #:restrictions 'my-restrictions) messages)  ; arent restrictions the spec? also (.applies-when 'condition)
+#;(impl ((actualize (aspect aspect-name)) name
                                           #:for-spec spec-name  ; #:implements spec-name
                                           #:restrictions 'my-restrictions) messages)
 
@@ -226,7 +226,7 @@
 ;(_ *:aspect) expansions... more like, we actually need a special header for each section or something...
 
 
-'(
+#;(
 (_input *:aspect) -> (measure _input (aspect name))  ; this way to make it possible to call measure once when many *: are called
 (_input *:aspect) -> (measure _input (aspect aspect))  ; we can work with this... can protc:aspect to keep names safe
 
@@ -237,8 +237,8 @@
 ;; body:messages
 ; do we need to be able to make defining the accepted value types for messages part of the language?
 ; does single-expression in the context evaluate if not quoted? need to test, also values
-#'(message-name:message-type message-value:single-expression)
-#'(invariant thing:defined-in-inputs-or-imports aspect-name:defined-aspect [message-name:message-type [message-value]+]+)
+#;(message-name:message-type message-value:single-expression)
+#;(invariant thing:defined-in-inputs-or-imports aspect-name:defined-aspect [message-name:message-type [message-value]+]+)
 
 
 ;; defining the symbolic components
@@ -249,8 +249,8 @@
 ; def *being-name*
 ; def function  ; juse reuse define...
 
-'(define-measure aspect-name spec-name-or-use-_-for-generic #:type 'non-destructive #:uses)
-'(define-actualize aspect-name spec-name-or-use-_-for-generic #:type 'non-destructive #:uses)
+#;(define-measure aspect-name spec-name-or-use-_-for-generic #:type 'non-destructive #:uses)
+#;(define-actualize aspect-name spec-name-or-use-_-for-generic #:type 'non-destructive #:uses)
 
 ;; define-measure
 ;spec *:aspect [_blank/generic]
@@ -266,7 +266,7 @@
 
 ; the thing is that this doesn't work because we don't know ahead of time
 ; how many bound or unbound identifiers there are...
-'(let-values ([() ()])
+#;(let-values ([() ()])
   (let ([spec-id-1]
         [spec-id-2])
     (let ([impl-id-1]
@@ -405,6 +405,11 @@ and how to combine them in an impl section" (void))
   ;)
 
 (define (part-tree tree)
+  ; TODO in cases where there are name collisions in parts trees
+  ; try to bind the parent node so it is possible to write
+  ; filters -> fails
+  ; bx51wi-filters
+  ; hvac-filters
   "TODO this should really be syntax"
   (void))
 
