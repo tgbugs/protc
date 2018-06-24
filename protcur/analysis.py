@@ -6,7 +6,7 @@ import ast
 from pathlib import PurePath
 from collections import Counter
 from IPython import embed
-from protcur.core import atag, deltag, linewrap
+from pyontutils.htmlfun import atag
 from pyontutils.hierarchies import creatTree
 from pyontutils.utils import async_getter, noneMembers, allMembers, anyMembers, TermColors as tc
 from pyontutils.core import makeGraph, makePrefixes
@@ -14,6 +14,7 @@ from pyontutils.scigraph_client import Vocabulary
 from pysercomb import parsing
 #from pysercomb import parsing_parsec
 from hyputils.hypothesis import HypothesisAnnotation, HypothesisHelper, idFromShareLink, shareLinkFromId
+from protcur.core import linewrap
 from desc.prof import profile_me
 
 try:
@@ -740,6 +741,7 @@ class protc(AstGeneric):
               'references-for-evidence',
               'aspect',
               'black-box-component',
+              'has-part',  # FIXME these are not being incorporated properly when they have parents...
               '*measure',  # under represented
               'output',
               'objective*',

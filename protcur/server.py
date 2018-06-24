@@ -6,7 +6,7 @@ from pathlib import Path
 from datetime import date
 from markdown import markdown
 from hyputils.hypothesis import HypothesisUtils
-from protcur.core import htmldoc, atag, deltag, titletag
+from pyontutils.htmlfun import htmldoc, atag, deltag, titletag
 from protcur.analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid
 from protcur.analysis import citation_tree, papers, statistics, readTagDocs, justTags, addDocLinks, Hybrid, protc
 from IPython import embed
