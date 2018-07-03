@@ -1,0 +1,13 @@
+* A use case
+  Show me every protocol that takes me from a set of known terms (kt)
+  to the definition of a single unknown term (ut).
+  
+  Assume I know only the terms, sun, moon, rock, tree, left, right,
+  up, down, light, dark, hard, soft, alive, dead, move, stop, go, now,
+  then, when, who, what, where, how. You many define as many new terms as
+  needed. Is there a path from those terms to an operational definition of
+  'radioactive decay' such that I can determine whether some rock will
+  make me dead or not if I keep it near me? What terms are missing?
+  Can we find one or more minimal sets of terms that are sufficient to
+  bootstrap this knowledge? Can we prove that there is a shortest path?
+  Can we prove that we cannot prove that there is a shortest path?
