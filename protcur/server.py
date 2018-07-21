@@ -6,7 +6,8 @@ from pathlib import Path
 from datetime import date
 from markdown import markdown
 from hyputils.hypothesis import HypothesisUtils
-from pyontutils.htmlfun import htmldoc, atag, deltag, titletag
+from pyontutils.htmlfun import htmldoc, atag, deltag, titletag, render_table
+from pyontutils.htmlfun import monospace_body_style, table_style, details_style
 from protcur.analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid
 from protcur.analysis import citation_tree, papers, statistics, readTagDocs, justTags, addDocLinks, Hybrid, protc
 from IPython import embed
@@ -45,21 +46,6 @@ def export_json_impl(annos):
     DATE = date.today().strftime('%Y-%m-%d')
     return output_json, DATE
 
-# styles
-
-monospace_body_style = 'body { font-family: Dejavu Sans Mono; font-size: 11pt }'
-
-table_style = ('th { text-align: left; padding-right: 20px; }'
-               'tr { vertical-align: top;  }'
-               'tr:hover { background-color: #fcfcfc;  }'
-               'table { font-family: Dejavu Sans Mono; }'
-               'a:link { color: black; }'
-               'a:visited { color: grey; }'
-               'del { color: white; }')
-
-details_style = ('details summary::-webkit-details-marker { display: none; }\n'
-                'details > summary:first-of-type { list-style-type: none; }')
-
 # rendering
 
 def render_idents(idents, stats):
@@ -96,15 +82,6 @@ def render_2col_table(dict_, h1, h2, uriconv=lambda a:a):  # FIXME this sucks an
     for hl_name, thing in sorted(dict_.items()):
         output.append(f'<tr><th><a href={uriconv(hl_name)}>{hl_name}</a></th>'
                       f'<th>{thing}</th></tr>')
-    out = '<table>' + '\n'.join(output) + '</table>'
-    return out
-
-def render_table(rows, *headers):
-    output = []
-    output.append('<tr><th>' + '</th><th>'.join(headers) + '</th><tr>')
-    for row in rows:
-        output.append('<tr><th>' + '</th><th>'.join(row) + '</th><tr>')
-
     out = '<table>' + '\n'.join(output) + '</table>'
     return out
 
