@@ -7,6 +7,7 @@
          racket/gui/base
          racket/class
          framework
+         framework/preferences
          mrlib/switchable-button
          drracket/tool
          images/compile-time
@@ -22,6 +23,52 @@
   (interface ()
              allow-protocol-checker?
              run-protocol-checker))
+
+
+; needed to prevent error messages
+(define pref:close-on-reset-console? (preferences:get/set 'protcheck:CloseOnResetConsole?))
+
+(define drracket-macro-stepper-director%
+  (class object% ;macro-stepper-director/process%
+    (init-field filename)
+    (inherit-field stepper-frames)
+    (define eventspace (current-eventspace))
+
+    (define stepper #f)
+    (inherit new-stepper)
+
+    (define/private (lazy-new-stepper)
+      (unless stepper
+        (set! stepper (new-stepper))))
+
+    (define/override (add-trace events)
+      (parameterize ((current-eventspace eventspace))
+        (queue-callback
+         (lambda ()
+           (lazy-new-stepper)
+           (super add-trace events)))))
+    (define/override (add-deriv deriv)
+      (parameterize ((current-eventspace eventspace))
+        (queue-callback
+         (lambda ()
+           (lazy-new-stepper)
+           (super add-deriv deriv)))))
+
+    #;
+    (define/override (new-stepper-frame)
+      (parameterize ((current-eventspace eventspace))
+        (new macro-stepper-frame%
+             (config (new macro-stepper-config/prefs%))
+             (filename filename)
+             (director this))))
+
+    (define/public (shutdown)
+      (when (pref:close-on-reset-console?)
+        (for ([(frame flags) (in-hash stepper-frames)])
+          (unless (memq 'no-obsolete flags)
+            (send frame show #f)))))
+
+    (super-new)))
 
 (define protocol-checker-button-label "Protocol Checker")
 
@@ -111,12 +158,16 @@
                   (send (get-definitions-text) get-next-settings))])
             (send lang capability-value 'protocol-checker:enabled)))
 
-        '(define/private (enable/disable-stuff enable?)
+        (define/private (enable/disable-stuff enable?)
           (if enable?
+            #t
+            #;
               (begin (send macro-debug-menu-item enable #t)
                      (unless (send macro-debug-button is-shown?)
                        (send macro-debug-panel
                              add-child macro-debug-button)))
+              #f
+            #;
               (begin (send macro-debug-menu-item enable #f)
                      (when (send macro-debug-button is-shown?)
                        (send macro-debug-panel
@@ -156,11 +207,13 @@
           (send interactions-text set-macro-stepper-director director)
 
           (define (the-module-name-resolver . args)
-            (parameterize ((current-expand-observe void))
-              (apply original-module-name-resolver args)))
+            (void)
+            #;(parameterize ((current-expand-observe void))
+              #;(apply original-module-name-resolver args)))
 
           ;; --
 
+          #;
           (define (init-proc) ;; =user=
             (set! original-module-name-resolver (current-module-name-resolver))
             (current-module-name-resolver the-module-name-resolver)
@@ -229,6 +282,7 @@
                    (cleanup)
                    (custodian-shutdown-all user-custodian))))))
 
+          #;
           (with-lock/edit-sequence definitions-text
             (lambda ()
               (send the-tab clear-annotations)
