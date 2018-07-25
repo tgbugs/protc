@@ -803,7 +803,7 @@ For example use @(def solution (a+b solute solvent))."
      #'(a.thing a.aspects a.values)
      ])
   (syntax-parse #'(: my-thing g ([volume 10])) [a:asp #'a.aspects ])
-  (syntax-parse #'(: my-thing g g g g g ([volume 10])) [a:asp #'a.aspect ])
+  (syntax-parse #'(: my-thing g g g g g ([volume 10])) [a:asp #'a.aspects ])
 
   g
   (: my-thing g)
