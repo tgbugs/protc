@@ -11,7 +11,7 @@
          drracket/tool
          images/compile-time
          (for-syntax racket/base images/icons/tool images/icons/style)
-         protc/check-protocol)
+         protc/protcheck)
 
 (provide tool@)
 
