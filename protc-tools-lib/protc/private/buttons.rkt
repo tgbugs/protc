@@ -6,16 +6,26 @@
 
 (require racket/class
          images/compile-time
-         (for-syntax racket/base images/icons/tool images/icons/style)
+         (for-syntax racket/base
+                     images/icons/tool
+                     images/icons/arrow
+                     images/icons/symbol
+                     images/icons/style)
          )
 
 (provide button-list)
 
-(define protcheck-button-label "Protocol Checker")
+(define protcheck-button-label "Check Protocol")
+(define export-button-label "Export")
 
 ; from syncheck-drracket-button.rkt
+(define export-bitmap
+  (compiled-bitmap (right-under-arrow-icon
+                     #:color "green"
+                     #:height (toolbar-icon-height))))
+
 (define protcheck-bitmap
-  (compiled-bitmap (check-syntax-icon #:height (toolbar-icon-height))))
+  (compiled-bitmap (check-icon #:height (toolbar-icon-height))))
 (define protcheck-small-bitmap
   (compiled-bitmap (small-check-syntax-icon #:height (toolbar-icon-height))))
 
@@ -44,6 +54,8 @@
   (send definitions-text set-position (- position (string-length syntax-checking)))
   )
 
+(define (export-func frame)
+  (println "exporting file"))
 
 
 (define protcheck-button
@@ -53,8 +65,15 @@
    protcheck-func
    #f))
 
+(define export-button
+  (list
+   export-button-label 
+   export-bitmap
+   protcheck-func
+   #f))
+
 (define button-list
-  (list protcheck-button))
+  (list protcheck-button export-button))
 
 
 

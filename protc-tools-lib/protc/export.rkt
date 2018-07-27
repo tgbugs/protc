@@ -356,28 +356,31 @@
   ; TODO target is probably needed here? inversion of control or if statement?
   ; https://docs.racket-lang.org/scribble/core.html#(part._.Structure_.Reference)
   ; https://docs.racket-lang.org/scribble/pict_2.png map protc to this model
+  (pretty-print ast)
   (define dalist (cadr ast))
   (define (dr key) (dict-ref dalist key))
-  (define name (car (dr '.name)))
+  (define name (dr '.name))
+  (define docstring (dr '.docstring))
+  (define subprotocols (dr '.subprotocols))
   ;(define entries (map (λ (row) (map ~a row)) (dr '.inputs)))
-  (define inputs (cons '("Inputs") (map (compose list ~a) (car (dr '.inputs)))))
-  (define outputs (cons '("Outputs") (map (compose list ~a) (car (dr '.outputs)))))
-  (define steps (car (dr '.steps)))
+  (define inputs (cons '("Inputs") (map (compose list ~a) (dr '.inputs))))
+  (define outputs (cons '("Outputs") (map (compose list ~a) (dr '.outputs))))
+  (define steps (dr '.steps))
   (define unit-warnings '())
   (define (add-warning warning)
     (set! unit-warnings (cons warning unit-warnings)))
   (define table-cols
-    (list (cons (list check-box) (map (λ (i) (cbox i)) (car (dr '.inputs))))
+    (list (cons (list check-box) (map (λ (i) (cbox i)) (dr '.inputs)))
           inputs
           outputs
-          (cons '("Variables") (map (compose list (check-units add-warning)) (car (dr '.vars))))  ; TODO these need to be resolved
+          (cons '("Variables") (map (compose list (check-units add-warning)) (dr '.vars)))  ; TODO these need to be resolved
           ; the best way to do this is probably to provide an export function that wraps
           ; protc->scribble which accepts a let-like ([var 1] [var2 1001]) spec and then prompts for missing
           ; that can be written in plain racket in the file and will be disregarded when it comes to the actual protocol
-          (cons '("Values") (map (λ (v) (cinput v)) (car (dr '.vars))))
-          (cons '("Measures") (map (compose list (check-units add-warning)) (car (dr '.measures))))
+          (cons '("Values") (map (λ (v) (cinput v)) (dr '.vars)))
+          (cons '("Measures") (map (compose list (check-units add-warning)) (dr '.measures)))
           ;(cons '("Results") (map (compose list html/form) (car (dr '.measures))))  ; TODO html looks like it needs to be specialized
-          (cons '("Results") (map (λ (m) (cinput m)) (car (dr '.measures))))
+          (cons '("Results") (map (λ (m) (cinput m)) (dr '.measures)))
           )
     )
   (println (zip-blank inputs outputs))
@@ -390,15 +393,34 @@
           (make-qrcode (user-orcid export-user) 'L #:filename filename)
           (image filename #:scale 0.25 #;#:style #;'center))))
 
+  (define (flatten-subs subs)
+    (pretty-print subs)
+    (let* ([dalist subs]  ; note the absense of the outer data here since we use name-stx
+           [dr (λ (key) (dict-ref dalist key))]
+           [name (dr '.name)]
+           [x (println name)]  ; wat
+           [title (symbol->string name)]
+           [steps (dr '.steps)]
+           [args (list title steps)]
+           [subs-next (dr '.subprotocols)])
+      ; simple ordering rule, impl will introduce additional ordering rules
+      (if (null? subs-next)
+          args
+          (reverse (cons args (reverse (map flatten-subs subs-next)))))))
   (define sub-protocols 
-    (list 
-     (sub-protocol "spike?" '("in current clamp mode"
-                              "watch the voltage trace"
-                              "if there is a spike there will be a small deflection"))
-     (sub-protocol "EPSP?" '("in current clamp mode"
-                             "watch the voltage trace"
-                             "there will be an inward deflection"))
-     (sub-protocol "projects-a-b?" '("(define projects-a-b (and (spike? cell-a) (EPSP? cell-b))"))))
+    (let ([fs (map flatten-subs subprotocols)])
+      ;(pretty-print fs)
+      ;(pretty-print (apply append fs))
+      (map (λ (sp) (apply sub-protocol sp)) (apply append fs)))
+    
+    #;(list 
+       (sub-protocol "spike?" '("in current clamp mode"
+                                "watch the voltage trace"
+                                "if there is a spike there will be a small deflection"))
+       (sub-protocol "EPSP?" '("in current clamp mode"
+                               "watch the voltage trace"
+                               "there will be an inward deflection"))
+       (sub-protocol "projects-a-b?" '("(define projects-a-b (and (spike? cell-a) (EPSP? cell-b))"))))
   
   (define scrib 
     (let ([tag-prefix "protc"]

@@ -9,5 +9,5 @@
     ;[(drracket:indentation) (indent)]
     [(drracket:toolbar-buttons) (dynamic-require 'protc/protcheck 'button-list)]
     [(drracket:default-filters) '(["Protc Sources" "*.ptc"])]
-    [(drracket:default-extension) "ptc"]
+    [(drracket:default-extension) "rkt"]
     [else (default-filter key default)]))
