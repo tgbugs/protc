@@ -1,0 +1,47 @@
+\documentclass[12pt]{article}
+
+% debug (requires lualatex)
+%\directlua{ require("drawboxes")}
+%\usepackage{graphicx,atbegshi}
+%\AtBeginShipout {\directlua{drawboxes.visual_debug()}}
+
+\parskip=10pt
+\parindent=0pt
+\partopsep=0pt
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{pifont}
+\usepackage{titling}
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+\usepackage{etoolbox}
+
+% neither is built in sadly
+%\usepackage{pst-barcode}
+%\usepackage{qrcode}
+
+\geometry{letterpaper, portrait, margin=1in}
+
+\newcommand{\mainstyle}{
+    \pagestyle{fancy}
+    \fancyhead{}
+    \fancyfoot{}
+    %\fancyfoot[R]{\thepage}
+    \rfoot{Page \thepage \hspace{1pt} of \pageref*{LastPage}}
+}
+
+\fancypagestyle{titlepagestyle}
+{
+  \mainstyle
+}
+
+% the worst check boxes ever
+\DeclareUnicodeCharacter{2610}{\raisebox{3.5pt}{\fbox{}}}
+\DeclareUnicodeCharacter{2611}{\raisebox{3.5pt}{\fbox{}\hspace*{-6pt}\raisebox{-2pt}{\ding{51}}}}
+
+\mainstyle
+
+\apptocmd{\maketitle}{\thispagestyle{titlepagestyle}}{}{}
+

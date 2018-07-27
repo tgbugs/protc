@@ -1,0 +1,91 @@
+.maincolumn {
+    max-width: 700px;
+}
+
+.maincolumn th, .maincolumn td {
+    white-space: nowrap; /* prevent hyphen issues */
+}
+
+input[type="text"] {
+    border: 1px dashed #000;
+    box-sizing: border-box;
+    height: 30px;
+    // width: 160px;
+    margin: 5px;
+    padding: 5px;
+    // max-width: 70px;
+    width: 100%;
+}
+
+input[type="text"]:focus {
+    outline: hsl(216, 15%, 70%) solid 3px;
+    outline-offset: 0px;
+}
+
+table[type="fit"] {
+    width: 100%;
+}
+
+/* custom checkboxes */
+
+.checkbox input[type="checkbox"] {
+    opacity: 0;
+    top: 0;
+    left: 0;
+    position: relative;
+    height: 12px;
+    width: 12px;
+}
+
+.checkbox {
+    position: relative;
+    top: 0;
+    left: 0;
+    overflow: hidden;  /* prevent checkbox overflow at low zoom */
+    display: inline-block;
+}
+
+.checkbox .checkmark::before, .checkbox .checkmark::after {
+    position: absolute;
+    content: "";
+    
+    /*Needed for the line-height to take effect*/
+    display: inline-block;
+}
+
+/*Outer box of the fake checkbox*/
+.checkbox {
+    border: 1px solid;
+    height: 12px;
+    width: 12px;
+    left: 0px;
+    top: 0px;
+}
+
+.checkbox:hover, .checkbox:focus-within {
+    /* have to use outline because background-color fights with
+       the checkmark itself and breaks usability */
+    outline: hsl(216, 15%, 70%) solid 2px;
+    outline-offset: 0px;
+}
+
+.checkbox .checkmark::after {
+    height: 4px;
+    width: 7.8px;
+    z-index: -1;
+    border-left: 2px solid;
+    border-bottom: 2px solid;
+    
+    transform: rotate(-45deg);
+    
+    left: 1px;
+    top: 2px;
+}
+
+.checkbox input[type="checkbox"] + .checkmark::after {
+    content: none;
+}
+
+.checkbox input[type="checkbox"]:checked + .checkmark::after {
+    content: "";
+}
