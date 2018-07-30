@@ -11,6 +11,7 @@
          scribble/latex-properties
          scribble/latex-prefix
          scribble/xref
+         rackunit
          racket/dict
          racket/list
          racket/class
@@ -352,11 +353,48 @@
   (margin-note (intersperse (linebreak) notes-list))
   )
 
+(define (flatten-subs subs [parent #f])
+    (pretty-print `(subs: ,subs))
+    (let* ([dalist subs]  ; note the absense of the outer data here since we use name-stx
+           [dr (λ (key) (dict-ref dalist key))]
+           [name (dr '.name)]
+           [x (println name)]  ; wat
+           [title (symbol->string name)]
+           [steps (dr '.steps)]
+           [args (list title steps)]
+           [subs-next (dr '.subprotocols)]
+           [fsf (λ (s) (flatten-subs s #t))]
+           )
+      ; simple ordering rule, impl will introduce additional ordering rules
+      (if (null? subs-next)
+          (if parent args (list args))
+          (reverse (cons args (reverse (map fsf subs-next))))
+          #;(reverse
+           (append
+            (list args)
+            (reverse
+             (map flatten-subs subs-next))))
+
+          )))
+
+(check-equal? (flatten-subs '((.name . a)
+                              (.steps "1" "2" "3")
+                              (.subprotocols)))
+                '(("a" ("1" "2" "3"))))
+(check-equal? (flatten-subs '((.name . a)
+                              (.steps "1" "2" "3")
+                              (.subprotocols
+                               ((.name . b)
+                                (.steps "4" "5")
+                                (.subprotocols)))))
+              '(("b" ("4" "5"))
+                ("a" ("1" "2" "3"))))
+
 (define (protc->scribble ast #:user [export-user null])
   ; TODO target is probably needed here? inversion of control or if statement?
   ; https://docs.racket-lang.org/scribble/core.html#(part._.Structure_.Reference)
   ; https://docs.racket-lang.org/scribble/pict_2.png map protc to this model
-  (pretty-print ast)
+  ;(pretty-print ast)
   (define dalist (cadr ast))
   (define (dr key) (dict-ref dalist key))
   (define name (dr '.name))
@@ -393,25 +431,11 @@
           (make-qrcode (user-orcid export-user) 'L #:filename filename)
           (image filename #:scale 0.25 #;#:style #;'center))))
 
-  (define (flatten-subs subs)
-    (pretty-print subs)
-    (let* ([dalist subs]  ; note the absense of the outer data here since we use name-stx
-           [dr (λ (key) (dict-ref dalist key))]
-           [name (dr '.name)]
-           [x (println name)]  ; wat
-           [title (symbol->string name)]
-           [steps (dr '.steps)]
-           [args (list title steps)]
-           [subs-next (dr '.subprotocols)])
-      ; simple ordering rule, impl will introduce additional ordering rules
-      (if (null? subs-next)
-          args
-          (reverse (cons args (reverse (map flatten-subs subs-next)))))))
   (define sub-protocols 
-    (let ([fs (map flatten-subs subprotocols)])
+    (let ([fs (apply append (map flatten-subs subprotocols))])
       ;(pretty-print fs)
       ;(pretty-print (apply append fs))
-      (map (λ (sp) (apply sub-protocol sp)) (apply append fs)))
+      (map (λ (sp) (apply sub-protocol sp)) fs))
     
     #;(list 
        (sub-protocol "spike?" '("in current clamp mode"
@@ -476,9 +500,7 @@
 
                     (if (null? unit-warnings)
                         base
-                        (cons (make-margin (reverse unit-warnings)) base)))
-                  
-                  ]
+                        (cons (make-margin (reverse unit-warnings)) base)))]
           [parts (cons (sub-protocol (symbol->string name) steps #:style style-current) sub-protocols)
 
                   #;(sub-protocol "Sub protocol 1" '("do this" "do that" "..." "profit!") #:style style-current)
