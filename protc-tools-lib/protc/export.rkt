@@ -11,7 +11,6 @@
          scribble/latex-properties
          scribble/latex-prefix
          scribble/xref
-         rackunit
          racket/dict
          racket/list
          racket/class
@@ -31,6 +30,8 @@
          (for-syntax racket/base syntax/parse racket/syntax)
          )
 
+(module+ test
+  (require rackunit))
 
 (provide protc->scribble
          scribble->many
@@ -187,7 +188,6 @@
         'pdf scribble->pdf))
 
 (define (scribble->many parts-list #:name [file-name "test-protc-output"] . formats)
-  
   (map (λ (fmt) ((hash-ref lut fmt) parts-list #:name file-name)) formats)
   (void))
 
@@ -377,18 +377,19 @@
 
           )))
 
-(check-equal? (flatten-subs '((.name . a)
-                              (.steps "1" "2" "3")
-                              (.subprotocols)))
+(module+ test
+  (check-equal? (flatten-subs '((.name . a)
+                                (.steps "1" "2" "3")
+                                (.subprotocols)))
                 '(("a" ("1" "2" "3"))))
-(check-equal? (flatten-subs '((.name . a)
-                              (.steps "1" "2" "3")
-                              (.subprotocols
-                               ((.name . b)
-                                (.steps "4" "5")
-                                (.subprotocols)))))
-              '(("b" ("4" "5"))
-                ("a" ("1" "2" "3"))))
+  (check-equal? (flatten-subs '((.name . a)
+                                (.steps "1" "2" "3")
+                                (.subprotocols
+                                 ((.name . b)
+                                  (.steps "4" "5")
+                                  (.subprotocols)))))
+                '(("b" ("4" "5"))
+                  ("a" ("1" "2" "3")))))
 
 (define (protc->scribble ast #:user [export-user null])
   ; TODO target is probably needed here? inversion of control or if statement?
