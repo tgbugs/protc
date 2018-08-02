@@ -6,6 +6,7 @@
          ;protc/utils  ; this is private ...
          rdf/utils
          protc/private/utils
+         (for-meta 2 syntax/parse racket/syntax racket/base)
          (for-syntax racket/base
                      racket/list
                      racket/string
@@ -303,8 +304,9 @@
   "some kind of wire connects a and any number of bs"
   )
 
-(define a 'a)
-(has-part a b c d e)
+(module+ test
+  (define a 'a)
+  (has-part a b c d e))
 
 #;(define-syntax (define-process stx)  ; define-verb (spec (process (verb args ...))) is the alternate form
   ; define-process creates functions that operate only on
@@ -349,8 +351,6 @@
     )
   )
 
-
-
 (define-syntax (invariant stx)
   #'"TODO")
 
@@ -365,6 +365,41 @@
     (if (null? next)
         stx
         (syntax-property (bind-properties next) key value)))
+  )
+
+#;
+(define-syntax (make-spec/name stx)
+  (syntax-parse stx
+    [(_ name:id)
+     #'(begin
+         (define all '())
+         (define (add spec)
+           (set! all (cons spec all))
+           )
+         (define (get)
+           )
+         ((list ))
+         )]))
+
+(define-for-syntax (make-spec/name)
+  (define specs '())
+  (define (get) specs)
+  (define (add spec) (set! specs (cons spec specs)))
+  (values add get))
+
+(define-for-syntax (lookup-name name stx)
+    (define (failure) (raise-syntax-error #f "couldn't find any data associated with name" stx))
+    (let ([add-get (syntax-local-value name failure)])
+      (values (car add-get) (cdr add-get))))
+
+; FIXME if we do this this way then we cannot add new specs at run time ...
+; is this ok? yes no maybe?
+(define-syntax (get-specs stx)
+  (syntax-parse stx
+    [(_ name-data:id more-stx)
+     (let-values ([(add get) (lookup-name #'name-data #'more-stx)])
+       #`(list #,@(get)))
+     ])
   )
 
 (define-syntax (spec stx)
@@ -392,6 +427,9 @@
 
                       )
     #:local-conventions ([name id]
+                         [spec-name id]
+                         [specific-name id]
+                         [parent-type id]
                          ;[aspect id]
                          [docstring string]
                          [input id]
@@ -404,6 +442,7 @@
                          [aspect id]
                          [aspect* expr]  ; TODO
                          [oper id]
+                         [identifier string]  ; TODO or macro? (DOI: check my syntax please?)
                          )
     [(_ (~or (black-box specific-name parent-type) (participant specific-name parent-type))
         (~optional docstring)
@@ -442,6 +481,26 @@
      #:with name-ast (format-id #'specific-name
                                 #:source #'specific-name
                                 "~a-ast" (syntax-e #'specific-name))
+     #:with name-data (format-id #'specific-name
+                                #:source #'specific-name
+                                "~a-data" (syntax-e #'specific-name))
+     #:with spec/name (format-id #'specific-name
+                                #:source #'specific-name
+                                "spec/~a" (syntax-e #'specific-name))
+     ; TODO spec/name needs to be a syntax value with a set/get that
+     ; collects all the full names for a given name
+     #:do ((define-values (add get) (make-spec/name)))
+     #:with name-data-stx #`(define-syntax name-data (cons #,add #,get)
+                              #;#,(let-values ([(add get) (make-spec/name)]) (cons add get)))
+     ;#:do ((define-values (add get) (lookup-name #'name-data stx)))  ; use later
+     ;#:with specs #'(let-values ([(add get) (lookup-name #'specific-name stx)]) #`(#,(get))) #;(get-specs (syntax-e #'specific-name))
+     #:with specialize-name #`(define (specific-name)
+                                "provide the existing information bound to a black-box"
+                                `((.type . black-box)
+                                  (.name . specific-name)
+                                  (.parent . parent-type)
+                                  (.docstring . (~? docstring ""))
+                                  (.specs ,(get-specs name-data #,stx))))
      #'(begin
          #;(define-syntax name-stx
            (syntax-property
@@ -452,15 +511,16 @@
          (define name-stx #'export-stx)
          (define name-ast
            '(data export-stx))
-         (define specific-name #'#''(specific-name))  ; TODO black-box struct (already sort of done elsewhere)?
-         )
+         name-data-stx
+         specialize-name)
      ]
-    [(_ (~or (make name) (:> name)) ; make binds the output name as a being/symbol
+    [(_ (~or (make name (~optional spec-name)) (:> name (~optional spec-name))) ; make binds the output name as a being/symbol
         ; this approach has the drawback that (make name) is now the only way to refer to this process?
         ; false, that is where impl comes in, but how do we deal with the 1000 different ways to spec
         ; (measure mouse is) ? most of the time we are not going to be 'making' mice... because we
         ; since that is essentially (begin (+ male-mouse female-mouse food water territory) (wait)) -> mice
         (~optional docstring)
+        (~optional (.id identifier))
         (~optional (.uses import ...))  ; subProtocolOf ???
         (~optional (.vars var ...))  
         ;(~optional (.inputs inputs ...))
@@ -474,6 +534,19 @@
      #:with name-stx (format-id #'name
                                 #:source #'name
                                 "~a-stx" (syntax-e #'name))
+     #:with name-data (format-id #'name
+                                #:source #'name
+                                "~a-data" (syntax-e #'name))
+     #:attr no-bb-yet (if (identifier-binding #'name-data)
+                          #f
+                          #'(spec (black-box name thing)))
+     #:with spec/name #;(if (attribute spec-name)
+                          #;(format-id #'spec-name
+                                     #:source #'spec-name
+                                     "spec/~a" (syntax-e #'spec-name)))
+     (format-id #'(~? spec-name name)  ; FIXME need to support diversity under a single name with identifiers
+                #:source #'(~? spec-name name)
+                "spec/~a" (syntax-e #'(~? spec-name name)))
      #:with name-ast (format-id #'name
                                 #:source #'name
                                 "~a-ast" (syntax-e #'name))
@@ -489,6 +562,12 @@
                           ; the debug message is totally useless :/ took me 3 hours to figure out how to debug it properly
                           (other body ...)
                      )
+     #:do ((when (identifier-binding #'name-data)
+             (define-values (add get) (lookup-name #'name-data stx))
+             (add #'spec/name)
+             (void))
+           ; TODO on fail create it ...
+           )
      #:with name-binding (let* ([-name #'name]
                                 [-name-stx #'name-stx]
                                 
@@ -553,7 +632,23 @@
                            (attribute step)
                            (attribute body)
                            ))
-     (let ([out 
+     (let ([out
+            #'(begin
+                (~? no-bb-yet)  ; FIXME this doesn't quite do what we want...
+                ; we need to pop this out top and then run this whole thing again...
+                (define spec/name
+                  '((.type . make)
+                    (.name . (~? spec-name name))
+                    ;(.id . (~? identifier))  ; wtf...
+                    (.docstring . (~? docstring ""))
+                    (.inputs (~? (~@ input ...)) (~? (~@ constrained-input ...)))
+                    (.outputs name)
+                    (.vars (~? (~@ var ...)))  ; TODO these need to be requested before export to pdf
+                    (.steps (~? (~@ step ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
+                    (other body ...)))
+                )
+            ]
+           [old-out 
             #'(begin
                 (define (specification-phase)
                   ; we have to be able to talk about these before they are bound ...
@@ -691,7 +786,7 @@
         ; FIXME aspect!?
         ;(~optional (.uses imports ...))
         (~optional (.vars vars ...))  
-        (~optional (.inputs (~or input [oper constrained-input aspect ...]) ...))  
+        (~optional (.inputs (~or input [oper constrained-input aspect* ...]) ...))  
         (~optional (.outputs outputs ...))  
         body ...
         ;return-being  ; do we have this?
@@ -706,7 +801,7 @@
                           (.inputs name (~? input) ...)
                           (.outputs name)  ; hopefully ...
                           (.vars (~? vars) ...)  ; TODO these need to be requested before export to pdf
-                          (.measures (constrained-input aspect ...) ...)
+                          (.measures (~? (constrained-input aspect* ...)) ...)  ; FIXME aspect black-box binding
                           (.steps)
                           (other body ...)
                      )
@@ -807,27 +902,32 @@
   )
 
 (module+ test
-(spec (black-box thing thing)
-      "the root of all things")
+  (spec (black-box thing thing)
+        "the root of all things")
 
-(spec (black-box sub-thing thing))
-(spec (make something-else-no-steps)
-      "make thing")
-(spec (make something-else)
-      (.steps "1" "2" "3" "4")
-      "make thing")
+  (spec (black-box sub-thing thing))
+  (spec (make something-else-no-steps)
+        "make thing")
+  (spec (make something-else)
+        (.steps "1" "2" "3" "4")
+        "make thing")
 
-#;
-(spec (make yet-another-thing)
-      (.steps 1 2 3 4)
-      "failes as expected")
+  #;
+  (spec (make yet-another-thing)
+        (.steps 1 2 3 4)
+        "failes as expected")
 
-(spec (make thing)
-      (.inputs hello world)
-      "instructions")
+  (spec (make thing)
+        (.inputs hello world)
+        (.steps "make a thing!")
+        "instructions")
 
-#;
-(spec (actualize pulse)
+  (spec (make thing alt-make-thing)
+        ; top level seems to completely klobber these... not even add to them
+        (.steps "do a different set of actions and get the same thing!")
+        "again ...")
+
+  (spec (actualize pulse)
         (.vars duration
                duration-units
                step-size
@@ -837,14 +937,14 @@
                            [duration-units duration])]
                  ....))
 
-#;(spec (make loose-patched-cell)
-        (.inputs brain-slice
-                 internal-solution
-                 (: patch-pippette ([MOhms (range 6 10)])))  ; ERROR: don't know how to measure
-        (part-of brain-slice cell)
-        (put-a-in-b internal-solution patch-pippette)
-        ;(.output (loose-patch cell patch-pipette))
-        )
+  #;(spec (make loose-patched-cell)
+          (.inputs brain-slice
+                   internal-solution
+                   (: patch-pippette ([MOhms (range 6 10)])))  ; ERROR: don't know how to measure
+          (part-of brain-slice cell)
+          (put-a-in-b internal-solution patch-pippette)
+          ;(.output (loose-patch cell patch-pipette))
+          )
 )
 
 #;
