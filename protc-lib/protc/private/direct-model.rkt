@@ -500,7 +500,7 @@
                                   (.name . specific-name)
                                   (.parent . parent-type)
                                   (.docstring . (~? docstring ""))
-                                  (.specs ,(get-specs name-data #,stx))))
+                                  (.specs ,@(get-specs name-data #,stx))))
      #'(begin
          #;(define-syntax name-stx
            (syntax-property
@@ -633,21 +633,24 @@
                            (attribute body)
                            ))
      (let ([out
-            #'(begin
-                (~? no-bb-yet)  ; FIXME this doesn't quite do what we want...
-                ; we need to pop this out top and then run this whole thing again...
-                (define spec/name
-                  '((.type . make)
-                    (.name . (~? spec-name name))
-                    ;(.id . (~? identifier))  ; wtf...
-                    (.docstring . (~? docstring ""))
-                    (.inputs (~? (~@ input ...)) (~? (~@ constrained-input ...)))
-                    (.outputs name)
-                    (.vars (~? (~@ var ...)))  ; TODO these need to be requested before export to pdf
-                    (.steps (~? (~@ step ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
-                    (other body ...)))
-                )
-            ]
+            (if (identifier-binding #'name-data)
+                #'(begin
+                    (~? no-bb-yet)  ; FIXME this doesn't quite do what we want...
+                    ; we need to pop this out top and then run this whole thing again...
+                    (define spec/name
+                      '((.type . make)
+                        (.name . (~? spec-name name))
+                        ;(.id . (~? identifier))  ; wtf...
+                        (.docstring . (~? docstring ""))
+                        (.inputs (~? (~@ input ...)) (~? (~@ constrained-input ...)))
+                        (.outputs name)
+                        (.vars (~? (~@ var ...)))  ; TODO these need to be requested before export to pdf
+                        (.steps (~? (~@ step ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
+                        (other body ...))))
+                #`(begin
+                    (spec (black-box name thing))
+                    ; recursion here ...
+                    #,stx))]
            [old-out 
             #'(begin
                 (define (specification-phase)
@@ -873,6 +876,7 @@
     #:disable-colon-notation
     #:local-conventions ([spec-name id]
                          [impl-name id]
+                         [step sc-step-ref]
                          [docstring string])
     #:datum-literals (order .inputs)
     #;[(_ name body ...)
@@ -886,6 +890,7 @@
     [(_ (spec-name (~optional impl-name))
         (~optional docstring)
         (~optional (.inputs inputs ...))  ; implementation specific inputs i.e. ones that should be results invariant
+        (~optional (.steps step ...))
         body ...
         )
      #'(begin
