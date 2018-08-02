@@ -76,7 +76,6 @@ All actualize sections should specify a variable name that will be used in inher
            ; FIXME may need with-syntax
            #:attr name (name-join "." #'-name this-syntax)
            #:attr sc-name (name-join "sc-" #'-name this-syntax)))
-  
 
 (define-syntax-class -asp
   ; NOTE we do not need this form anymore, it is more consistent to refer to unbound aspects without the colon
@@ -89,13 +88,15 @@ All actualize sections should specify a variable name that will be used in inher
   #:description "(: thing:id lonely-aspect:id ... ([aspect:id value] ...))"
   #:literals (:)
   ; TODO get this right...
-  ;(pattern (: thing:id -aspect:id ... ([aspect-value:id value] ...))
+  #;
+  (pattern (: thing:id -aspect:id ... ([aspect-value:id value] ...)))
 
-  ;(pattern (: thing:id -aspect:id ...)  ; FIXME consumes ....
-           ;#:attr aspects #'(list -aspect ...)
-           ;#:attr values #'()
-           ;)
-  ;(~and (~not ....))
+  #;
+  (pattern (: thing:id -aspect:id ...)  ; FIXME consumes ....
+            #:attr aspects #'(list -aspect ...)
+            #:attr values #'())
+  #;
+  (~and (~not ....))
   (pattern (: thing:id -aspect:id ... (~optional ([aspect-value:id value] ...)))
            ; switch order to allow the values to line up
            ;#:attr aspect-value #`(list #,(if (attribute -aspect-value) #'-aspect-value null) ...)
@@ -105,22 +106,33 @@ All actualize sections should specify a variable name that will be used in inher
            #:attr values (if (attribute value)
                              #'(list value ...)
                              #'()))
-  ;(pattern (: thing:id (~or* -aspect:id [-aspect-value value]) ...)
-           ;#:attr aspects #'(list aspect-value ... -aspect ...)
-           ;#:attr values #'(list value ...))
-  ;(pattern (: thing:id aspect-value:id value))  ; normally only want (t a v) but (t a a a a v) is more consistent
-  ;(pattern (: thing:id aspect-l:id ...))
-  ;(pattern (: thing:id (~optional aspect:id ...) (~optional ([aspect-value:id value] ...))))
-  ;(pattern (: thing:id aspect:id ... (~optional ([aspect-value:id value] ... ))))
-  ;(pattern (: thing:id aspect:id ...))
-  ;(pattern (: thing:id (~seq aspect:id value) ...))
+  #;
+  (pattern (: thing:id (~or* -aspect:id [-aspect-value value]) ...)
+           #:attr aspects #'(list aspect-value ... -aspect ...)
+           #:attr values #'(list value ...))
+  #;
+  (pattern (: thing:id aspect-value:id value))  ; normally only want (t a v) but (t a a a a v) is more consistent
+  #;
+  (pattern (: thing:id aspect-l:id ...))
+  #;
+  (pattern (: thing:id (~optional aspect:id ...) (~optional ([aspect-value:id value] ...))))
+  #;
+  (pattern (: thing:id aspect:id ... (~optional ([aspect-value:id value] ... ))))
+  #;
+  (pattern (: thing:id aspect:id ...))
+  #;
+  (pattern (: thing:id (~seq aspect:id value) ...))
 
   ; new possibility
-  ;(pattern (: thing:id aspect:id (operator aspect:id value) ... ))
-  ;(pattern (: thing:id aspect:id aspect-constraint:sc-asp-inv ...)) ; for single aspect only?
-  ;(pattern (: thing:id [aspect-value:id sc-asp-inv] ...))  ; HRM and let*?
+  #;
+  (pattern (: thing:id aspect:id (operator aspect:id value) ... ))
+  #;
+  (pattern (: thing:id aspect:id aspect-constraint:sc-asp-inv ...)) ; for single aspect only?
+  #;
+  (pattern (: thing:id [aspect-value:id sc-asp-inv] ...))  ; HRM and let*?
+  #;
+  (pattern (: thing:id lonely-aspect:id ... ([aspect:id value] ...)))
   )
-;(pattern (: thing:id lonely-aspect:id ... ([aspect:id value] ...))))
 
 (define-syntax-class are-you-kidding-me
   #:literals (:)
@@ -200,83 +212,82 @@ All actualize sections should specify a variable name that will be used in inher
    ;#:attr messages #'(message ...)
    ))
 
-  (define-syntax-class sc-aspect
-    ;; TODO merge with protc-lib
-    ;#:datum-literals (: .invariants .uses)
-    (pattern [: name:id aspect:id]))
+(define-syntax-class sc-aspect
+  ;; TODO merge with protc-lib
+  ;#:datum-literals (: .invariants .uses)
+  (pattern [: name:id aspect:id]))
 
-  (define sym-input 'sym-input)
-  (define sym-output 'sym-output)
-  (define-syntax-class sc-protc-body
-    (pattern ((~alt (~optional (.invariants invariant-binding-form-nested ...))  ; FIXME nesting
-                    (~optional parameters)
-                    (~optional validate/being:expr)  ; validate/being validate/being->symbol? works on both inputs and outputs and is part of define/   ; TODO this needs a generic portion to map symbols to verification funcations
-                    ;(~optional require)  ; ~or* on being->symbol and symbol->being for each name, essentially (define/symbol->being mouse) -> a function that when given 'mouse returns the protocol... can be imported by name
-                    (~optional (.uses imports ...))  ; reference required by name
-                    ;(~optional symbol->being)  ; (define/symbol->being thing #:name my-actualization-protocol-for-thing)
-                    ;(~optional being->symbol)
-                    (~optional telos)
-                    (~between aspect-bindings 1 +inf.0)
-                    thing:string
-                    
-                    ) ...
-              body:expr ...
-              )
-             #:attr invariant-binding-form (if (attribute invariant-binding-form-nested)
-                                               #'(invariant-binding-form-nested ...)
-                                               #''())  ; FIXME
-             #:attr inputs '()
-             #:attr outputs '()
-             #:attr required-symbolic-inputs '()
-             #:attr required-symbolic-outputs '()
-             )  ; FIXME TODO
+(define sym-input 'sym-input)
+(define sym-output 'sym-output)
+(define-syntax-class sc-protc-body
+  (pattern ((~alt (~optional (.invariants invariant-binding-form-nested ...))  ; FIXME nesting
+                  (~optional parameters)
+                  (~optional validate/being:expr)  ; validate/being validate/being->symbol? works on both inputs and outputs and is part of define/   ; TODO this needs a generic portion to map symbols to verification funcations
+                  ;(~optional require)  ; ~or* on being->symbol and symbol->being for each name, essentially (define/symbol->being mouse) -> a function that when given 'mouse returns the protocol... can be imported by name
+                  (~optional (.uses imports ...))  ; reference required by name
+                  ;(~optional symbol->being)  ; (define/symbol->being thing #:name my-actualization-protocol-for-thing)
+                  ;(~optional being->symbol)
+                  (~optional telos)
+                  (~between aspect-bindings 1 +inf.0)
+                  thing:string
+                  ) ...
+            body:expr ...
+            )
+           #:attr invariant-binding-form (if (attribute invariant-binding-form-nested)
+                                             #'(invariant-binding-form-nested ...)
+                                             #''())  ; FIXME
+           #:attr inputs '()
+           #:attr outputs '()
+           #:attr required-symbolic-inputs '()
+           #:attr required-symbolic-outputs '()
+           )  ; FIXME TODO
 
-    (pattern lone-body:expr
-             #:with TODO (datum->syntax this-syntax ''TODO)
-             #:with input (datum->syntax this-syntax ''input)
-             #:with (output ...) (datum->syntax this-syntax '(symbol/body-output-1 symbol/body-output-2))
-             ;#:with sym-input (datum->syntax this-syntax ''sym-input)  ; why does _this_ fail!??!
-             #:with sym-output (datum->syntax this-syntax 'symbol/body-symbolic-output-1)
+  (pattern lone-body:expr
+           #:with TODO (datum->syntax this-syntax ''TODO)
+           #:with input (datum->syntax this-syntax ''input)
+           #:with (output ...) (datum->syntax this-syntax '(symbol/body-output-1 symbol/body-output-2))
+           ;#:with sym-input (datum->syntax this-syntax ''sym-input)  ; why does _this_ fail!??!
+           #:with sym-output (datum->syntax this-syntax 'symbol/body-symbolic-output-1)
 
-             #:attr invariant-binding-form #'TODO
-             #:attr validate #'TODO
-             #:attr validate/being #'TODO
-             #:attr telos #'TODO
-             #:attr required-symbolic-inputs #'sym-input  ; these need to be identifiers for the consumer
-             #:attr required-symbolic-outputs #'sym-output  ; TODO > 1
-             #:attr inputs #'intput
-             #:attr outputs #'(output ...)
-             ))
+           #:attr invariant-binding-form #'TODO
+           #:attr validate #'TODO
+           #:attr validate/being #'TODO
+           #:attr telos #'TODO
+           #:attr required-symbolic-inputs #'sym-input  ; these need to be identifiers for the consumer
+           #:attr required-symbolic-outputs #'sym-output  ; TODO > 1
+           #:attr inputs #'intput
+           #:attr outputs #'(output ...)
+           ))
 
-  (define-syntax-class sc-step-ref
-    (pattern instruction:string
-             #:attr name #f
-             #:attr [args 1] #f)
-    (pattern (name:id args:expr ...)
-             #:attr instruction
-             (let ([slv (syntax-local-value
-                         (format-id #'name "~a-stx" (syntax-e #'name)))])
-               (datum->syntax slv (apply (eval (dict-ref (syntax->datum slv) '.docstringf)) (syntax->datum #'(args ...))))
-               )))
+(define-syntax-class sc-step-ref
+  (pattern instruction:string
+           #:attr name #f
+           #:attr [args 1] #f)
+  (pattern (name:id args:expr ...)
+           #:attr instruction
+           (let ([slv (syntax-local-value
+                       (format-id #'name "~a-stx" (syntax-e #'name)))])
+             (datum->syntax slv (apply (eval (dict-ref (syntax->datum slv) '.docstringf)) (syntax->datum #'(args ...))))
+             )))
 
-  (define-syntax-class sc-being->symbol-body
-    ; TODO
-    (pattern body:expr
-             #:attr validate #'"pull this value out pf the defined body structure"
-             #:attr read #'"hrm, equally problematic"
-             ))
+(define-syntax-class sc-being->symbol-body
+  ; TODO
+  (pattern body:expr
+           #:attr validate #'"pull this value out pf the defined body structure"
+           #:attr read #'"hrm, equally problematic"
+           ))
 
-  (define-syntax-class sc-prtoc-input
-    (pattern name:id)
-    ;(pattern aspect:sc-aspect)
-    ;(pattern (name:id aspect:sc-aspect))  ; TODO merge
-    #;(pattern (name:id unit:id)))
+(define-syntax-class sc-prtoc-input
+  (pattern name:id)
+  ;(pattern aspect:sc-aspect)
+  ;(pattern (name:id aspect:sc-aspect))  ; TODO merge
+  #;(pattern (name:id unit:id)))
 
-  (define-syntax-class sc-protc-output
-    (pattern name:id)
-    ;(pattern aspect:sc-aspect)
-    ;(pattern (name:id aspect:sc-aspect))  ; TODO merge
-    #;(pattern (name:id unit:id)))
+(define-syntax-class sc-protc-output
+  (pattern name:id)
+  ;(pattern aspect:sc-aspect)
+  ;(pattern (name:id aspect:sc-aspect))  ; TODO merge
+  #;(pattern (name:id unit:id)))
 
-  (define-syntax-class sc-id+unit
-    (pattern (name:id unit:id)))
+(define-syntax-class sc-id+unit
+  (pattern (name:id unit:id)))
