@@ -1,227 +1,244 @@
 #lang racket/base
-  (define-syntax (spec-1 stx)
-    (syntax-parse stx
-      ; constrained-by ; compile time / write time, (result thing) just needs a way to bind proveancne, which is 2 things, measure function name and execution trace identifier
-      ;    comes from body
-      ; has-symbolic-input
-      ;    these are .vars in the current thinking
-      ; has-input
-      ;    these are .inputs in the current thinking
-      ; has-output
-      ; has-symbolic output
+(require ;scribble/srcdoc
+         ;(for-doc scribble/base scribble/manual)
+         protc/export
+         ;protc/utils  ; this is private ...
+         rdf/utils
+         "direct-model.rkt"
+         (for-syntax racket/base
+                     racket/list
+                     racket/string
+                     racket/pretty
+                     racket/syntax
+                     syntax/parse
+                     "direct-model.rkt"
+                     "syntax-classes.rkt"
+                     "utils.rkt"))
 
-      ; the executor function needs to define symbol->being and being->symbol or maybe that goes somehwere ehse?
-      #:datum-literals (.uses .inputs .outputs .vars .measures)
-      #:local-conventions ([body sc-protc-body]  ; TODO allow these to be defined dynamically
-                           [inputs sc-prtoc-input]
-                           [outputs sc-protc-output]
-                           [required-symbolic-inputs id]  ; number/literal, number + unit (literalis require translation)
-                           [required-symbolic-outputs id]  ; number/literal, number + unit (literalis require translation)
-                           [required-symbolic-inputs sc-id+unit]
-                           [required-symbolic-outputs sc-id+unit]
-                           [name id]
-                           [steps sc-step-ref]
-                           [doc string]
-                           )
-      [(_ (name)  ; FIXME this gives bad syntax error even though this is defined ... :/
-          (~optional (~seq #:executor executor) #:defaults ([executor #'"human"]))
-          (.uses imports ...)
-          body ...)
-       #''TODO]
-      [(_ (name required-symbolic-inputs ...)  ; FIXME this gives bad syntax error even though this is defined ... :/
-          (~optional (~seq #:executor executor) #:defaults ([executor #'"human"]))
-          (~optional (.uses imports ...))
-          (~optional (.inputs inputs ...))
-          (~optional (.outputs outputs ...))
-          body ...)
-       #''TODO]
-      [(_ (~seq #:name name)  ; FIXME this gives bad syntax error even though this is defined ... :/
-          (~optional (~seq #:executor executor) #:defaults ([executor #'"human"]))
-          (.uses imports ...)
-          (.inputs inputs ...)
-          (.outputs outputs ...)
-          (.vars required-symbolic-inputs ...)
-          )
-       (begin #''TODO)]
-      [(_ (~seq #:name name)  ; FIXME this gives bad syntax error even though this is defined ... :/
-          (~optional (~seq #:executor executor) #:defaults ([executor #'"human"]))
-          (.inputs inputs ...)
-          (.outputs outputs ...)
-          (.vars required-symbolic-inputs ...)
-          )
-       (begin #''TODO)]
-      [(_ (~seq #:name name)
-          (~optional (~seq #:executor executor) #:defaults ([executor #'"human"]))
-          (.inputs inputs ...)
-          (.measures required-symbolic-outputs ...))
-       (begin #''TODO)] 
-      [(_ (~seq #:name name)  ; these are our normal functions the body can be anything
-          (~optional (~seq #:executor executor) #:defaults ([executor #'"human"]))
-          (.vars required-symbolic-inputs ...)
-          (.measures required-symbolic-outputs ...))
-       (begin #''TODO)] 
-      [(_ (name required-symbolic-inputs ...)
-          (~optional (.uses imports ...))
-          (.inputs inputs ...)
-          (.outputs outputs ...)
-          (.measures required-symbolic-outputs ...)  ; FIXME this needs to be replaced with aspect-input pairs?
-          body ...)
-       #:with (bout ...) (datum->syntax this-syntax (flatten (syntax->datum #'(body.outputs ...))))
-       #'(begin
-           (define (specification-phase)
-             ; FIXME this doesn't work... it is missing the impl sections
-             ; this takes no inputs because they are extracted from the body
-             ; this defines symbol->being and being->symbol possibly via require through the executor
-             ; you could imagine using using asymmetric crypto to certify that the measurement devices have not been tampered with
-             ; but without control of the hardware that is virtually impossible, we can only trust any _individual_ measurement device (which means that you have to distrust all of them...)
+(define-syntax (spec-1 stx)
+  (syntax-parse stx
+    ; constrained-by ; compile time / write time, (result thing) just needs a way to bind proveancne, which is 2 things, measure function name and execution trace identifier
+    ;    comes from body
+    ; has-symbolic-input
+    ;    these are .vars in the current thinking
+    ; has-input
+    ;    these are .inputs in the current thinking
+    ; has-output
+    ; has-symbolic output
 
-             ; TODO the symbols are defined up here for inputs outputs and vars
-             ; they are 'bound' to their referent by the referent data
-             body.invariant-binding-form ...  ; these need to expand to functions that fill in the missing info
-             ; body.parameters ...
-             body.validate/being ...   ; we only have to validate ours, all the other definitions will do theirs too
-             body.telos ...  ; individual things can also have their own?
-             (define (symbolic-input-phase required-symbolic-inputs ... body.required-symbolic-inputs ...)
-               (define (*start-execution*)  ; input-phase
-                 ; the symbolic representation of the protocol takes no arguments because those inputs
-                 (define-values (inputs ... body.inputs ...)  ; this gives us all the named things we have to deal with
-                   ;; "actualize"  ; turns out racket does have function types, they just don't tell you ^_^
-                   (bind/symbol->being inputs ... body.inputs ...))
-                 ; body.steps  ; TODO setup/prerecs go here when we are compiling the human readable version? and then execution goes functionally in symbolic outputs define values?
-                 (define-values (required-symbolic-outputs ... body.required-symbolic-outputs ...)
-                   ;; "measure"
-                   (being->symbol required-symbolic-outputs ... body.required-symbolic-outputs ...))
-                 ; TODO ? it seems that lifting body.outputs to here breaks ordering rules...
-                 ; so we need to include a way to order evaluation
-                 (validate/being outputs ... bout ...) ; this uses the implicit/internal measures on those outputs
-                 (values required-symbolic-outputs ... body.required-symbolic-outputs ...))
-               *start-execution*)
-             symbolic-input-phase)
+    ; the executor function needs to define symbol->being and being->symbol or maybe that goes somehwere ehse?
+    #:datum-literals (.uses .inputs .outputs .vars .measures)
+    #:local-conventions ([body sc-protc-body]  ; TODO allow these to be defined dynamically
+                         [inputs sc-prtoc-input]
+                         [outputs sc-protc-output]
+                         [required-symbolic-inputs id]  ; number/literal, number + unit (literalis require translation)
+                         [required-symbolic-outputs id]  ; number/literal, number + unit (literalis require translation)
+                         [required-symbolic-inputs sc-id+unit]
+                         [required-symbolic-outputs sc-id+unit]
+                         [name id]
+                         [steps sc-step-ref]
+                         [doc string]
+                         )
+    [(_ (name)  ; FIXME this gives bad syntax error even though this is defined ... :/
+        (~optional (~seq #:executor executor) #:defaults ([executor #'"human"]))
+        (.uses imports ...)
+        body ...)
+     #''TODO]
+    [(_ (name required-symbolic-inputs ...)  ; FIXME this gives bad syntax error even though this is defined ... :/
+        (~optional (~seq #:executor executor) #:defaults ([executor #'"human"]))
+        (~optional (.uses imports ...))
+        (~optional (.inputs inputs ...))
+        (~optional (.outputs outputs ...))
+        body ...)
+     #''TODO]
+    [(_ (~seq #:name name)  ; FIXME this gives bad syntax error even though this is defined ... :/
+        (~optional (~seq #:executor executor) #:defaults ([executor #'"human"]))
+        (.uses imports ...)
+        (.inputs inputs ...)
+        (.outputs outputs ...)
+        (.vars required-symbolic-inputs ...)
+        )
+     (begin #''TODO)]
+    [(_ (~seq #:name name)  ; FIXME this gives bad syntax error even though this is defined ... :/
+        (~optional (~seq #:executor executor) #:defaults ([executor #'"human"]))
+        (.inputs inputs ...)
+        (.outputs outputs ...)
+        (.vars required-symbolic-inputs ...)
+        )
+     (begin #''TODO)]
+    [(_ (~seq #:name name)
+        (~optional (~seq #:executor executor) #:defaults ([executor #'"human"]))
+        (.inputs inputs ...)
+        (.measures required-symbolic-outputs ...))
+     (begin #''TODO)] 
+    [(_ (~seq #:name name)  ; these are our normal functions the body can be anything
+        (~optional (~seq #:executor executor) #:defaults ([executor #'"human"]))
+        (.vars required-symbolic-inputs ...)
+        (.measures required-symbolic-outputs ...))
+     (begin #''TODO)] 
+    [(_ (name required-symbolic-inputs ...)
+        (~optional (.uses imports ...))
+        (.inputs inputs ...)
+        (.outputs outputs ...)
+        (.measures required-symbolic-outputs ...)  ; FIXME this needs to be replaced with aspect-input pairs?
+        body ...)
+     #:with (bout ...) (datum->syntax this-syntax (flatten (syntax->datum #'(body.outputs ...))))
+     #'(begin
+         (define (specification-phase)
+           ; FIXME this doesn't work... it is missing the impl sections
+           ; this takes no inputs because they are extracted from the body
+           ; this defines symbol->being and being->symbol possibly via require through the executor
+           ; you could imagine using using asymmetric crypto to certify that the measurement devices have not been tampered with
+           ; but without control of the hardware that is virtually impossible, we can only trust any _individual_ measurement device (which means that you have to distrust all of them...)
 
-           (define name-ast  ; have to use format-id to get this bound correctly for some reason
-             '(data
-               ((.executor executor)
-                (.name name)
-                (.inputs (inputs ...))
-                (.outputs (outputs ...))
-                (.vars (required-symbolic-inputs ...))  ; TODO these need to be requested before export to pdf
-                (.measures (required-symbolic-outputs ...)))))  
-           (define name specification-phase))
-       ]
-      [(_ name
-          (~optional (.identifier ident))  ; allow mapping of names specced locally, we can provide (spec-ident (~seq local global) ...) too
-          ; and can then pull in the expected parts from the ontology
-          body ...)
-       #:with name-predicate (format-id #'name #:source #'name "~a?" (syntax-e #'name))
-       #'(begin
-           (define (name-predicate expected-results)  ; TODO results/result structure
-             #f  ; TODO (for/and value-checkers expected-results)
-             )
+           ; TODO the symbols are defined up here for inputs outputs and vars
+           ; they are 'bound' to their referent by the referent data
+           body.invariant-binding-form ...  ; these need to expand to functions that fill in the missing info
+           ; body.parameters ...
+           body.validate/being ...   ; we only have to validate ours, all the other definitions will do theirs too
+           body.telos ...  ; individual things can also have their own?
+           (define (symbolic-input-phase required-symbolic-inputs ... body.required-symbolic-inputs ...)
+             (define (*start-execution*)  ; input-phase
+               ; the symbolic representation of the protocol takes no arguments because those inputs
+               (define-values (inputs ... body.inputs ...)  ; this gives us all the named things we have to deal with
+                 ;; "actualize"  ; turns out racket does have function types, they just don't tell you ^_^
+                 (bind/symbol->being inputs ... body.inputs ...))
+               ; body.steps  ; TODO setup/prerecs go here when we are compiling the human readable version? and then execution goes functionally in symbolic outputs define values?
+               (define-values (required-symbolic-outputs ... body.required-symbolic-outputs ...)
+                 ;; "measure"
+                 (being->symbol required-symbolic-outputs ... body.required-symbolic-outputs ...))
+               ; TODO ? it seems that lifting body.outputs to here breaks ordering rules...
+               ; so we need to include a way to order evaluation
+               (validate/being outputs ... bout ...) ; this uses the implicit/internal measures on those outputs
+               (values required-symbolic-outputs ... body.required-symbolic-outputs ...))
+             *start-execution*)
+           symbolic-input-phase)
+
+         (define name-ast  ; have to use format-id to get this bound correctly for some reason
+           '(data
+             ((.executor executor)
+              (.name name)
+              (.inputs (inputs ...))
+              (.outputs (outputs ...))
+              (.vars (required-symbolic-inputs ...))  ; TODO these need to be requested before export to pdf
+              (.measures (required-symbolic-outputs ...)))))  
+         (define name specification-phase))
+     ]
+    [(_ name
+        (~optional (.identifier ident))  ; allow mapping of names specced locally, we can provide (spec-ident (~seq local global) ...) too
+        ; and can then pull in the expected parts from the ontology
+        body ...)
+     #:with name-predicate (format-id #'name #:source #'name "~a?" (syntax-e #'name))
+     #'(begin
+         (define (name-predicate expected-results)  ; TODO results/result structure
+           #f  ; TODO (for/and value-checkers expected-results)
            )
-       ]
-      [(_ (~seq #:name name)  ; the big block has to come last or it will eat all the  rest
-          (~optional (~seq #:executor executor) #:defaults ([executor #'"human"]))  ; is executor really just a one of? I think so, parallelism ...
-          (~optional doc)  ; FIXME this might be undesireable...
-          (.uses imports ...)
-          (.inputs inputs ...)
-          (.outputs outputs ...)
-          (.vars required-symbolic-inputs ...)
-          (.measures required-symbolic-outputs ...)  ; aka symret
-          ;(.steps steps:sc-step-eval ...)  ; FIXME hack
-          (.steps steps ...)  ; FIXME hack
-          ; TODO allow these to be in any order? also note that this is the non-atomic ordering
-          body ...)
-       #:with name-ast (format-id #'name
-                                  #:source #'name
-                                  "~a-ast" (syntax-e #'name))
-       #:with name-stx (format-id #'name
-                                  #:source #'name
-                                  "~a-stx" (syntax-e #'name))
-       #:with (bout ...) (datum->syntax this-syntax (flatten (syntax->datum #'(body.outputs ...))))
-       #:with docstringf #'(λ (inputs ...) (format (~? doc "") inputs ...))
-       #:with docstring (if (attribute doc)
-                            (if (attribute inputs)
-                                (apply format (syntax-e #'doc) (syntax->datum #'(inputs ...))) ; FIXME we want to format this via args
-                                #'doc)
-                            (datum->syntax #'name (format "do ~a" #'name)))
+         )
+     ]
+    [(_ (~seq #:name name)  ; the big block has to come last or it will eat all the  rest
+        (~optional (~seq #:executor executor) #:defaults ([executor #'"human"]))  ; is executor really just a one of? I think so, parallelism ...
+        (~optional doc)  ; FIXME this might be undesireable...
+        (.uses imports ...)
+        (.inputs inputs ...)
+        (.outputs outputs ...)
+        (.vars required-symbolic-inputs ...)
+        (.measures required-symbolic-outputs ...)  ; aka symret
+        ;(.steps steps:sc-step-eval ...)  ; FIXME hack
+        (.steps steps ...)  ; FIXME hack
+        ; TODO allow these to be in any order? also note that this is the non-atomic ordering
+        body ...)
+     #:with name-ast (format-id #'name
+                                #:source #'name
+                                "~a-ast" (syntax-e #'name))
+     #:with name-stx (format-id #'name
+                                #:source #'name
+                                "~a-stx" (syntax-e #'name))
+     #:with (bout ...) (datum->syntax this-syntax (flatten (syntax->datum #'(body.outputs ...))))
+     #:with docstringf #'(λ (inputs ...) (format (~? doc "") inputs ...))
+     #:with docstring (if (attribute doc)
+                          (if (attribute inputs)
+                              (apply format (syntax-e #'doc) (syntax->datum #'(inputs ...))) ; FIXME we want to format this via args
+                              #'doc)
+                          (datum->syntax #'name (format "do ~a" #'name)))
 
-       #;(let ([names (syntax->list #'((~? steps.name) ...))])
-           (unless (null? names)
-             (println names)
-             (println (map
-                       (compose syntax-local-value
-                                (λ (name) (format-id name #:source name "~a-stx" (syntax-e name))))
-                       ;syntax-local-value
-                       names))))
-       #:with (subprotocols ...) (let ([names (syntax->list #'((~? steps.name) ...))])
-                                   (map
-                                    (compose syntax-local-value
-                                             (λ (name) (format-id name #:source name "~a-stx" (syntax-e name))))
-                                    names))
+     #;(let ([names (syntax->list #'((~? steps.name) ...))])
+         (unless (null? names)
+           (println names)
+           (println (map
+                     (compose syntax-local-value
+                              (λ (name) (format-id name #:source name "~a-stx" (syntax-e name))))
+                     ;syntax-local-value
+                     names))))
+     #:with (subprotocols ...) (let ([names (syntax->list #'((~? steps.name) ...))])
+                                 (map
+                                  (compose syntax-local-value
+                                           (λ (name) (format-id name #:source name "~a-stx" (syntax-e name))))
+                                  names))
 
-       #'(begin
-           (define (specification-phase)
-             ; this takes no inputs because they are extracted from the body
-             ; this defines symbol->being and being->symbol possibly via require through the executor
-             ; you could imagine using using asymmetric crypto to certify that the measurement devices have not been tampered with
-             ; but without control of the hardware that is virtually impossible, we can only trust any _individual_ measurement device (which means that you have to distrust all of them...)
+     #'(begin
+         (define (specification-phase)
+           ; this takes no inputs because they are extracted from the body
+           ; this defines symbol->being and being->symbol possibly via require through the executor
+           ; you could imagine using using asymmetric crypto to certify that the measurement devices have not been tampered with
+           ; but without control of the hardware that is virtually impossible, we can only trust any _individual_ measurement device (which means that you have to distrust all of them...)
 
-             ; TODO the symbols are defined up here for inputs outputs and vars
-             ; they are 'bound' to their referent by the referent data
-             body.invariant-binding-form ...  ; these need to expand to functions that fill in the missing info
-             ; body.parameters ...
-             body.validate/being ...   ; we only have to validate ours, all the other definitions will do theirs too
-             body.telos ...  ; individual things can also have their own?
-             ; FIXME TODO: how to lift .uses!
-             (define (symbolic-input-phase required-symbolic-inputs ... body.required-symbolic-inputs ...)
-               (define (*start-execution*)  ; input-phase
-                 ; the symbolic representation of the protocol takes no arguments because those inputs
-                 (define-values (inputs ... body.inputs ...)  ; this gives us all the named things we have to deal with
-                   ;; "actualize"  ; turns out racket does have function types, they just don't tell you ^_^
-                   (bind/symbol->being inputs ... body.inputs ...))
-                 ; body.steps  ; TODO setup/prerecs go here when we are compiling the human readable version? and then execution goes functionally in symbolic outputs define values?
-                 (define-values (required-symbolic-outputs ... body.required-symbolic-outputs ...)
-                   ;; "measure"
-                   (being->symbol required-symbolic-outputs ... body.required-symbolic-outputs ...))
-                 ; TODO ? it seems that lifting body.outputs to here breaks ordering rules...
-                 ; so we need to include a way to order evaluation
-                 (validate/being outputs ... bout ...) ; this uses the implicit/internal measures on those outputs
-                 (values required-symbolic-outputs ... body.required-symbolic-outputs ...))
-               *start-execution*)
-             symbolic-input-phase)
+           ; TODO the symbols are defined up here for inputs outputs and vars
+           ; they are 'bound' to their referent by the referent data
+           body.invariant-binding-form ...  ; these need to expand to functions that fill in the missing info
+           ; body.parameters ...
+           body.validate/being ...   ; we only have to validate ours, all the other definitions will do theirs too
+           body.telos ...  ; individual things can also have their own?
+           ; FIXME TODO: how to lift .uses!
+           (define (symbolic-input-phase required-symbolic-inputs ... body.required-symbolic-inputs ...)
+             (define (*start-execution*)  ; input-phase
+               ; the symbolic representation of the protocol takes no arguments because those inputs
+               (define-values (inputs ... body.inputs ...)  ; this gives us all the named things we have to deal with
+                 ;; "actualize"  ; turns out racket does have function types, they just don't tell you ^_^
+                 (bind/symbol->being inputs ... body.inputs ...))
+               ; body.steps  ; TODO setup/prerecs go here when we are compiling the human readable version? and then execution goes functionally in symbolic outputs define values?
+               (define-values (required-symbolic-outputs ... body.required-symbolic-outputs ...)
+                 ;; "measure"
+                 (being->symbol required-symbolic-outputs ... body.required-symbolic-outputs ...))
+               ; TODO ? it seems that lifting body.outputs to here breaks ordering rules...
+               ; so we need to include a way to order evaluation
+               (validate/being outputs ... bout ...) ; this uses the implicit/internal measures on those outputs
+               (values required-symbolic-outputs ... body.required-symbolic-outputs ...))
+             *start-execution*)
+           symbolic-input-phase)
 
-           ; FIXME use syntax-local-value here, vastly preferable
-           ; keeps things safe at compile time
-           (define-syntax name-stx
-             #'((.executor . executor)
-                (.name . name)
-                (.docstring . docstring)
-                (.docstringf . docstringf)
-                (.inputs inputs ...)
-                (.outputs outputs ...)
-                (.vars required-symbolic-inputs ...)  ; TODO these need to be requested before export to pdf
-                (.measures required-symbolic-outputs ...)
-                (.steps steps.instruction ...) ; TODO pull in the asts at compile time
-                (.subprotocols subprotocols ...)
-                (other body ...)
-                ))
-           (define name-ast  ; have to use format-id to get this bound correctly for some reason
-             '(data
-               ((.executor . executor)
-                (.name . name)
-                (.docstring . docstring)
-                (.docstringf . docstringf)
-                (.inputs inputs ...)
-                (.outputs outputs ...)
-                (.vars required-symbolic-inputs ...)  ; TODO these need to be requested before export to pdf
-                (.measures required-symbolic-outputs ...)
-                (.steps (~? steps.instruction) ...) ; TODO pull in the asts at compile time
-                (.subprotocols subprotocols ...)
-                (other body ...)
-                )))  
-           (define name specification-phase))]
-      ))
+         ; FIXME use syntax-local-value here, vastly preferable
+         ; keeps things safe at compile time
+         (define-syntax name-stx
+           #'((.executor . executor)
+              (.name . name)
+              (.docstring . docstring)
+              (.docstringf . docstringf)
+              (.inputs inputs ...)
+              (.outputs outputs ...)
+              (.vars required-symbolic-inputs ...)  ; TODO these need to be requested before export to pdf
+              (.measures required-symbolic-outputs ...)
+              (.steps steps.instruction ...) ; TODO pull in the asts at compile time
+              (.subprotocols subprotocols ...)
+              (other body ...)
+              ))
+         (define name-ast  ; have to use format-id to get this bound correctly for some reason
+           '(data
+             ((.executor . executor)
+              (.name . name)
+              (.docstring . docstring)
+              (.docstringf . docstringf)
+              (.inputs inputs ...)
+              (.outputs outputs ...)
+              (.vars required-symbolic-inputs ...)  ; TODO these need to be requested before export to pdf
+              (.measures required-symbolic-outputs ...)
+              (.steps (~? steps.instruction) ...) ; TODO pull in the asts at compile time
+              (.subprotocols subprotocols ...)
+              (other body ...)
+              )))  
+         (define name specification-phase))]
+    ))
 
+(module+ test
   (spec-1 #:name my-protocol
           (.uses)  ; TODO nothing...
           (.inputs mouse vibratome cut-buffer)
@@ -329,3 +346,4 @@
     (list test-connected-pair-ast))
   (provide protc-for-export)  ; TODO compiled protc modules should export this automatically
   (export test-connected-pair 'html 'pdf)
+  )

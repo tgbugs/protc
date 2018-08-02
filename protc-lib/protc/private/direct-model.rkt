@@ -12,7 +12,8 @@
                      racket/pretty
                      racket/syntax
                      syntax/parse
-                     protc/private/utils))
+                     "syntax-classes.rkt"
+                     "utils.rkt"))
 
 (provide spec
          impl
@@ -22,7 +23,12 @@
          define-relation
          define-aspect
          export
-         invariant)
+         invariant
+
+         bind/symbol->being
+         being->symbol
+         validate/being
+         )
 
 ;;; the protc phase model
 ;;; 0. writing time
@@ -40,100 +46,6 @@
 
 ;;; information constraint language ICL would be an alternate name for protc
 ;;; if I were in a stuffy corporate >_<
-
-(module syntax-classes racket/base
-  (require syntax/parse
-           racket/syntax
-           racket/dict
-           (for-template (only-in racket/base #%top #%app quote))
-           (for-syntax racket/base))
-  (provide (all-defined-out))
-  (define-syntax-class sc-aspect
-    ;; TODO merge with protc-lib
-    ;#:datum-literals (: .invariants .uses)
-    (pattern [: name:id aspect:id]))
-
-  (define sym-input 'sym-input)
-  (define sym-output 'sym-output)
-  (define-syntax-class sc-protc-body
-    (pattern ((~alt (~optional (.invariants invariant-binding-form-nested ...))  ; FIXME nesting
-                    (~optional parameters)
-                    (~optional validate/being:expr)  ; validate/being validate/being->symbol? works on both inputs and outputs and is part of define/   ; TODO this needs a generic portion to map symbols to verification funcations
-                    ;(~optional require)  ; ~or* on being->symbol and symbol->being for each name, essentially (define/symbol->being mouse) -> a function that when given 'mouse returns the protocol... can be imported by name
-                    (~optional (.uses imports ...))  ; reference required by name
-                    ;(~optional symbol->being)  ; (define/symbol->being thing #:name my-actualization-protocol-for-thing)
-                    ;(~optional being->symbol)
-                    (~optional telos)
-                    (~between aspect-bindings 1 +inf.0)
-                    thing:string
-                    
-                    ) ...
-              body:expr ...
-              )
-             #:attr invariant-binding-form (if (attribute invariant-binding-form-nested)
-                                               #'(invariant-binding-form-nested ...)
-                                               #''())  ; FIXME
-             #:attr inputs '()
-             #:attr outputs '()
-             #:attr required-symbolic-inputs '()
-             #:attr required-symbolic-outputs '()
-             )  ; FIXME TODO
-
-    (pattern lone-body:expr
-             #:with TODO (datum->syntax this-syntax ''TODO)
-             #:with input (datum->syntax this-syntax ''input)
-             #:with (output ...) (datum->syntax this-syntax '(symbol/body-output-1 symbol/body-output-2))
-             ;#:with sym-input (datum->syntax this-syntax ''sym-input)  ; why does _this_ fail!??!
-             #:with sym-output (datum->syntax this-syntax 'symbol/body-symbolic-output-1)
-
-             #:attr invariant-binding-form #'TODO
-             #:attr validate #'TODO
-             #:attr validate/being #'TODO
-             #:attr telos #'TODO
-             #:attr required-symbolic-inputs #'sym-input  ; these need to be identifiers for the consumer
-             #:attr required-symbolic-outputs #'sym-output  ; TODO > 1
-             #:attr inputs #'intput
-             #:attr outputs #'(output ...)
-             ))
-
-  (define-syntax-class sc-step-ref
-    (pattern instruction:string
-             #:attr name #f
-             #:attr [args 1] #f)
-    (pattern (name:id args:expr ...)
-             #:attr instruction
-             (let ([slv (syntax-local-value
-                         (format-id #'name "~a-stx" (syntax-e #'name)))])
-               (datum->syntax slv (apply (eval (dict-ref (syntax->datum slv) '.docstringf)) (syntax->datum #'(args ...))))
-               )))
-
-  (define-syntax-class sc-being->symbol-body
-    ; TODO
-    (pattern body:expr
-             #:attr validate #'"pull this value out pf the defined body structure"
-             #:attr read #'"hrm, equally problematic"
-             ))
-
-  (define-syntax-class sc-prtoc-input
-    (pattern name:id)
-    ;(pattern aspect:sc-aspect)
-    ;(pattern (name:id aspect:sc-aspect))  ; TODO merge
-    #;(pattern (name:id unit:id)))
-
-  (define-syntax-class sc-protc-output
-    (pattern name:id)
-    ;(pattern aspect:sc-aspect)
-    ;(pattern (name:id aspect:sc-aspect))  ; TODO merge
-    #;(pattern (name:id unit:id)))
-
-  (define-syntax-class sc-id+unit
-    (pattern (name:id unit:id)))
-  
-  )
-
-(require (for-syntax 'syntax-classes))
-
-
 
 (define (runtime-read name:aspect)
   ; TODO in cases where there is an external file
@@ -469,6 +381,7 @@
                       black-box participant
 
                       order
+                      .executor
                       .uses
                       .vars
                       .config-vars
@@ -536,7 +449,7 @@
              (syntax-property #'export-stx 'name #'specific-name)
              'spec (list))
             'impl (list)))
-         (define name-stx export-stx)
+         (define name-stx #'export-stx)
          (define name-ast
            '(data export-stx))
          (define specific-name #'#''(specific-name))  ; TODO black-box struct (already sort of done elsewhere)?
@@ -893,6 +806,7 @@
      #''TODO])
   )
 
+(module+ test
 (spec (black-box thing thing)
       "the root of all things")
 
@@ -931,6 +845,7 @@
         (put-a-in-b internal-solution patch-pippette)
         ;(.output (loose-patch cell patch-pipette))
         )
+)
 
 #;
 (module+ test
