@@ -503,7 +503,6 @@
                         base
                         (cons (make-margin (reverse unit-warnings)) base)))]
           [parts (cons (sub-protocol (symbol->string name) steps #:style style-current) sub-protocols)
-
                   #;(sub-protocol "Sub protocol 1" '("do this" "do that" "..." "profit!") #:style style-current)
                   #;(sub-protocol (colorize #:color "green" "Sub protocol 2")
                                 (list (WARNING "testing!")) #:style style-current)

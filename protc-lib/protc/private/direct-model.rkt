@@ -84,7 +84,7 @@
     [(_ name-of-symbol/being (~optional (~seq #:name name)) aspect body ...)
      ; if #:name is left out then the default is set or overwritten with a warning? or should it error
      ; if #:name is set then it is essentially an implementation
-     
+
      ; TODO aspects need to intelligently request only numbers or numbers + units
      ; TODO either the last expression in the body returns the values or we read the aspect and make a generic version
      #:with repl-message (datum->syntax (format "please input ~a" #'aspect))
@@ -258,7 +258,7 @@
      #:with elip (datum->syntax this-syntax '...)
      #:with elip+ (datum->syntax this-syntax '...+)
      #:with objects (datum->syntax this-syntax 'objects-internal)
-     (let ([out 
+     (let ([out
             #'(define-syntax (relation-name stx)
                 (syntax-parse stx
                   [(_ subject objects elip+)
@@ -522,7 +522,7 @@
         (~optional docstring)
         (~optional (.id identifier))
         (~optional (.uses import ...))  ; subProtocolOf ???
-        (~optional (.vars var ...))  
+        (~optional (.vars var ...))
         ;(~optional (.inputs inputs ...))
         (~optional (.inputs (~or input [oper constrained-input aspect* ...]) ...))
         ;(.outputs outputs ...)  ; technically these should be extra-outputs?
@@ -537,9 +537,11 @@
      #:with name-data (format-id #'name
                                 #:source #'name
                                 "~a-data" (syntax-e #'name))
+     #|
      #:attr no-bb-yet (if (identifier-binding #'name-data)
                           #f
                           #'(spec (black-box name thing)))
+     |#
      #:with spec/name #;(if (attribute spec-name)
                           #;(format-id #'spec-name
                                      #:source #'spec-name
@@ -570,7 +572,7 @@
            )
      #:with name-binding (let* ([-name #'name]
                                 [-name-stx #'name-stx]
-                                
+
                                 #;[slv (syntax-local-value (format-id #'name "~a-stx" (syntax-e #'name))
                                                          ; it can't be that this is being shadowed can it?!
                                                          ;-name-stx
@@ -623,7 +625,7 @@
                                                ''(u wot m8, seriously?)
                                                )
                                          (define name specification-phase)))
- 
+
      #;(pretty-write (list 'ct:
                            (attribute name)
                            (attribute import)
@@ -635,8 +637,7 @@
      (let ([out
             (if (identifier-binding #'name-data)
                 #'(begin
-                    (~? no-bb-yet)  ; FIXME this doesn't quite do what we want...
-                    ; we need to pop this out top and then run this whole thing again...
+                    ;(~? no-bb-yet)
                     (define spec/name
                       '((.type . make)
                         (.name . (~? spec-name name))
@@ -651,7 +652,7 @@
                     (spec (black-box name thing))
                     ; recursion here ...
                     #,stx))]
-           [old-out 
+           [old-out
             #'(begin
                 (define (specification-phase)
                   ; we have to be able to talk about these before they are bound ...
@@ -669,7 +670,7 @@
                   ; we just have to orchestra passing in variables ...
                   (define (~? (symbolic-input-phase var ...) (symbolic-input-phase))
                     (define (*start-execution*)
-                      
+
                       ; TODO validate inputs step needs options auto, on, skip or something like that
                       (~? (validate/being input ... constrained-input ...))
                       (validate/being name))
@@ -686,12 +687,13 @@
        out)
      ]
     [(_ (~or (measure name ...+ aspect) (>^> name ...+ aspect) (*: name ...+ aspect))
+        ; FIXME why did I allow multiple names here?! Measure the length of all 20 ferrets or something?!
         ; FIXME why does (spec (black-box a b c d) "asdf") work here?!??!!
         ; measure binds a
         ; aspec-predicate-category
         (~optional (.uses import ...))  ; the reason we do this is to keep the relevant names under control
         (~optional docstring)
-        (~optional (.vars var ...))  
+        (~optional (.vars var ...))
         (~optional (.config-vars cvar ...))  ; TODO naming ...
         (~optional (.inputs (~or input [oper constrained-input aspect* ...])...)) ; FIXME
         ;(.outputs outputs ...)    ; unused?
@@ -722,14 +724,15 @@
                           (.type . measure)
                           (.name . name:aspect)
                           (.docstring . (~? docstring ""))
-                          ;(.inputs (~? (name ... inputs ... constrained-input ...) (name ...)))
-                          (.inputs name ... (~? input) ... (~? constrained-input) ...)
-                          (.outputs name ...)  ; hopefully ...
-                          (.vars (~? var) ...)  ; TODO these need to be requested before export to pdf
+                          (.inputs (~? (~@ input ...)) (~? (~@ constrained-input ...)))
+                          (.outputs name ...)  ; TODO allow >^ type techniques
+                          (.vars (~? (~@ var ...)))  ; TODO these need to be requested before export to pdf
+                          ;(.measures (~? (constrained-input aspect* ...)) ...)
                           (.measures aspect (~? (constrained-input aspect* ...)) ...)  ; FIXME aspect black-box binding
-                          (.steps (~? step) ...)
+                          (.steps (~? (~@ step ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
+                          ; the debug message is totally useless :/ took me 3 hours to figure out how to debug it properly
                           (other body ...))
-     (let ([out 
+     (let ([out
             #'(begin
                 (define (specification-phase)  ; TODO maybe use parameterization to pass in executors and runtime info?
                   'measure  ; when unquoted failes as expected
@@ -752,7 +755,7 @@
                       ; input types are enforeced, that measures that are used to define a
                       ; thing are correctly tagged as putative
 
-                      ; TODO paramerize ... 
+                      ; TODO paramerize ...
                       ; FIXME for certain executors and implementations
                       ; the overseer may never actually get the result
                       ; we need a way to indicate this ... (if impl-says-to-save-this do-it just-note-it)
@@ -779,18 +782,25 @@
                   #'export-stx)
                 (define name:aspect-ast  ; have to use format-id to get this bound correctly for some reason
                   '(data
-                    export-stx))  
+                    export-stx))
                 (define name:aspect specification-phase))])
        #;(pretty-print (syntax->datum out))
        out)
      ]
-    [(_ (~or (actualize name) (v> name) (:* name))  ; actualize binds the output name as a process which could have many being outputs
+    [(_ (inverse-measure name aspect*))
+     ;aka actualize for a single aspect... :/ I would prefer to call _this_ actualize
+     #''TODO
+     ]
+    [(_ (~or (actualize name) (v> name) (:* name))
+        ; actualize binds the output name as a process which could have many being outputs
+        ; AND MULTIPLE ASPECTS ... HRM TODO
         (~optional docstring)
         ; FIXME aspect!?
         ;(~optional (.uses imports ...))
-        (~optional (.vars vars ...))  
-        (~optional (.inputs (~or input [oper constrained-input aspect* ...]) ...))  
-        (~optional (.outputs outputs ...))  
+        (~optional (.vars var ...))
+        (~optional (.inputs (~or input [oper constrained-input aspect* ...]) ...))
+        (~optional (.outputs outputs ...))
+        (~optional (.steps step ...))
         body ...
         ;return-being  ; do we have this?
         )
@@ -801,25 +811,24 @@
                           (.type . actualize)
                           (.name . name:aspect)
                           (.docstring . (~? docstring ""))
-                          (.inputs name (~? input) ...)
-                          (.outputs name)  ; hopefully ...
-                          (.vars (~? vars) ...)  ; TODO these need to be requested before export to pdf
-                          (.measures (~? (constrained-input aspect* ...)) ...)  ; FIXME aspect black-box binding
-                          (.steps)
-                          (other body ...)
-                     )
+                          (.inputs (~? (~@ input ...)) (~? (~@ constrained-input ...)))
+                          (.outputs name)  ; TODO allow ^> type techniques  FIXME this assumes name:aspect...
+                          (.vars (~? (~@ var ...)))
+                          (.measures asp??? (~? (constrained-input aspect* ...)) ...)  ; FIXME aspect black-box binding
+                          (.steps (~? (~@ step ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
+                          (other body ...))
      ; FIXME need a way to check this syntax here and then combine it with impl to form the real output
      ; we do also still want to allow people to view only the spec phase if they want
-     (let ([out 
+     (let ([out
             #'(begin
                 (define (specification-phase)  ; TODO maybe use parameterization to pass in executors and runtime info?
                   'actualize
                   (~? (define-values (name input ... constrained-input ...)
                         (bind/symbol->being name input ... constrained-input ...))
                       (define (name) (bind/symbol->being name)))
-                  #;(~? (define-values (cvars ...) (bind/symbol->being cvars ...)))
+                  #;(~? (define-values (cvar ...) (bind/symbol->being cvar ...)))
                   body ...
-                  (define (~? (symbolic-input-phase vars ...) (symbolic-input-phase))
+                  (define (~? (symbolic-input-phase var ...) (symbolic-input-phase))
                     (define (*start-execution*)
                       (~? (validate/being input ... constrained-input ...))
                       (validate/being name)  ; NOTE thing vs putative-thing
@@ -832,8 +841,8 @@
                       ; input types are enforeced, that measures that are used to define a
                       ; thing are correctly tagged as putative
 
-                      ; TODO paramerize ... 
-                      (define result 
+                      ; TODO paramerize ...
+                      (define result
                         (struct/result (runtime-read name)
                                        ; aspect is implied? we have to defer because we may not know units
                                        (runtime-protocol name)
@@ -850,11 +859,11 @@
                   #'export-stx)
                 (define name-ast  ; have to use format-id to get this bound correctly for some reason
                   '(data
-                    export-stx))  
+                    export-stx))
                 (define name specification-phase))])
        #;(pretty-print (syntax->datum out))
        out)
-     ]  
+     ]
     [(_ (order name)
         ;inputs and outputs inferred
         (~optional (.vars var ...))
@@ -877,6 +886,7 @@
     #:local-conventions ([spec-name id]
                          [impl-name id]
                          [step sc-step-ref]
+                         [type id]
                          [docstring string])
     #:datum-literals (order .inputs)
     #;[(_ name body ...)
@@ -887,15 +897,44 @@
         body ...)
      #'(define impl-name (list body ...))  ; TODO need to deal with if-defined
      ]
-    [(_ (spec-name (~optional impl-name))
+    [(_ (~or (spec-name (~optional impl-name))
+             (impl-name (~seq #:type type)))  ; FIXME the 2nd option feels like a big ol' mistake...
         (~optional docstring)
-        (~optional (.inputs inputs ...))  ; implementation specific inputs i.e. ones that should be results invariant
+        (~optional (.vars var ...))
+        ;(~optional (.inputs input ...))  ; implementation specific inputs i.e. ones that should be results invariant
+        (~optional (.inputs (~or input [oper constrained-input aspect* ...]) ...))
         (~optional (.steps step ...))
-        body ...
-        )
-     #'(begin
+        ; the right way to implement '.uses' is just detect whether another spec/impl is used in the body
+        ; and add it as a dependency in the subprotocols
+        body ...)
+     #|
+     #:with no-spec-yet (if (identifier-binding #'spec/name)
+                            #f
+                            #'(spec (black-box impl-name thing)))
 
-         )
+     |#
+     (if (identifier-binding (attribute spec-name))
+         ; welp
+         ; turns out if you want to use impl directly without a spec either you have to provide a way to declare
+         ; type or it just simply will not work becuse we can't really infer the type of thing we are implementing
+         ; I guess the crappy way to do this is to allow people to use #:type being #:type aspect #:type ??? here
+         ; which is probably ok as a starting point for 1-off protocols, since they are fairly straight forward to
+         ; automatically abstract and lift
+         #'(begin
+             ;(~? no-spec-yet) ; no guts yet
+             (define impl/name
+               '((.type . make)
+                 (.name . (~? impl-name spec-name))
+                 ;(.id . (~? identifier))  ; wtf...
+                 (.docstring . (~? docstring ""))
+                 (.inputs (~? (~@ input ...)) (~? (~@ constrained-input ...)))
+                 ; NOTE: in principle every succeeding level should allow the same arguments as the previous level
+                 (.outputs (~? impl-name spec-name))
+                 (.vars (~? (~@ var ...)))  ; FIXME add the ability to bind these here in impl
+                 (.steps (~? (~@ step ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
+                 (other body ...))))
+         #`(begin (spec (type impl-name))
+                  #,stx))
      ]
     )
   )
@@ -959,7 +998,7 @@
   ;(spec (black-box should fail) "yes?")  ; was a typo of >v> for >^> >_<
   ;(spec (black-box wut) "stahp")
 
-  
+
 
   ; at the implementation stage functions operate on inputs
   ; whereas at the spec stage functions operate on symbolic inputs
@@ -986,7 +1025,7 @@
     (read-bytes 1)
     (current-milliseconds))
   (define (duration process)
-    (read-bytes 1)  ; if it is called directly 
+    (read-bytes 1)  ; if it is called directly
     (define start (time-at-term-input))
     ;(%#rw-eval process)
     (define stop (time-at-term-input))
@@ -1062,7 +1101,7 @@
             'order-1
             'order-2))
   (impl (order protocol)
-        ; there is 
+        ; there is
         )
 
   ;(spec (protocol si1 si2 [i1 i2 i3]))
@@ -1075,7 +1114,7 @@
           ; (repeate-with-inputs) from (repeate) where an names are bound but
           ; I will reuse the same inputs... hrm... maybe simply marking things
           ; as consumed or not? we have our full transition states specced out already
-          ; in 
+          ; in
           (spec (inner-protocol-0 final-volume)
                 (.inputs [: volumetric-flask [volume final-volume]]
                          ; this is super akward and not at all it should be implemented since it is not composable
@@ -1113,7 +1152,7 @@
           (my-make-thing))
 
   #;(spec (make thing)
-          ; this breaks the (process) meaning, but it allows us to dissociate 
+          ; this breaks the (process) meaning, but it allows us to dissociate
           )
 
   #;(spec some-salt  ; the issue how to nicely bind the name of the output when a function is run, without forcing the user to rename...
@@ -1144,7 +1183,7 @@
   ; (take store 100)
   ;(require racket/pretty)
   ;(pretty-write my-protocol-ast)
-  
+
   #;(export cell:membrane-potential 'html 'pdf)  ; FIXME why does this fail
 
   (parameterize ([runtime-executor (get-user)])
