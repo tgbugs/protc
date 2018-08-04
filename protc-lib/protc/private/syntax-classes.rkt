@@ -291,3 +291,12 @@ All actualize sections should specify a variable name that will be used in inher
 
 (define-syntax-class sc-id+unit
   (pattern (name:id unit:id)))
+
+(define-syntax-class sc-action
+  #:datum-literals (*: >^> measure :* v> actualize)
+  (pattern ((~or *: >^> measure :* v> actualize) icipant (~optional aspect) (~optional more))
+           #:attr (vars 1) #''TODO  ; syntax-local-value or something from the icipant
+           #:attr (act-measure 1) #''TODO
+           #:attr (measure 1) #''TODO
+           )
+  )

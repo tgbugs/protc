@@ -18,9 +18,9 @@
 
 (provide spec
          impl
-         has-part
-         part-of
-         has-member
+         ;has-part
+         ;part-of
+         ;has-member
          define-relation
          define-aspect
          export
@@ -48,7 +48,7 @@
 ;;; information constraint language ICL would be an alternate name for protc
 ;;; if I were in a stuffy corporate >_<
 
-(define (runtime-read name:aspect)
+(define (runtime-read . name:aspect)
   ; TODO in cases where there is an external file
   ; or the dataset is too large or is external
   ; we need to compute and identity on the file
@@ -60,8 +60,8 @@
   ; whatever globally resolvable id we need for the repo
   '(struct/remote-data name identity)
   '(struct/quantity value units))
-(define (runtime-protocol name:aspect) "current-protocol TODO")
-(define (runtime-measure-name name:aspect) '(get-current-impl name:aspect))
+(define (runtime-protocol . name:aspect) "current-protocol TODO")
+(define (runtime-measure-name . name:aspect) '(get-current-impl name:aspect))
 (define runtime-executor (make-parameter null))  ; looks like a function
 (struct struct/result (protc:value source:protocol source:measure-name executor datetime)
   #:inspector (make-inspector))
@@ -249,6 +249,16 @@
                 )
 
 (define-syntax (define-relation stx)
+  ; FIXME -> telos, goal, expected state, required state, where (has-part? a b) needs to have a full measure spec and impl
+  ; and we need to warn if it is missing
+
+  ; FIXME this needs to be extended in the impl, but also needs a way to indicate a missing measure and actualize
+  ; the statement of a 'fact' does not help us if we have no way to use those 'specs' as a point of reference for
+  ; correctness, this is a telos!
+
+  ; if has-part is used we have to know how to measure whether it is correct and how to to actualize it
+  ; this is where genrics and dispatching on type/binding definitions per type is important...
+  
   (syntax-parse stx
     ;#:datum-literals (|.|) ; breaks the meaning of . since it is ...+ not ... FIXME
     [(_ (relation-name:id parent:id rest:id)  ; . is dangerous ... #;. does not comment
@@ -289,24 +299,176 @@
          (set! triples (cons (triple relation-name subject object) triples)))
      ]))
 
-(define-relation (has-part parent children)
-  "parent has multiple parts children, such as a car having
-   doors or a cell having a nucleus and a cytoplasm")
+;;; do notation for scoping and sequencing
+;; do : ordered | unordered
+;; ordered : practical | scientific  
+;(define-syntax (do-unordered))
+;(define-syntax (do-ordered))
+;(define-syntax (do-practical))
+;(define-syntax (do-scientific))
 
-(define-relation (part-of child parent)
-  "opposite of has-part")
+; TODO are there examples where there are practical unordered?
+; e.g. buy all these things ... you have to do them but they
+; aren't really scientific or unscientific
+; VS buy this thing from exactly this vendor otherwise it wont work
+; but that is not really scoping or ordering ... and for most of this
+; stuff the (spec (get mouse)) and procurement chains (discussed elsewhere)
+; will be handled via other mechanisms... so think on a better word...
 
-(define-relation (has-member child parent)
-  "explicitly name a member of a composite entity")
+(define-syntax (do stx)
+  ; FIXME do conflates 2 things:
+  ; 1. attribute reference scoping for bridging symbolic and being contexts
+  ; 2. sequecing of actions
+  ; it may be ok to conflate these, because in almost all cases the
+  ; scoping will always acompany do (aka do-unordered)
+  ; TODO consider counterexamples for the scoping rules
 
-; FIXME figure out why we can't use this outside of this file ...
-(define-relation (wired-to a bs)
-  "some kind of wire connects a and any number of bs"
-  )
+  ; FIXME we need a better abstraction than define-syntax for these
+  ; than can accomodate multiple executors
+  ; ALTERNATELY do is an executor independent construct for providing
+  ; high level sequencing and execution rules in a way that can be
+  ; specialized by an implementation using do-practical
+  "do all these things, but not with any particular order requirements"
+  (syntax-parse stx
+    [(_ [unordered-action:sc-action ...]  ; TODO these need to be make/measure/actualize etc
+        body ...)
+     #:with (action-icipant-get-measure ...) #'(unordered-action.icipant ...) ;(format-id unordered-action.icipant ...)  ; TODO
+     #'(begin
+         ; retrieve all the action definitions (using syntax-local-value maybe?) and put them in .steps
+         ; OR warn if the action has not been defined and put it in on the list of implicitly delegated
+
+         (define (some-subprotocol unordered-action.vars ... ...)
+           "TODO generate docstring from the retrieved definitions as well?"  ; TODO
+           ;(define (action-icipant-get-measure unordered-action.measures ...) 'do 'stuff) ...
+           (define (await-input)
+             (define result  ; TODO this isn't quite right we have to bind the results back to their icipants
+               (struct/result (runtime-read unordered-action.act-measure ... ... unordered-action.measure ... ...)
+                              ; aspect is implied? we have to defer because we may not know units
+                              (runtime-protocol unordered-action.act-measure ... ... unordered-action.measure ... ...)
+                              (runtime-measure-name unordered-action.act-measure ... ... unordered-action.measure ... ...)
+                              (runtime-executor unordered-action.act-measure ... ... unordered-action.measure ... ...)
+                              ; absolutely must pull time from the server
+                              (current-milliseconds)))
+             ; for unordered prepare continuations for all awaiting measures
+             ; and then wait on all of them, or something like that
+             body ...
+             )))]))
+
+(define-syntax (do* stx)
+  ; FIXME * is confusing because I use it by lisp convetion to imply that something should be ordered
+  ; but also in the original protc convention to mean 'in a left to right input/output start/end, the
+  ; asterisk tells you where the world and uncertainty is' maybe we can get some better symbol for that...
+  ; ~ maybe? not distinct enough
+
+  ; also FIXME: do* is an imperative version of sequential application
+  ; it seems plausible that do* could actually be do-practical because
+  ; the scientific ordering dependencies should be expressed functionally
+  ; I'm fairly certain that this is true, because if there is _any_
+  ; path dependance in the process then even things like
+  ; ((measure skin redness) ((wait (quantity 10 (units 'seconds))) (slap skin)))
+  ; can be expressed functionally, if we don't for people to write this way
+  ; (which is probably a good idea, heh) then behind the scenes it is probably
+  ; a good idea to translate do* into functional form...
+  (syntax-parse stx
+    [(_ [ordered-action:sc-action ...]
+        body ...)
+     #'(begin
+         ; 1. make the executor format
+         ; 2. make the overseer function
+         ; TODO handle nesting of these
+         )]))
+
+(define-syntax (do-practical* stx)
+  (syntax-parse stx
+    [(_ [ordered-action:sc-action ...]
+        body ...)
+     #'(begin
+         ; 1. make the executor format
+         ; 2. make the overseer function
+         ; TODO handle nesting of these
+         )]))
 
 (module+ test
+  (define-relation (has-part parent children)
+    "parent has multiple parts children, such as a car having
+   doors or a cell having a nucleus and a cytoplasm")
+
+  (define-relation (part-of child parent)
+    "opposite of has-part")
+
+  (define-relation (has-member child parent)
+    "explicitly name a member of a composite entity")
+
+  ; FIXME figure out why we can't use this outside of this file ...
+  (define-relation (wired-to a bs)
+    "some kind of wire connects a and any number of bs"
+    )
+
   (define a 'a)
-  (has-part a b c d e))
+  (has-part a b c d e)
+
+  (spec (measure parent has-part?)  ; vs (measure has-part?) (.inputs child)
+        (.inputs child)
+        (.symret boolean?))
+
+  ; TODO need to modify #%top so that when we are inside an executor body section has-part?
+  ; and friends can be used like normal functions, they are aspects of subsets of larger black boxes
+  ; there is nothing that limits aspects to being single arity but still a TODO on how to extend
+
+  ; FIXME FIXME this should be detecting the existing has-part? defined above!!!!
+  (impl (has-part?)
+        (.executor human)
+        (and (observe? parent)  ; this is mostly implicit observe? -> (true? (*observe parent))
+             (observe? child)
+             ; oh look, just follow the pattern if you don't know what to do!
+             ; actualize* takes a thing and an aspect which means that you need both!
+             ; and that way the thing you are actualizing/measuring will always be present
+             ; for symbolic manipulation and examination!
+             ; implicit when? or how to communicate this...
+
+             ; this is perfect, order and order* used this way allow use to
+             ; explictily create the scope in which a measurement is going to
+             ; be made and do all the symbolic things that we want with them
+             ; afterward in the body, the instructions will translate to
+             ; "displace the parent in x, y, z space and record how much you moved it"
+             (do* [(:* parent displacement vector3)
+                      (*: child displacement vector3)]
+                  (= (: parent displacement)
+                     (: child displacement)))
+
+             ; more redable version
+             ; note that sticking the vecotr type on the end is adding an explicit data type
+             ; which is impl... the spec could have just displacement and then we need a way
+             ; to allow the implementation to specify that that is displacement in
+             ; (param:dimensions (param:unit 'meters)
+             ;                   (param:unit 'meters)
+             ;                   (param:unit 'meters))
+             ; (dim 'meter 'meter 'meter) (dim-n 3 'meter) vector3 'meter somehow...
+             (do* [(actualize parent displacement vector3)
+                   (measure child displacement vector3)]
+                  (= (: parent displacement)
+                     (: child displacement)))
+             #;
+             (do*
+              ; actually I think having the scope helps a whole lot
+              ; because it says that the values are those that are in
+              ; the context of _this_ action, there could be many actions
+              (:* parent displacement vector3)
+              (*: child displacement vector3)
+              (= (: parent displacement) (: child displacement)))
+             ; basically begin
+             #; ; old version, which sort of works but is probably overly verbose
+             (do* ([action (:* parent displacement vector3)]
+                   ; we could define move* as (:* parent displacement vector3) ...
+                   ; and that would allow us to propagate the fact that when you move something
+                   ; there is some displacement, whether you actually measured it or not will only
+                   ; matter if you do something with it down the line
+                   [outcome (*: child displacement vector3)])
+              #;([action (move* parent vector3)]  ; vs move:distance*
+                   [outcome (*move:vector3 child)])
+
+                  (= (: action vector3) (: outcome vector3))
+                  ))))
 
 #;(define-syntax (define-process stx)  ; define-verb (spec (process (verb args ...))) is the alternate form
   ; define-process creates functions that operate only on
@@ -440,6 +602,7 @@
                          ; should probably find a way to fail on that either by binding .steps to syntax or something else
                          [import id]
                          [aspect id]
+                         [aspect-multi id]
                          [aspect* expr]  ; TODO
                          [oper id]
                          [identifier string]  ; TODO or macro? (DOI: check my syntax please?)
@@ -686,8 +849,14 @@
        #;(pretty-print (syntax->datum out))
        out)
      ]
-    [(_ (~or (measure name ...+ aspect) (>^> name ...+ aspect) (*: name ...+ aspect))
+    [(_ (~or
+         (measure name ...+ aspect)  ; we forth now
+         (>^> name ...+ aspect)
+         (*: name ...+ aspect)
+             )
         ; FIXME why did I allow multiple names here?! Measure the length of all 20 ferrets or something?!
+        ; ANSWER we forth now! this is how we support multiple arity aspects
+        ; so (has-part? parent child) -> (measure parent child has-part?) same for actualize...
         ; FIXME why does (spec (black-box a b c d) "asdf") work here?!??!!
         ; measure binds a
         ; aspec-predicate-category
@@ -791,7 +960,13 @@
      ;aka actualize for a single aspect... :/ I would prefer to call _this_ actualize
      #''TODO
      ]
-    [(_ (~or (actualize name) (v> name) (:* name))
+    [(_ #;(~or (actualize name) (v> name) (:* name))
+        (~or (~or (actualize name [aspect-multi ...])
+                  (v> name [aspect-multi ...])
+                  (:* name [aspect-multi ...]))
+             (~or (actualize name-multi ...+ aspect)
+                  (v> name-multi ...+ aspect)
+                  (:* name-multi ...+ aspect)))
         ; actualize binds the output name as a process which could have many being outputs
         ; AND MULTIPLE ASPECTS ... HRM TODO
         (~optional docstring)
@@ -888,7 +1063,7 @@
                          [step sc-step-ref]
                          [type id]
                          [docstring string])
-    #:datum-literals (order .inputs)
+    #:datum-literals (order .executor .vars .inputs .steps)
     #;[(_ name body ...)
        #''TODO]
     #;[(_ (name) body ...)
@@ -900,6 +1075,7 @@
     [(_ (~or (spec-name (~optional impl-name))
              (impl-name (~seq #:type type)))  ; FIXME the 2nd option feels like a big ol' mistake...
         (~optional docstring)
+        (~optional (.executor executor))
         (~optional (.vars var ...))
         ;(~optional (.inputs input ...))  ; implementation specific inputs i.e. ones that should be results invariant
         (~optional (.inputs (~or input [oper constrained-input aspect* ...]) ...))
@@ -913,7 +1089,7 @@
                             #'(spec (black-box impl-name thing)))
 
      |#
-     (if (identifier-binding (attribute spec-name))
+     (if (and (attribute spec-name) (identifier-binding (attribute spec-name)))
          ; welp
          ; turns out if you want to use impl directly without a spec either you have to provide a way to declare
          ; type or it just simply will not work becuse we can't really infer the type of thing we are implementing
@@ -933,8 +1109,11 @@
                  (.vars (~? (~@ var ...)))  ; FIXME add the ability to bind these here in impl
                  (.steps (~? (~@ step ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
                  (other body ...))))
-         #`(begin (spec (type impl-name))
-                  #,stx))
+         (begin (println (list 'ct: (attribute spec-name) (attribute impl-name)))
+                #`(begin (spec ((~? type make) (~? spec-name impl-name)))
+                         ; FIXME logic seems unsound here
+                         ; FIXME bad way to do defaults should fail instead?
+                         #,stx)))
      ]
     )
   )
@@ -971,7 +1150,15 @@
         (.steps "do a different set of actions and get the same thing!")
         "again ...")
 
-  (spec (actualize pulse)
+  (spec (actualize pulse [duration electromagnetic])
+        (.vars duration-units
+               step-units)
+        (.inputs [setting pulse-maker
+                          ([step-units electromagnetic]
+                           [duration-units duration])]
+                 ....))
+
+  #;(spec (actualize pulse)
         (.vars duration
                duration-units
                step-size
@@ -981,14 +1168,17 @@
                            [duration-units duration])]
                  ....))
 
-  #;(spec (make loose-patched-cell)
+  (spec (make loose-patched-cell)
           (.inputs brain-slice
                    internal-solution
                    (: patch-pippette ([MOhms (range 6 10)])))  ; ERROR: don't know how to measure
           (part-of brain-slice cell)
-          (put-a-in-b internal-solution patch-pippette)
           ;(.output (loose-patch cell patch-pipette))
           )
+
+  (impl (loose-patched-cell)
+        (put-a-in-b internal-solution patch-pippette)
+        )
 )
 
 #;
