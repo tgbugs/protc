@@ -340,6 +340,8 @@
       (case units
         [(mg/kg) (begin (add-warning (list (red "mg/kg:") " Don't know how to bind two masses")) (red sname))]
         [(count) (begin (add-warning (list (red "count:") " I don't know how to count that...")) (red sname))]
+        [("6-10 MΩ") (begin (add-warning (list (red "pipette-resistance:")
+                                        " Don't know how to measure MΩ for pipette")) (red sname))]
         [else sname]
         ))
     )
@@ -411,7 +413,8 @@
   ; TODO target is probably needed here? inversion of control or if statement?
   ; https://docs.racket-lang.org/scribble/core.html#(part._.Structure_.Reference)
   ; https://docs.racket-lang.org/scribble/pict_2.png map protc to this model
-  ;(pretty-print ast)
+  (displayln "prtoc->scribble ast:")
+  (pretty-print ast)
   (define dalist ast) ;(cadr ast))  ; switched to support spec no longer spec-1
   (define (dr key) (dict-ref dalist key))
   (define name (dr '.name))

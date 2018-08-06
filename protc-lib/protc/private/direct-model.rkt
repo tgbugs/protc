@@ -824,13 +824,13 @@
      |#
      #:with (subprotocols ...) (let ([names (filter (λ (n) (not (eqv? (syntax-e n) 'null))) (syntax->list #'((~? (~@ step.name ...)))))])
      ;#:with (subprotocols ...) (let ([names (syntax->list #'((~? (~@ step.name ...))))])
-                                 (pretty-print (list "sp-names" names))  ; FIXME names are not being found
+                                 ;(pretty-print (list "sp-names" names))  ; FIXME names are not being found
                                  (map (compose syntax-local-value (λ (name) (fmtid "~a-stx" name)))
                                       names))
      #:with export-stx #'((.executor)
                           (.type . make)
                           (.name . (~? spec-name name))
-                          ;(.docstringf . docstringf)
+                          (.docstringf . docstringf)
                           (.docstring . (~? docstring ""))
                           (.inputs (~? (~@ input ...)) (~? (~@ constrained-input ...)))
                           (.outputs name)
@@ -922,7 +922,7 @@
                       `((.type . make)
                         (.name . (~? spec-name name))
                         ;(.id . (~? identifier))  ; wtf...
-                        ;(.docstringf . docstringf)
+                        (.docstringf . docstringf)
                         (.docstring . (~? docstring ""))
                         (.inputs (~? (~@ input ...)) (~? (~@ constrained-input ...)))
                         (.outputs name)
@@ -1018,7 +1018,7 @@
      ;(println (syntax-e #'name:aspect))
      ;(println (syntax-e #'name:aspect-ast))
      #:with (subprotocols ...) (let ([names (filter (λ (n) (not (eqv? (syntax-e n) 'null))) (syntax->list #'((~? (~@ step.name ...)))))])
-                                 (pretty-print (list "sp-names" names))  ; FIXME names are not being found
+                                 ;(pretty-print (list "sp-names" names))  ; FIXME names are not being found
                                  (map (compose syntax-local-value (λ (name) (fmtid "~a-stx" name)))
                                       names))
      ;#:do ((pretty-print (syntax->datum #'(subprotocols ...))))
@@ -1026,7 +1026,7 @@
      #:with export-stx #'((.executor)   ; somewhere in here this is a missing ~?
                           (.type . measure)
                           (.name . aspect)  ; TODO specname version?
-                          ;(.docstringf . docstringf)
+                          (.docstringf . docstringf)
                           (.docstring . (~? docstring ""))
                           (.inputs name ... (~? (~@ input ...)) (~? (~@ constrained-input ...)))
                           (.outputs name ...)  ; TODO allow >^ type techniques
@@ -1049,15 +1049,15 @@
                         (define spec/*aspect
                           '((.type . measure)
                             (.name . aspect)
-                            ;(.docstringf . docstringf)
+                            (.docstringf . docstringf)
                             (.docstring . (~? docstring ""))
                             (.inputs name ... (~? (~@ input ...)) (~? (~@ constrained-input ...)))
                             (.outputs name ...)
                             (.vars (~? (~@ var ...)))
                             (.steps (~? (~@ step.instruction ...)))
                             (.subprotocols subprotocols ...)
-                            (.errors "example error")
-                            (.measures)
+                            (.errors #;"example error")  ; TODO
+                            (.measures (~? (~@ -measure ...)))
                             (other body ...))))
                     #`(begin
                         (define-aspect aspect aspect "NO DEFINITION") ; TODO source location + error
@@ -1157,13 +1157,13 @@
      |#
      ;#:with (subprotocols ...) (let ([names (syntax->list #'((~? (~@ step.name ...))))])
      #:with (subprotocols ...) (let ([names (filter (λ (n) (not (eqv? (syntax-e n) 'null))) (syntax->list #'((~? (~@ step.name ...)))))])
-                                 (pretty-print (list "sp-names" names))  ; FIXME names are not being found
+                                 ;(pretty-print (list "sp-names" names))  ; FIXME names are not being found
                                  (map (compose syntax-local-value (λ (name) (fmtid "~a-stx" name)))
                                       names))
      #:with export-stx #'((.executor)
                           (.type . actualize)
                           (.name . name:aspect)
-                          ;(.docstringf . docstringf)
+                          (.docstringf . docstringf)
                           (.docstring . (~? docstring ""))
                           (.inputs (~? (~@ input ...)) (~? (~@ constrained-input ...)))
                           (.outputs name)  ; TODO allow ^> type techniques  FIXME this assumes name:aspect...
