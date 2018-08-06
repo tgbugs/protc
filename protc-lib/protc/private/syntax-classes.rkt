@@ -267,7 +267,10 @@ All actualize sections should specify a variable name that will be used in inher
            #:attr instruction
            (let ([slv (syntax-local-value
                        (format-id #'name "~a-stx" (syntax-e #'name)))])
-             (datum->syntax slv (apply (eval (dict-ref (syntax->datum slv) '.docstringf)) (syntax->datum #'(args ...))))
+             #; ;FIXME not quite ready for prime time outside of spec-1
+             (datum->syntax slv (apply (eval (dict-ref (syntax->datum slv) '.docstringf))
+                                       (syntax->datum #'(args ...))))
+             (datum->syntax slv (dict-ref (syntax->datum slv) '.docstring))
              )))
 
 (define-syntax-class sc-being->symbol-body

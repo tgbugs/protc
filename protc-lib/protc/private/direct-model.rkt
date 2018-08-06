@@ -6,6 +6,7 @@
          ;protc/utils  ; this is private ...
          rdf/utils
          protc/private/utils
+         ;(for-meta -1 racket/base)  ; needed for docstringf?
          (for-meta 2 syntax/parse racket/syntax racket/base)
          (for-syntax racket/base
                      racket/list
@@ -300,6 +301,7 @@
                        data-alist))
                (~? (define (-shortname #:children [c #t] #:parent [p #t]) (name #:children c #:parent p)))
                )])
+       #;
        (pretty-print (list 'ct: (syntax->datum out)))
        out)
      ]
@@ -687,6 +689,7 @@
                       .outputs
                       .symret
                       .steps
+                      .measures  ; FIXME remove archaic
 
                       )
     #:local-conventions ([name id]
@@ -736,6 +739,7 @@
                           (.vars)
                           (.measures)
                           (.steps)
+                          (.subprotocols)
                           (other body ...))
      #:with name-stx (bind-properties (format-id #'specific-name
                                                 #:source #'specific-name
@@ -795,6 +799,8 @@
         ;return-being  ; all we have is the name, the defining measures probably should return implicitly...
         )
      ; have to use format-id to get these new identifiers bound correctly for some reason
+     ;#:with docstringf #'(λ (input ... constrained-input ...) (format (~? docstring "") input ... constrainted-input ...))  ; TODO
+     #:with docstringf #'(λ _ (~? docstring ""))  ; TODO
      #:with name-stx (format-id #'name
                                 #:source #'name
                                 "~a-stx" (syntax-e #'name))
@@ -810,16 +816,23 @@
      #:with name-ast (format-id #'name
                                 #:source #'name
                                 "~a-ast" (syntax-e #'name))
+     #:with (subprotocols ...) (let ([names (syntax->list #'((~? (~@ step.name ...))))])
+                                 (map (compose syntax-local-value (λ (name) (fmtid "~a-stx" name)))
+                                      names))
      #:with export-stx #'((.executor)
                           (.type . make)
-                          (.name . name)
+                          (.name . (~? spec-name name))
+                          ;(.docstringf . docstringf)
                           (.docstring . (~? docstring ""))
                           (.inputs (~? (~@ input ...)) (~? (~@ constrained-input ...)))
                           (.outputs name)
                           (.vars (~? (~@ var ...)))  ; TODO these need to be requested before export to pdf
                           ;(.measures (~? (constrained-input aspect* ...)) ...)
                           (.steps (~? (~@ step ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
+                          (.subprotocols subprotocols ...)
                           ; the debug message is totally useless :/ took me 3 hours to figure out how to debug it properly
+                          (.errors "example error")
+                          (.measures)
                           (other body ...)
                      )
      #:do ((when (identifier-binding #'name-data)
@@ -901,11 +914,13 @@
                       `((.type . make)
                         (.name . (~? spec-name name))
                         ;(.id . (~? identifier))  ; wtf...
+                        ;(.docstringf . docstringf)
                         (.docstring . (~? docstring ""))
                         (.inputs (~? (~@ input ...)) (~? (~@ constrained-input ...)))
                         (.outputs name)
                         (.vars (~? (~@ var ...)))  ; TODO these need to be requested before export to pdf
                         (.steps (~? (~@ step ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
+                        (.subprotocols subprotocols ...)
                         (.impls ,@(get-specs name-impls #,stx))
                         (other body ...))))
                 #`(begin
@@ -965,6 +980,7 @@
         (~optional (.inputs (~or input [oper constrained-input aspect* ...])...)) ; FIXME
         ;(.outputs outputs ...)    ; unused?
         (~optional (.steps step ...))
+        (~optional (.measures -measure ...))  ; FIXME remove this!
         (~optional (.symret predicate))
         ; NOTE: we may not need this, it could be _either_ an aspect or a predicate
         ; where predicates represent a simple threshold function
@@ -976,6 +992,8 @@
 
         body ...
         #;return-symbolic)  ; FIXME I think this is wrong...
+     ;#:with docstringf #'(λ (name ... (~? (~@ inputs ...))) (format (~? docstring "") inputs ...))
+     #:with docstringf #'(λ _ (~? docstring ""))  ; TODO
      #:with spec/*aspect (fmtid "spec/*~a" #'aspect)  ; TODO #'(~? spec-name aspect)
      #:with aspect-data (fmtid "~a-data" #'aspect)
      #:with name:aspect (format-id #'aspect  ; NOTE #'(name ... aspect) does not work :/
@@ -987,33 +1005,47 @@
      #:with name:aspect-ast (format-id #'aspect
                                        #:source #'aspect
                                        "~a-ast" (syntax-e #'name:aspect))
+     #:with aspect-stx (fmtid "~a-stx" #'aspect)
      ;(println (syntax-e #'name:aspect))
      ;(println (syntax-e #'name:aspect-ast))
-     #:with export-stx #''OLD #;#'((.executor)   ; somewhere in here this is a missing ~?
+     #:with (subprotocols ...) (let ([names (syntax->list #'((~? (~@ step.name ...))))])
+                                 (map (compose syntax-local-value (λ (name) (fmtid "~a-stx" name)))
+                                      names))
+     #:with export-stx #'((.executor)   ; somewhere in here this is a missing ~?
                           (.type . measure)
-                          (.name . name:aspect)
+                          (.name . aspect)  ; TODO specname version?
+                          ;(.docstringf . docstringf)
                           (.docstring . (~? docstring ""))
-                          (.inputs (~? (~@ input ...)) (~? (~@ constrained-input ...)))
+                          (.inputs name ... (~? (~@ input ...)) (~? (~@ constrained-input ...)))
                           (.outputs name ...)  ; TODO allow >^ type techniques
                           (.vars (~? (~@ var ...)))  ; TODO these need to be requested before export to pdf
                           ;(.measures (~? (constrained-input aspect* ...)) ...)
-                          (.measures aspect (~? (constrained-input aspect* ...)) ...)  ; FIXME aspect black-box binding
+                          ;(.measures aspect (~? (constrained-input aspect* ...)) ...)  ; FIXME aspect black-box binding
                           (.steps (~? (~@ step ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
                           ; the debug message is totally useless :/ took me 3 hours to figure out how to debug it properly
+                          (.subprotocols subprotocols ...)
+                          (.errors)
+                          (.measures (~? (~@ -measure ...)))
                           (other body ...))
      (let ([out
 
                 ; TODO dispatch on call signature somehow
                 (if (identifier-binding #'aspect-data)
                     #`(begin
+                        (define-syntax aspect-stx  ; FIXME still needed for some reason ...
+                          #'export-stx)
                         (define spec/*aspect
                           '((.type . measure)
-                            (.name . (~? spec-name aspect))
+                            (.name . aspect)
+                            ;(.docstringf . docstringf)
                             (.docstring . (~? docstring ""))
                             (.inputs name ... (~? (~@ input ...)) (~? (~@ constrained-input ...)))
                             (.outputs name ...)
                             (.vars (~? (~@ var ...)))
                             (.steps (~? (~@ step ...)))
+                            (.subprotocols subprotocols ...)
+                            (.errors "example error")
+                            (.measures)
                             (other body ...))))
                     #`(begin
                         (define-aspect aspect aspect "NO DEFINITION") ; TODO source location + error
@@ -1102,18 +1134,25 @@
         body ...
         ;return-being  ; do we have this?
         )
+     #:with docstringf #'(λ _ (~? docstring ""))  ; TODO
      #:with name-ast (format-id #'name
                                 #:source #'name
                                 "~a-ast" (syntax-e #'name))
+     #:with (subprotocols ...) (let ([names (syntax->list #'((~? (~@ step.name ...))))])
+                                 (map (compose syntax-local-value (λ (name) (fmtid "~a-stx" name)))
+                                      names))
      #:with export-stx #'((.executor)
                           (.type . actualize)
                           (.name . name:aspect)
+                          ;(.docstringf . docstringf)
                           (.docstring . (~? docstring ""))
                           (.inputs (~? (~@ input ...)) (~? (~@ constrained-input ...)))
                           (.outputs name)  ; TODO allow ^> type techniques  FIXME this assumes name:aspect...
                           (.vars (~? (~@ var ...)))
                           (.measures asp??? (~? (constrained-input aspect* ...)) ...)  ; FIXME aspect black-box binding
                           (.steps (~? (~@ step ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
+                          (.errors "example error")
+                          (.measures)
                           (other body ...))
      ; FIXME need a way to check this syntax here and then combine it with impl to form the real output
      ; we do also still want to allow people to view only the spec phase if they want
@@ -1231,6 +1270,8 @@
                  (.outputs (~? impl-name spec-name))
                  (.vars (~? (~@ var ...)))  ; FIXME add the ability to bind these here in impl
                  (.steps (~? (~@ step ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
+                 (.errors "example error")
+                 (.measures)
                  (other body ...))))
          (begin (println (list 'ct: (attribute spec-name) (attribute impl-name)))
                 #`(begin (spec ((~? type make) (~? spec-name impl-name)))
@@ -1303,6 +1344,8 @@
         (put-a-in-b internal-solution patch-pippette)
         )
 )
+
+
 
 #;
 (module+ test

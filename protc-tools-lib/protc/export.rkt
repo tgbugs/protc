@@ -135,7 +135,7 @@
           parts))
   )
 
-(define (sub-protocol title steps #:style [style-current protc-style])
+(define (sub-protocol title steps errors #:style [style-current protc-style])
   "When exporting for execution, any tree structure must be flattened.
    If there is a defined order, then that flattening will follow that order.
    If there is NOT a defined order, then flattening will occur in the order
@@ -153,8 +153,14 @@
           title-content
           style-current
           to-collect
-          (list (apply itemlist #:style 'ordered
-                       (map (λ (step) (item step)) steps)))
+          (let ([body 
+                 (list
+                  (apply itemlist #:style 'ordered
+                         (map (λ (step) (item step)) steps)))])
+            (if (null? errors)
+                body
+                (cons (map WARNING errors) body))
+            )
           parts))
   )
 
@@ -361,7 +367,8 @@
            [x (println name)]  ; wat
            [title (symbol->string name)]
            [steps (dr '.steps)]
-           [args (list title steps)]
+           [errors (dr '.errors)]
+           [args (list title steps errors)]
            [subs-next (dr '.subprotocols)]
            [fsf (λ (s) (flatten-subs s #t))]
            )
@@ -379,24 +386,33 @@
 
 (module+ test
   (check-equal? (flatten-subs '((.name . a)
+                                (.errors)
                                 (.steps "1" "2" "3")
                                 (.subprotocols)))
-                '(("a" ("1" "2" "3"))))
+                '(("a" ("1" "2" "3") ())))
   (check-equal? (flatten-subs '((.name . a)
+                                (.errors)
                                 (.steps "1" "2" "3")
                                 (.subprotocols
                                  ((.name . b)
+                                  (.errors)
                                   (.steps "4" "5")
                                   (.subprotocols)))))
-                '(("b" ("4" "5"))
-                  ("a" ("1" "2" "3")))))
+                '(("b" ("4" "5") ())
+                  ("a" ("1" "2" "3") ())))
+  (check-equal? (flatten-subs '((.name . a)
+                                (.errors "YA DONE GOOFED")
+                                (.steps "1" "2" "3")
+                                (.subprotocols)))
+                '(("a" ("1" "2" "3") ("YA DONE GOOFED"))))
+  )
 
 (define (protc->scribble ast #:user [export-user null])
   ; TODO target is probably needed here? inversion of control or if statement?
   ; https://docs.racket-lang.org/scribble/core.html#(part._.Structure_.Reference)
   ; https://docs.racket-lang.org/scribble/pict_2.png map protc to this model
   ;(pretty-print ast)
-  (define dalist (cadr ast))
+  (define dalist ast) ;(cadr ast))  ; switched to support spec no longer spec-1
   (define (dr key) (dict-ref dalist key))
   (define name (dr '.name))
   (define docstring (dr '.docstring))
@@ -405,7 +421,7 @@
   (define inputs (cons '("Inputs") (map (compose list ~a) (dr '.inputs))))
   (define outputs (cons '("Outputs") (map (compose list ~a) (dr '.outputs))))
   (define steps (dr '.steps))
-  (define unit-warnings '())
+  (define unit-warnings (dr '.errors))  ; FIXME not quite
   (define (add-warning warning)
     (set! unit-warnings (cons warning unit-warnings)))
   (define table-cols
@@ -502,7 +518,7 @@
                     (if (null? unit-warnings)
                         base
                         (cons (make-margin (reverse unit-warnings)) base)))]
-          [parts (cons (sub-protocol (symbol->string name) steps #:style style-current) sub-protocols)
+          [parts (cons (sub-protocol (symbol->string name) steps '() #:style style-current) sub-protocols)
                   #;(sub-protocol "Sub protocol 1" '("do this" "do that" "..." "profit!") #:style style-current)
                   #;(sub-protocol (colorize #:color "green" "Sub protocol 2")
                                 (list (WARNING "testing!")) #:style style-current)
