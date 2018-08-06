@@ -261,7 +261,7 @@ All actualize sections should specify a variable name that will be used in inher
 
 (define-syntax-class sc-step-ref
   (pattern instruction:string
-           #:attr name #f
+           #:attr name #'null;#f
            #:attr [args 1] #f)
   (pattern (name:id args:expr ...)
            #:attr instruction

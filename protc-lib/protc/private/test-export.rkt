@@ -70,16 +70,17 @@
 (spec (measure cell-a cell-b test-connected-pair)  ; FIXME again obviously wrong type, this should just be a technique
       "test whether ~a is connected to ~a using two of ~a"
       ;(.uses)
-      (.inputs #;brain-slice
-               ;cell-a
-               ;cell-b
-               patch-pipette  ; FIXME technicalyy need more than one :/
-               )
+      
       ;(.outputs)
       (.vars command-potential
              pipette-resistance
              pulse-current
              pulse-duration)
+      (.inputs #;brain-slice
+               ;cell-a
+               ;cell-b
+               patch-pipette  ; FIXME technicalyy need more than one :/
+               )
       (.measures spike? EPSP? projects-a-b?)  ; FIXME xml escape! and auto lifting!
       (.steps
        ;"cell-b should already be whole-cell-patch"

@@ -705,6 +705,7 @@
                          ; which is _super_ confusing :/
                          ; should probably find a way to fail on that either by binding .steps to syntax or something else
                          [import id]
+                         [-measures id]
                          [aspect id]
                          [aspect-multi id]
                          [aspect* expr]  ; TODO
@@ -816,7 +817,14 @@
      #:with name-ast (format-id #'name
                                 #:source #'name
                                 "~a-ast" (syntax-e #'name))
+     #|
      #:with (subprotocols ...) (let ([names (syntax->list #'((~? (~@ step.name ...))))])
+                                 (map (compose syntax-local-value (λ (name) (fmtid "~a-stx" name)))
+                                      names))
+     |#
+     #:with (subprotocols ...) (let ([names (filter (λ (n) (not (eqv? (syntax-e n) 'null))) (syntax->list #'((~? (~@ step.name ...)))))])
+     ;#:with (subprotocols ...) (let ([names (syntax->list #'((~? (~@ step.name ...))))])
+                                 (pretty-print (list "sp-names" names))  ; FIXME names are not being found
                                  (map (compose syntax-local-value (λ (name) (fmtid "~a-stx" name)))
                                       names))
      #:with export-stx #'((.executor)
@@ -828,7 +836,7 @@
                           (.outputs name)
                           (.vars (~? (~@ var ...)))  ; TODO these need to be requested before export to pdf
                           ;(.measures (~? (constrained-input aspect* ...)) ...)
-                          (.steps (~? (~@ step ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
+                          (.steps (~? (~@ step.instruction ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
                           (.subprotocols subprotocols ...)
                           ; the debug message is totally useless :/ took me 3 hours to figure out how to debug it properly
                           (.errors "example error")
@@ -919,7 +927,7 @@
                         (.inputs (~? (~@ input ...)) (~? (~@ constrained-input ...)))
                         (.outputs name)
                         (.vars (~? (~@ var ...)))  ; TODO these need to be requested before export to pdf
-                        (.steps (~? (~@ step ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
+                        (.steps (~? (~@ step.instruction ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
                         (.subprotocols subprotocols ...)
                         (.impls ,@(get-specs name-impls #,stx))
                         (other body ...))))
@@ -973,14 +981,15 @@
         ; FIXME why does (spec (black-box a b c d) "asdf") work here?!??!!
         ; measure binds a
         ; aspec-predicate-category
+        ; FIXME TODO arbitrary ordering ...
         (~optional (.uses import ...))  ; the reason we do this is to keep the relevant names under control
         (~optional docstring)
         (~optional (.vars var ...))
         (~optional (.config-vars cvar ...))  ; TODO naming ...
         (~optional (.inputs (~or input [oper constrained-input aspect* ...])...)) ; FIXME
         ;(.outputs outputs ...)    ; unused?
-        (~optional (.steps step ...))
         (~optional (.measures -measure ...))  ; FIXME remove this!
+        (~optional (.steps step ...))
         (~optional (.symret predicate))
         ; NOTE: we may not need this, it could be _either_ an aspect or a predicate
         ; where predicates represent a simple threshold function
@@ -1008,9 +1017,12 @@
      #:with aspect-stx (fmtid "~a-stx" #'aspect)
      ;(println (syntax-e #'name:aspect))
      ;(println (syntax-e #'name:aspect-ast))
-     #:with (subprotocols ...) (let ([names (syntax->list #'((~? (~@ step.name ...))))])
+     #:with (subprotocols ...) (let ([names (filter (λ (n) (not (eqv? (syntax-e n) 'null))) (syntax->list #'((~? (~@ step.name ...)))))])
+                                 (pretty-print (list "sp-names" names))  ; FIXME names are not being found
                                  (map (compose syntax-local-value (λ (name) (fmtid "~a-stx" name)))
                                       names))
+     ;#:do ((pretty-print (syntax->datum #'(subprotocols ...))))
+     ;#:do ((pretty-print (syntax->datum #'((~? (~@ step ...))))))
      #:with export-stx #'((.executor)   ; somewhere in here this is a missing ~?
                           (.type . measure)
                           (.name . aspect)  ; TODO specname version?
@@ -1021,7 +1033,7 @@
                           (.vars (~? (~@ var ...)))  ; TODO these need to be requested before export to pdf
                           ;(.measures (~? (constrained-input aspect* ...)) ...)
                           ;(.measures aspect (~? (constrained-input aspect* ...)) ...)  ; FIXME aspect black-box binding
-                          (.steps (~? (~@ step ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
+                          (.steps (~? (~@ step.instruction ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
                           ; the debug message is totally useless :/ took me 3 hours to figure out how to debug it properly
                           (.subprotocols subprotocols ...)
                           (.errors)
@@ -1042,7 +1054,7 @@
                             (.inputs name ... (~? (~@ input ...)) (~? (~@ constrained-input ...)))
                             (.outputs name ...)
                             (.vars (~? (~@ var ...)))
-                            (.steps (~? (~@ step ...)))
+                            (.steps (~? (~@ step.instruction ...)))
                             (.subprotocols subprotocols ...)
                             (.errors "example error")
                             (.measures)
@@ -1138,7 +1150,14 @@
      #:with name-ast (format-id #'name
                                 #:source #'name
                                 "~a-ast" (syntax-e #'name))
+     #|
      #:with (subprotocols ...) (let ([names (syntax->list #'((~? (~@ step.name ...))))])
+                                 (map (compose syntax-local-value (λ (name) (fmtid "~a-stx" name)))
+                                      names))
+     |#
+     ;#:with (subprotocols ...) (let ([names (syntax->list #'((~? (~@ step.name ...))))])
+     #:with (subprotocols ...) (let ([names (filter (λ (n) (not (eqv? (syntax-e n) 'null))) (syntax->list #'((~? (~@ step.name ...)))))])
+                                 (pretty-print (list "sp-names" names))  ; FIXME names are not being found
                                  (map (compose syntax-local-value (λ (name) (fmtid "~a-stx" name)))
                                       names))
      #:with export-stx #'((.executor)
@@ -1150,7 +1169,7 @@
                           (.outputs name)  ; TODO allow ^> type techniques  FIXME this assumes name:aspect...
                           (.vars (~? (~@ var ...)))
                           (.measures asp??? (~? (constrained-input aspect* ...)) ...)  ; FIXME aspect black-box binding
-                          (.steps (~? (~@ step ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
+                          (.steps (~? (~@ step.instruction ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
                           (.errors "example error")
                           (.measures)
                           (other body ...))
@@ -1269,7 +1288,7 @@
                  ; NOTE: in principle every succeeding level should allow the same arguments as the previous level
                  (.outputs (~? impl-name spec-name))
                  (.vars (~? (~@ var ...)))  ; FIXME add the ability to bind these here in impl
-                 (.steps (~? (~@ step ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
+                 (.steps (~? (~@ step.instruction ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
                  (.errors "example error")
                  (.measures)
                  (other body ...))))
