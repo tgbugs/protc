@@ -243,16 +243,18 @@
                                      #`(define-syntax shortaspect-data (cons #,add #,get))
                                      ; it is dumb that this is more efficient but oh well
                                      #f)
-     #:with data-alist #``((.name . name)
-                           (.shortname . shortname)
-                           (.def . constructive-definition)
-                           (.parent (~? ,@aspect/parent-stx))
-                           (.children ,@(map (λ (proc) (if (procedure? proc)
+     #:with childs #'(.children ,@(map (λ (proc) (if (procedure? proc)
                                                            (begin (println proc)
                                                                   ; here's the infinite loop we've been waiting for
                                                                   (proc #:parent #f))
                                                            proc))
-                                             (get-specs aspect-data #,stx))))
+                                             (get-specs aspect-data #,stx)))
+     #:with data-alist #``((.name . name)
+                           (.shortname . shortname)
+                           (.def . constructive-definition)
+                           (.parent (~? ,@aspect/parent-stx))
+                           childs
+                           )
      #:attr aspect/name-stx #'(define aspect/name data-alist) ; TODO rosette integration
      #:attr aspect/shortname-stx (if (attribute aspect/shortname)
                                  #'(define aspect/shortname aspect/name)
@@ -261,8 +263,8 @@
                       (identifier-binding #'parent-data))
                (define-values (add get) (lookup-name #'parent-data stx))
                (displayln "YES WE ARE ACTUALLY ADDING...")
-               (add #'name)
-               #; ; don't need this, is a dupe
+               ;(add #'name)  ; FIXME causes the infinite loop
+               ; don't need this, is a dupe
                (when (attribute aspect/shortname)
                  (add #'aspect/shortname))
                (displayln (list "contents of the store" (get)))
