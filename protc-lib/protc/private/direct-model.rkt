@@ -27,6 +27,8 @@
          export
          invariant
 
+         lookup
+
          bind/symbol->being
          being->symbol
          validate/being
@@ -122,6 +124,7 @@
   "I have no idea what this is supposed to do")
 
 (define-syntax (being->symbol stx)
+  ; this is the actualy being to symbol function that has an aspect inbetween
   (syntax-parse stx
     [(_ [name aspect] ...)
      #'(map name-aspect->define/being->symbol-func '((name aspect) ...))]
@@ -134,6 +137,24 @@
      #'(values (being name) ...)  ; use this if we need a more explicit type
      #'(values 'fake-result ...)
      ]))
+
+(define-syntax (being->name stx)
+  ; this is the simple version of being->symbol, and is specifically for
+  ; getting the exact name of the being in question
+  (syntax-parse stx
+
+    )
+  )
+
+(define-syntax (being->type stx)
+  ; this gives the type name for any individual being
+  ; this is not implemented as (measure) because it is
+  ; assertional (is this correct!?) -> no
+  ; I just don't know what this is "measuring"
+  ; for being->name this is assertional or assigned
+  ; by the executor or agent who is overseeing what is going on
+  ; but for being->type or being->type-name it could be defined
+  )
 
 (define-syntax (define/definition-function stx)  ; XXX deprecated
   (syntax-parse stx
@@ -308,6 +329,31 @@
     )
   )
 
+(define-syntax (lookup stx)  ; FIXME this implementation is totally broken
+  ; this is an export time function
+  ; or ... sometimes runtime depending on when the being is actually able to be bound to the name
+  ; if the export is to a computation form
+  ; then unless some impl demands it, the lookup
+  ; will be deferred for as long as possible
+  ; and then the executor will be presented with steps
+  ; to execute lookups in the order they are defined
+  
+  ; lookup indicates that a value for the aspect in question
+  ; should already be known as a result at the time of writing
+  ; the protocol, it it is not, then lookup indicates a dependency
+  ; and if (measure being aspect) has not been defined then a
+  ; warning should be generated and a placeholder measure step
+  ; will be inserted
+  (syntax-parse stx
+    [(_ being:id aspect)
+     ; TODO add export-time-lookup (or whatever depending on the being) to a list
+     ; that will be executed at export time to fill in as much information as possible
+     #'(define (export-time-lookup)  ; possibly define-syntax?
+        (let ([maybe-result (match-triples #:s being #:p aspect)])
+          (if (null? maybe-result)
+              (measure being aspect)  ; FIXME we do need to warn if this doesn't exist
+              maybe-result)))]))
+
 (module+ test
   (define-aspect sasp some-aspect "some aspect parent")
   ;(debug-repl)
@@ -352,15 +398,28 @@
 (define (make-store)
   (define int-triples '())
 
-  (define (add-triple triples)
+  (define (add-triple triple)
     (set! int-triples (cons triple int-triples)))
 
   (define (add-triples triples)
     (set! int-triples (append triples int-triples)))
 
-  (values add-triple add-triples (λ () int-triples)))
+  (define-syntax (null?-or-equal? stx) 
+    (syntax-parse stx
+      [(_ nullable to-match)
+       #'(or (null? nullable) (equal? nullable to-match))]))
 
-(define-values (add-triple add-triples get-triples) (make-store))
+  (define (match-triples #:s [s null] #:p [p null] #:o [o null])
+    (define (f s-t p-t o-t)
+      (and (null?-or-equal? s s-t)
+           (null?-or-equal? p p-t)
+           (null?-or-equal? o o-t)
+           ))
+    (filter (λ (t) (apply f t)) int-triples))
+
+  (values add-triple add-triples (λ () int-triples) get-o))
+
+(define-values (add-triple add-triples get-triples match-triples) (make-store))
 
 #;(define (has-part parent . children)
   ; TODO in spec context has-part needs to also define all the part names in local scope ...
@@ -553,60 +612,7 @@
   ; there is nothing that limits aspects to being single arity but still a TODO on how to extend
 
   ; FIXME FIXME this should be detecting the existing has-part? defined above!!!!
-  #;
-  (impl (has-part?)
-        (.executor human)
-        (and (observe? parent)  ; this is mostly implicit observe? -> (true? (*observe parent))
-             (observe? child)
-             ; oh look, just follow the pattern if you don't know what to do!
-             ; actualize* takes a thing and an aspect which means that you need both!
-             ; and that way the thing you are actualizing/measuring will always be present
-             ; for symbolic manipulation and examination!
-             ; implicit when? or how to communicate this...
-
-             ; this is perfect, order and order* used this way allow use to
-             ; explictily create the scope in which a measurement is going to
-             ; be made and do all the symbolic things that we want with them
-             ; afterward in the body, the instructions will translate to
-             ; "displace the parent in x, y, z space and record how much you moved it"
-             (do* [(:* parent displacement vector3)
-                      (*: child displacement vector3)]
-                  (= (: parent displacement)
-                     (: child displacement)))
-
-             ; more redable version
-             ; note that sticking the vecotr type on the end is adding an explicit data type
-             ; which is impl... the spec could have just displacement and then we need a way
-             ; to allow the implementation to specify that that is displacement in
-             ; (param:dimensions (param:unit 'meters)
-             ;                   (param:unit 'meters)
-             ;                   (param:unit 'meters))
-             ; (dim 'meter 'meter 'meter) (dim-n 3 'meter) vector3 'meter somehow...
-             (do* [(actualize parent displacement vector3)
-                   (measure child displacement vector3)]
-                  (= (: parent displacement)
-                     (: child displacement)))
-             #;
-             (do*
-              ; actually I think having the scope helps a whole lot
-              ; because it says that the values are those that are in
-              ; the context of _this_ action, there could be many actions
-              (:* parent displacement vector3)
-              (*: child displacement vector3)
-              (= (: parent displacement) (: child displacement)))
-             ; basically begin
-             #; ; old version, which sort of works but is probably overly verbose
-             (do* ([action (:* parent displacement vector3)]
-                   ; we could define move* as (:* parent displacement vector3) ...
-                   ; and that would allow us to propagate the fact that when you move something
-                   ; there is some displacement, whether you actually measured it or not will only
-                   ; matter if you do something with it down the line
-                   [outcome (*: child displacement vector3)])
-              #;([action (move* parent vector3)]  ; vs move:distance*
-                   [outcome (*move:vector3 child)])
-
-                  (= (: action vector3) (: outcome vector3))
-                  ))))
+  )
 
 #;(define-syntax (define-process stx)  ; define-verb (spec (process (verb args ...))) is the alternate form
   ; define-process creates functions that operate only on
