@@ -1,12 +1,13 @@
 #lang racket/base
 (require protc/private/direct-model)
 
-(spec (black-box thing)
+(spec (black-box thing thing)
       "Any nameable subset of physical reality existing at a single point in time")
 
 (spec (measure parent child has-part?)  ; vs (measure has-part?) (.inputs child)
       (.symret boolean?))
 
+#;
 (impl (has-part?)
         (.executor human)
         (and (observe? parent)  ; this is mostly implicit observe? -> (true? (*observe parent))
@@ -78,10 +79,11 @@ Contrast this with a human being, where one subset is called and arm and another
       (define-being s1 (being-subset thing))
       (define-being s2 (being-subset thing))
       (for-all (s1 s2)
-               (given (different? s1 s2)
-                      (same (being->name thing)
-                            (being->name s1)
-                            (being->name s2)))))
+               (given ((being->type-name thing)
+                       (different? s1 s2))
+                      (same (being->type-name thing)
+                            (being->type-name s1)
+                            (being->type-name s2)))))
 
 
 (spec (actualize thing allocation)
