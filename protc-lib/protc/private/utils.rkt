@@ -1,5 +1,5 @@
 #lang racket/base
-(require (for-syntax racket/base))
+(require racket/pretty (for-syntax racket/base syntax/parse))
 (provide (all-defined-out))
 
 (define-syntax (if-defined stx)
@@ -13,3 +13,10 @@
                  (string->symbol
                   (string-append prefix (symbol->string
                                          (syntax->datum suffix))))))
+
+(define-syntax (ppstx stx)
+  (syntax-parse stx
+    [(_ thing:expr)
+     #'(let ([out thing])
+         (pretty-print (list 'ppstx: (syntax->datum out)))
+         out)]))

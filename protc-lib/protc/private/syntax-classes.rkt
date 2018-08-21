@@ -303,3 +303,7 @@ All actualize sections should specify a variable name that will be used in inher
            #:attr (measure 1) #''TODO
            )
   )
+
+(define-syntax-class sc-block-type
+  #:datum-literals (measure actualize make)
+  (pattern (~or measure actualize make)))

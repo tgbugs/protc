@@ -195,7 +195,10 @@
   )
 
 (define-for-syntax (fmtid pattern stx)
-  (format-id stx #:source stx pattern (syntax-e stx)))
+  (let* ([se (syntax->datum stx)])
+    (if (list? se)
+        (apply format-id stx #:source stx pattern se)
+        (format-id stx #:source stx pattern se))))
 
 #;
 (define-syntax (make-spec/name stx)
@@ -248,10 +251,25 @@
         (~optional (~seq #:parent parent))
         constructive-definition:expr  ; FIXME need a way to look inside of these
         )
+     #;
+     ; TODO need this this as a way to document the arity of our aspects, also makes more sense logically
+     ; HOWEVER given that my use of aspect is _very_ close to 'measureable' this may be moot ...
+     ; and multi arity aspects will simply be treated as 'complex' and requiring some computation
+     ; e.g. (kD/allolosteric enzyme modulator) where temperature is implicit
+     ; as opposed to chained or typed aspects, where act mass is different from act [allocation mass]
+     (_ (~or (aspect:id being-name-multi:id ...+)
+             ([aspect-multi:id ...] being-name:id))
+        (~optional (~seq #:parent parent:id))
+        (~optional (~seq #:abbrev shortname:id))  ; aka shortaspect
+        constructive-definition:expr  ; FIXME need a way to look inside of these
+        )
+     ;#:with aspect/name (fmtid "aspect/~a" #'(~? aspect (aspect-multi ...)))  ; FIXME need (: a b c) macro
      #:with aspect/name (fmtid "aspect/~a" #'name)
-     #:attr aspect/shortname (if (eqv? (syntax-e #'shortname) (syntax-e #'name))
-                                 #f
-                                 (fmtid "aspect/~a" #'shortname))
+     #:attr aspect/shortname (if (and (attribute shortname)
+                                      (not (eqv? (syntax-e #'name)
+                                                 (syntax-e #'shortname))))
+                                 (fmtid "aspect/~a" #'shortname)
+                                 #f)
      #:attr -shortname (if (eqv? (syntax-e #'shortname) (syntax-e #'name)) #f #'shortname)
      #:attr aspect/parent (if (attribute parent) (fmtid "aspect/~a" #'parent) #f)
      #:with parent-data (if (attribute parent) (fmtid "~a-data" #'parent) #f)  ; this canont use attr??? or maybe it can?
@@ -273,24 +291,20 @@
      #:with shortaspect-get (fmtid "~a-get" #'shortname)  ; ok to define this unconditionally
      #:attr shortaspect-add-stx (if (attribute aspect/shortname)
                                     #'(define-syntax (shortaspect-add stx)
-                                      (syntax-parse stx
-                                        [(_ value)
-                                         #'(aspect-add value)
-                                        #;
-                                         #'(begin-for-syntax
-                                             (set! aspect-data (cons value aspect-data))
-                                             (set! shortaspect-data aspect-data))]))
+                                        (syntax-parse stx
+                                          [(_ value)
+                                           #'(aspect-add value)]))
                                     #f)
-      #:attr shortaspect-get-stx (if (attribute aspect/shortname)
-                                     #'(define-syntax (shortaspect-get stx)
-                                         aspect-data)
-                                     #f)
+     #:attr shortaspect-get-stx (if (attribute aspect/shortname)
+                                    #'(define-syntax (shortaspect-get stx)
+                                        aspect-data)
+                                    #f)
 
      #:with childs #'(.children ,@(map (λ (proc) (if (procedure? proc)
-                                                           (begin (println proc)
-                                                                  ; here's the infinite loop we've been waiting for
-                                                                  (proc #:parent #f))
-                                                           proc))
+                                                     (begin (println proc)
+                                                            ; here's the infinite loop we've been waiting for
+                                                            (proc #:parent #f))
+                                                     proc))
                                        (aspect-get)  ; this is _already_ spliced
                                        ;((syntax-local-value #'aspect-get))
                                        #;(get-specs aspect-data #,stx)
@@ -303,88 +317,65 @@
                            )
      #:attr aspect/name-stx #'(define aspect/name data-alist) ; TODO rosette integration
      #:attr aspect/shortname-stx (if (attribute aspect/shortname)
-                                 #'(define aspect/shortname aspect/name)
-                                 #f)
+                                     #'(define aspect/shortname aspect/name)
+                                     #f)
      #:attr aspect-parent-add-stx (if (attribute parent-add)
                                       (begin
+                                        #;  ; debug
                                         (println `(adding ,(syntax->datum #'aspect/name) to
                                                           ,(syntax->datum #'parent)) )
                                         #'(parent-add 'aspect/name))
                                       #f)
      #| ; I don't think we need this
      #:attr shortaspect-parent-add-stx (if (and (attribute parent-add)
-                                                (attribute aspect/shortname))
-                                           ; TODO do we need this? it is confusing ...
-                                           #'(parent-add 'aspect/shortname)
-                                           #f)
+     (attribute aspect/shortname))
+     ; TODO do we need this? it is confusing ...
+     #'(parent-add 'aspect/shortname)
+     #f)
      |#
 
      ; TODO syntax-local-value to look this stuff up for use in rosette
-     #:with quote-thing (datum->syntax stx 'quote)
-     #:with quasiquote-thing (datum->syntax stx 'quasiquote)
-     (let ([out 
-            #`(begin
-                ;(~? aspect/shortname-stx)
-                ;(~? (define-syntax aspect/shortname (list (~? parent) 'constructive-definition)))
-                aspect/name-stx
-                (~? aspect/shortname-stx)  ; have to use this form, otherwise it seems that the nested missing parent will force skip all...
-                (define-for-syntax aspect-data '())
-                (~? (define-for-syntax shortaspect-data aspect-data))
-                (define-syntax (aspect-add stxi)
-                  (syntax-parse stxi
-                    [(_ value)
-                     (println `(adding ,(syntax->datum #'value) to name))
-                     #'(begin-for-syntax
-                         (set! aspect-data (cons value aspect-data))
-                         (~? (set! shortaspect-data aspect-data))
-                         )]))
-                (define-syntax (aspect-get stx)
-                  #`(quote #,aspect-data))
-                #;
-                (define-syntax (aspect-get stxi)  ; (aspect-get) doesnt work despite (name-get) working!?
-                  (if (null? aspect-data)
-                      #''()
-                      #;
-                      (datum->syntax #f (cons 'list aspect-data))
-                      #;(datum->syntax #f (quote-thing aspect-data))
-                      (let ([out (λ () aspect-data)
-                             #;
-                             (datum->syntax #f (quasiquote-thing (quasiquote-thing ,,aspect-data)))])
-                        (pretty-print out)
-                        out
-                        )
-                      
-                      ;aspect-data
-                      ; this is multi-location because
-                      ; it is created out of multiple different input syntaxes
-                      ; which currently go in as datums not syntax ...
-                      ))  ; FIXME where should this anchor?
-             
-                (~? shortaspect-add-stx)
-                (~? shortaspect-get-stx)
+     #`(begin
+         ;(~? aspect/shortname-stx)
+         ;(~? (define-syntax aspect/shortname (list (~? parent) 'constructive-definition)))
+         aspect/name-stx
+         (~? aspect/shortname-stx)  ; have to use this form, otherwise it seems that the nested missing parent will force skip all...
+         (define-for-syntax aspect-data '())
+         (~? (define-for-syntax shortaspect-data aspect-data))
+         (define-syntax (aspect-add stxi)
+           (syntax-parse stxi
+             [(_ value)
+              #;  ; debug
+              (println `(adding ,(syntax->datum #'value) to name))
+              #'(begin-for-syntax
+                  (set! aspect-data (cons value aspect-data))
+                  (~? (set! shortaspect-data aspect-data))
+                  )]))
+         (define-syntax (aspect-get stx)
+           #`(quote #,aspect-data))
 
-                (~? aspect-parent-add-stx)
-                ;(~? shortaspect-parent-add-stx)  ; don' think we need this
-                (define (name #:children [c #t] #:parent [p #t] [data data-alist])
-                  ; FIXME can we do this at compile time?
-                  (println (list 'rt: name c p))
-                  (if c
-                      (if p
-                          data
-                          (let ([r (reverse data)])
-                            (reverse (cons (car r) (cddr r)))))
-                      (let ([r (reverse data)])
-                        (if p
-                            (reverse (cdr r))
-                            (reverse (cddr r)))))
-                  #;
-                  (cons `(.children ,@(get-specs aspect-data #,stx))
-                        data-alist))
-                (~? (define (-shortname #:children [c #t] #:parent [p #t]) (name #:children c #:parent p)))
-               )])
-       #;
-       (pretty-print (list 'ct: (syntax->datum out)))
-       out)
+         (~? shortaspect-add-stx)
+         (~? shortaspect-get-stx)
+
+         (~? aspect-parent-add-stx)
+         ;(~? shortaspect-parent-add-stx)  ; don' think we need this
+         (define (name #:children [c #t] #:parent [p #t] [data data-alist])
+           ; FIXME can we do this at compile time?
+           (println (list 'rt: name c p))
+           (if c
+               (if p
+                   data
+                   (let ([r (reverse data)])
+                     (reverse (cons (car r) (cddr r)))))
+               (let ([r (reverse data)])
+                 (if p
+                     (reverse (cdr r))
+                     (reverse (cddr r)))))
+           #;
+           (cons `(.children ,@(get-specs aspect-data #,stx))
+                 data-alist))
+         (~? (define (-shortname #:children [c #t] #:parent [p #t]) (name #:children c #:parent p)))
+         )
      ]
     )
   )
@@ -1128,7 +1119,8 @@
                     )
 
             ]
-           #;[old-out
+           #;  ; TODO review this as a way to generate our execution time overseer
+           [old-out
             #'(begin
                 (define (specification-phase)  ; TODO maybe use parameterization to pass in executors and runtime info?
                   'measure  ; when unquoted failes as expected
@@ -1187,6 +1179,7 @@
        (pretty-print (syntax->datum out))
        out)
      ]
+    #;
     [(_ (inverse-measure name aspect*))
      ;aka actualize for a single aspect... :/ I would prefer to call _this_ actualize
      #''TODO
@@ -1211,9 +1204,26 @@
         ;return-being  ; do we have this?
         )
      #:with docstringf #'(λ _ (~? docstring ""))  ; TODO
-     #:with name-ast (format-id #'name
-                                #:source #'name
-                                "~a-ast" (syntax-e #'name))
+     #:do (println "WE ARE OK HERE")
+     #:with -aspect (if (attribute aspect)
+                        #'aspect
+                        (fmtid
+                         (string-join (make-list
+                                       ; FIXME does order matter?
+                                       (length (syntax-e #'(aspect-multi ...))) "~a")
+                                      "-")
+                         #'(aspect-multi ...)))
+
+     ; for measures
+     #:with aspect-data (fmtid "~a-data" #'-aspect)
+     #:with aspect-add (fmtid "~a-add" #'-aspect)
+     #:with aspect*-get (fmtid "~a-get" #'-aspect)
+     #:attr aspect-get (if (attribute aspect)
+                           (fmtid "~a-get" #'aspect)
+                           #f)
+
+     #:with aspect-ast (fmtid "~a*-ast" #'-aspect)
+     #:with aspect-stx (fmtid "~a*-stx" #'-aspect)
      #|
      #:with (subprotocols ...) (let ([names (syntax->list #'((~? (~@ step.name ...))))])
                                  (map (compose syntax-local-value (λ (name) (fmtid "~a-stx" name)))
@@ -1226,20 +1236,63 @@
                                       names))
      #:with export-stx #'((.executor)
                           (.type . actualize)
-                          (.name . name:aspect)
+                          (.name . -aspect)
                           (.docstringf . docstringf)
                           (.docstring . (~? docstring ""))
                           (.inputs (~? (~@ input ...)) (~? (~@ constrained-input ...)))
-                          (.outputs name)  ; TODO allow ^> type techniques  FIXME this assumes name:aspect...
+                          (.outputs (~? name) (~? (~@ name-multi ...)))  ; TODO allow ^> type techniques  FIXME this assumes name:aspect...
                           (.vars (~? (~@ var ...)))
-                          (.measures asp??? (~? (constrained-input aspect* ...)) ...)  ; FIXME aspect black-box binding
+                          (.measures)
+                          (.measures (~? aspect)
+                                     (~? (~@ aspect-multi ...))
+                                     (~? (~@ (constrained-input aspect* ...) ...)))  ; FIXME aspect black-box binding
                           (.steps (~? (~@ step.instruction ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
                           (.errors "example error")
-                          (.measures)
                           (other body ...))
      ; FIXME need a way to check this syntax here and then combine it with impl to form the real output
      ; we do also still want to allow people to view only the spec phase if they want
      (let ([out
+            (if (or (not (attribute aspect-get)) (identifier-binding #'aspect-get))
+                ; FIXME infinite loop if we try to use #'aspect*-get :/
+                    #`(begin
+                        ;(aspect-add '(name ...))  ; TODO transform to name-name-name-...?
+                        (define-syntax aspect-stx  ; FIXME still needed for some reason ...
+                          #'export-stx)
+                        (define spec/aspect*
+                          '((.type . actualize)
+                            (.name . -aspect)
+                            (.docstringf . docstringf)
+                            (.docstring . (~? docstring ""))
+                            (.inputs (~? name (~@ name-multi ...))
+                                     (~? (~@ input ...))
+                                     (~? (~@ constrained-input ...)))
+                            (.outputs (~? name (~@ name-multi ...)))
+                            (.vars (~? (~@ var ...)))
+                            (.steps (~? (~@ step.instruction ...)))
+                            (.subprotocols subprotocols ...)
+                            (.errors #;"example error")  ; TODO
+                            (.measures (~? aspect (~@ aspect-multi ...))
+                                       ;(~? (~@ aspect* ... ...))  ; ok
+                                       (~? (~@ (constrained-input aspect* ...) ...))
+                                       )
+                            (other body ...))))
+                    #`(begin
+                        (define-measure (-aspect (~? name (~@ name-multi ...)))
+                          "NO DEFINITION") ; TODO source location + error
+                        #,stx)
+                    )
+            ]
+
+           [old-out2
+            #'(begin
+                (define-syntax name-stx
+                  #'export-stx)
+                (define aspect-ast  ; have to use format-id to get this bound correctly for some reason
+                  '(data
+                    export-stx))
+                )]
+           #;
+           [old-out
             #'(begin
                 (define (specification-phase)  ; TODO maybe use parameterization to pass in executors and runtime info?
                   'actualize
@@ -1275,12 +1328,8 @@
                       )
                     *start-execution*)
                   symbolic-input-phase)
-                (define-syntax name-stx
-                  #'export-stx)
-                (define name-ast  ; have to use format-id to get this bound correctly for some reason
-                  '(data
-                    export-stx))
-                (define name specification-phase))])
+                (define -aspect specification-phase))
+            ])
        #;
        (pretty-print (syntax->datum out))
        out)
@@ -1297,6 +1346,59 @@
      ]
     ))
 
+(define-syntax (define-measure stx)
+  ; it is amusing how easy this was to implement ...
+  (syntax-parse stx
+    [(_ (aspect:id name:id ...+) body ...)
+     #'(spec (measure name ... aspect) body ...)]))
+
+(define-syntax (define-actualize stx)
+  ; define-actualize is more rarely used than impl-actualize
+  ; because in many cases there is no spec independent of the
+  ; associated define-measure, one example where this can
+  ; be used is for (define-actualize ([allocation mass] thing))
+  (syntax-parse stx
+    #:datum-literals (::)
+    [(_ (aspect:id name:id ...+) body ...)
+     #'(spec (actualize name ... aspect) body ...)]
+    [(_ ([:: aspect:id ...] name:id ...+) body ...)
+     #''TODO]  ; FIXME aspect chain syntax :/
+    ))
+
+(module+ test
+  (define-measure (part-of? child parent)
+    (.symret boolean?)
+    ; TODO how to auto inherit impls from has-part?
+    (has-part? parent child))
+  (define-measure (composite? thing) "see definition in protc/protocols/core")
+  (define-actualize ([:: allocation mass] thing)
+    (.expects (composite? thing))
+    (.outputs '(subset thing) (- thing '(subset thing)))
+    )
+  (impl-actualize attach (part-of? child parent)  ; there's our verbse
+                  (.inputs fixative)
+                  (.steps "connect child to parent by placing them together using some fixative"))
+
+
+  (impl (actualize thing some-measure-0) "NO DEFINITION")
+  (impl-actualize DO-SOMETHING (some-measure thing)
+                  (.steps "wheeee!"))
+
+  )
+
+(define-syntax (impl-actualize stx)
+  ; if impl-actualize is the only definition then
+  ; both the spec and the aspect will be created but
+  ; will be empty
+  (syntax-parse stx
+    #:datum-literals (::)
+    [(_ (~optional impl-name) (aspect:id name:id ...+) body ...)
+     #'(impl (actualize name ... aspect) body ...)]
+    [(_ (~optional impl-name) ([:: aspect:id ...] name:id ...+) body ...)
+     #''TODO]
+    )
+  )
+
 ; we want to be able to start from either spec or impl...
 
 (define-syntax (impl stx)
@@ -1306,10 +1408,11 @@
     #:disable-colon-notation
     #:local-conventions ([spec-name id]
                          [impl-name id]
+                         [top-input id]
                          [step sc-step-ref]
-                         [type id]
+                         [type sc-block-type]
                          [docstring string])
-    #:datum-literals (order .executor .vars .inputs .steps)
+    #:datum-literals (order .executor .vars .inputs .steps make)
     #;[(_ name body ...)
        #''TODO]
     #;[(_ (name) body ...)
@@ -1318,8 +1421,13 @@
         body ...)
      #'(define impl-name (list body ...))  ; TODO need to deal with if-defined
      ]
-    [(_ (~or (spec-name (~optional impl-name))
+    [(_ #;(~or (spec-name (~optional impl-name))
              (impl-name (~seq #:type type)))  ; FIXME the 2nd option feels like a big ol' mistake...
+        (~optional impl-name) ((~optional type)
+                               (~optional (~seq top-input ...))
+                               ; FIXME currently if spec-name is the only thing defined
+                               ; then it is assumed to be a make block and that spec-name is the output
+                               spec-name)
         (~optional docstring)
         (~optional (.executor executor))
         (~optional (.vars var ...))
@@ -1349,16 +1457,21 @@
                  (.name . (~? impl-name spec-name))
                  ;(.id . (~? identifier))  ; wtf...
                  (.docstring . (~? docstring ""))
-                 (.inputs (~? (~@ input ...)) (~? (~@ constrained-input ...)))
+                 (.inputs (~? (~@ top-input ...))
+                          (~? (~@ input ...))
+                          (~? (~@ constrained-input ...)))
                  ; NOTE: in principle every succeeding level should allow the same arguments as the previous level
-                 (.outputs (~? impl-name spec-name))
+                 (.outputs (~? impl-name spec-name))  ; FIXME assumes make...
                  (.vars (~? (~@ var ...)))  ; FIXME add the ability to bind these here in impl
                  (.steps (~? (~@ step.instruction ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
                  (.errors "example error")
                  (.measures)
                  (other body ...))))
          (begin (println (list 'ct: (attribute spec-name) (attribute impl-name)))
-                #`(begin (spec ((~? type make) (~? spec-name impl-name)))
+                #`(begin (spec ((~? type make) top-input ... spec-name)
+                               ; FIXME if there is no body this runs forever!
+                               "NO DEFINITION"
+                               )
                          ; FIXME logic seems unsound here
                          ; FIXME bad way to do defaults should fail instead?
                          #,stx)))
