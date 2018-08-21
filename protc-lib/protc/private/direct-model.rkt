@@ -255,7 +255,7 @@
      #:attr -shortname (if (eqv? (syntax-e #'shortname) (syntax-e #'name)) #f #'shortname)
      #:attr aspect/parent (if (attribute parent) (fmtid "aspect/~a" #'parent) #f)
      #:with parent-data (if (attribute parent) (fmtid "~a-data" #'parent) #f)  ; this canont use attr??? or maybe it can?
-     #:attr parent-add (if (attribute parent) (fmtid "~a-add" #'name) #f)
+     #:attr parent-add (if (attribute parent) (fmtid "~a-add" #'parent) #f)
      #:attr aspect/parent-stx (if (attribute aspect/parent)
                                   ; FIXME get the original location of the syntax
                                   #; ;FIXME why does this break!?
@@ -269,12 +269,17 @@
      #:with aspect-add (fmtid "~a-add" #'name)
      #:with aspect-get (fmtid "~a-get" #'name)
      #:attr shortaspect-data (if (attribute aspect/shortname) (fmtid "~a-data" #'shortname) #f)
+     #:with shortaspect-add (fmtid "~a-add" #'shortname)  ; ok to define this unconditionally
+     #:with shortaspect-get (fmtid "~a-get" #'shortname)  ; ok to define this unconditionally
      #:attr shortaspect-add-stx (if (attribute aspect/shortname)
                                     #'(define-syntax (shortaspect-add stx)
                                       (syntax-parse stx
                                         [(_ value)
+                                         #'(aspect-add value)
+                                        #;
                                          #'(begin-for-syntax
-                                             (set! aspect-data (cons value aspect-data)))]))
+                                             (set! aspect-data (cons value aspect-data))
+                                             (set! shortaspect-data aspect-data))]))
                                     #f)
       #:attr shortaspect-get-stx (if (attribute aspect/shortname)
                                      #'(define-syntax (shortaspect-get stx)
@@ -302,27 +307,16 @@
                                  #f)
      #:attr aspect-parent-add-stx (if (attribute parent-add)
                                       (begin
-                                        (println '(adding #'aspect/name to #'parent) )
+                                        (println `(adding ,(syntax->datum #'aspect/name) to
+                                                          ,(syntax->datum #'parent)) )
                                         #'(parent-add 'aspect/name))
                                       #f)
+     #| ; I don't think we need this
      #:attr shortaspect-parent-add-stx (if (and (attribute parent-add)
                                                 (attribute aspect/shortname))
+                                           ; TODO do we need this? it is confusing ...
                                            #'(parent-add 'aspect/shortname)
                                            #f)
-     #|
-     #:do ((when (and (attribute parent)
-                      (identifier-binding #'parent-data))
-               (define-values (add get) (lookup-name #'parent-data stx))
-               (displayln "YES WE ARE ACTUALLY ADDING...")
-               ;(add #'name)  ; FIXME causes the infinite loop
-               ; don't need this, is a dupe
-               (when (attribute aspect/shortname)
-                 (add #'aspect/shortname))
-               (displayln (list "contents of the store" (get)))
-               )
-           #;
-           (when (attribute aspect/parent)
-             (pretty-print (list 'ct-slv: (syntax-local-value #'aspect/parent)))))
      |#
 
      ; TODO syntax-local-value to look this stuff up for use in rosette
@@ -335,11 +329,15 @@
                 aspect/name-stx
                 (~? aspect/shortname-stx)  ; have to use this form, otherwise it seems that the nested missing parent will force skip all...
                 (define-for-syntax aspect-data '())
+                (~? (define-for-syntax shortaspect-data aspect-data))
                 (define-syntax (aspect-add stxi)
                   (syntax-parse stxi
                     [(_ value)
+                     (println `(adding ,(syntax->datum #'value) to name))
                      #'(begin-for-syntax
-                         (set! aspect-data (cons value aspect-data)))]))
+                         (set! aspect-data (cons value aspect-data))
+                         (~? (set! shortaspect-data aspect-data))
+                         )]))
                 (define-syntax (aspect-get stx)
                   #`(quote #,aspect-data))
                 #;
@@ -366,7 +364,7 @@
                 (~? shortaspect-get-stx)
 
                 (~? aspect-parent-add-stx)
-                (~? shortaspect-parent-add-stx)
+                ;(~? shortaspect-parent-add-stx)  ; don' think we need this
                 (define (name #:children [c #t] #:parent [p #t] [data data-alist])
                   ; FIXME can we do this at compile time?
                   (println (list 'rt: name c p))
@@ -416,7 +414,6 @@
               (measure being aspect)  ; FIXME we do need to warn if this doesn't exist
               maybe-result)))]))
 
-#;
 (module+ test
   (define-aspect sasp some-aspect "some aspect parent")
   ;(debug-repl)
