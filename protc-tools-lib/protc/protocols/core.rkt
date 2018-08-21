@@ -190,14 +190,6 @@ Contrast this with a human being, where one subset is called and arm and another
       (until (= (*: solution volume) volume)
              (add-a-to-b solvent solution)))
 
-(impl (actualize concentration)
-      (do-practical* ([(actualize mass) solute]
-                      [put-a-in-b solute solvent]))
-      )
-
-(impl (conc-by-known-mass)
-      )
-
 (spec (actualize solute concentration)
       (.vars final-volume)
       (.inputs solvent)  ; can this be used to handle implicit inputs?
@@ -213,4 +205,17 @@ Contrast this with a human being, where one subset is called and arm and another
       ; rosette will create the program that can invert this at runtime
       ; when final volume is supplied
       )
+
+(impl (actualize solute concentration)
+      ; FIXME can we leave out solute if
+      ; (measure solute concentration
+      ; has already been defined?
+      (do-practical* ([(actualize mass) solute]
+                      [put-a-in-b solute solvent]))
+      )
+
+(impl (conc-by-known-mass)
+      )
+
+
 

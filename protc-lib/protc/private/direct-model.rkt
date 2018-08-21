@@ -1251,6 +1251,7 @@
                           (other body ...))
      ; FIXME need a way to check this syntax here and then combine it with impl to form the real output
      ; we do also still want to allow people to view only the spec phase if they want
+     #:with spec/aspect* (fmtid "spec/~a*" #'-aspect)  ; TODO #'(~? spec-name aspect)
      (let ([out
             (if (or (not (attribute aspect-get)) (identifier-binding #'aspect-get))
                 ; FIXME infinite loop if we try to use #'aspect*-get :/
@@ -1427,7 +1428,8 @@
                                (~optional (~seq top-input ...))
                                ; FIXME currently if spec-name is the only thing defined
                                ; then it is assumed to be a make block and that spec-name is the output
-                               spec-name)
+                               (~or spec-name
+                                    (aspect ...)))
         (~optional docstring)
         (~optional (.executor executor))
         (~optional (.vars var ...))
@@ -1443,7 +1445,23 @@
                             #'(spec (black-box impl-name thing)))
 
      |#
-     (if (and (attribute spec-name) (identifier-binding (attribute spec-name)))
+     #:attr name (if (attribute spec-name)
+                     #'spec-name
+                     ; FIXME need to get syntax loc fixed for this ...
+                     (let* ([as (syntax->list #'(aspect ...))]
+                            [a1 (car as)]
+                            [a2 (cadr as)])
+                       (fmtid (string-append "~a-" (format "~a" (syntax->datum a2))) a1))
+                     #;
+                     (fmtid
+                         (string-join (make-list
+                                       ; FIXME does order matter?
+                                       (length (syntax-e #'(aspect ...))) "~a")
+                                      "-")
+                         #'(aspect ...)))
+     #:with impl/name (fmtid "impl/~a" #'(~? impl-name name))
+     (if (or (not (attribute spec-name))  ; FIXME why do we always seem to fail when name is from #'( a ...)
+             (identifier-binding (attribute name)))
          ; welp
          ; turns out if you want to use impl directly without a spec either you have to provide a way to declare
          ; type or it just simply will not work becuse we can't really infer the type of thing we are implementing
@@ -1454,23 +1472,24 @@
              ;(~? no-spec-yet) ; no guts yet
              (define impl/name
                '((.type . make)
-                 (.name . (~? impl-name spec-name))
+                 (.name . (~? impl-name name))
                  ;(.id . (~? identifier))  ; wtf...
                  (.docstring . (~? docstring ""))
                  (.inputs (~? (~@ top-input ...))
                           (~? (~@ input ...))
                           (~? (~@ constrained-input ...)))
                  ; NOTE: in principle every succeeding level should allow the same arguments as the previous level
-                 (.outputs (~? impl-name spec-name))  ; FIXME assumes make...
+                 ;(.outputs (~? impl-name name))  ; FIXME assumes make...
+                 (.outputs)
                  (.vars (~? (~@ var ...)))  ; FIXME add the ability to bind these here in impl
                  (.steps (~? (~@ step.instruction ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
                  (.errors "example error")
                  (.measures)
                  (other body ...))))
-         (begin (println (list 'ct: (attribute spec-name) (attribute impl-name)))
-                #`(begin (spec ((~? type make) top-input ... spec-name)
+         (begin (println (list 'ct: (attribute name) (attribute impl-name)))
+                #`(begin (spec ((~? type make) top-input ... name)
                                ; FIXME if there is no body this runs forever!
-                               "NO DEFINITION"
+                               "NO DEFINITION"  ; TODO warning on this ...
                                )
                          ; FIXME logic seems unsound here
                          ; FIXME bad way to do defaults should fail instead?
