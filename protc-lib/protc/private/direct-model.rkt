@@ -286,7 +286,7 @@
                                                                   ; here's the infinite loop we've been waiting for
                                                                   (proc #:parent #f))
                                                            proc))
-                                       aspect-get  ; this is _already_ spliced
+                                       (aspect-get)  ; this is _already_ spliced
                                        ;((syntax-local-value #'aspect-get))
                                        #;(get-specs aspect-data #,stx)
                                        ))
@@ -326,24 +326,36 @@
      |#
 
      ; TODO syntax-local-value to look this stuff up for use in rosette
+     #:with quote-thing (datum->syntax stx 'quote)
+     #:with quasiquote-thing (datum->syntax stx 'quasiquote)
      (let ([out 
             #`(begin
                 ;(~? aspect/shortname-stx)
                 ;(~? (define-syntax aspect/shortname (list (~? parent) 'constructive-definition)))
                 aspect/name-stx
                 (~? aspect/shortname-stx)  ; have to use this form, otherwise it seems that the nested missing parent will force skip all...
-                (define-for-syntax aspect-data #''())
+                (define-for-syntax aspect-data '())
                 (define-syntax (aspect-add stxi)
                   (syntax-parse stxi
                     [(_ value)
                      #'(begin-for-syntax
-                         (set! aspect-data (datum->syntax #,stx (cons value (syntax->datum aspect-data)))))]))
+                         (set! aspect-data (cons value aspect-data)))]))
+                (define-syntax (aspect-get stx)
+                  #`(quote #,aspect-data))
+                #;
                 (define-syntax (aspect-get stxi)  ; (aspect-get) doesnt work despite (name-get) working!?
                   (if (null? aspect-data)
                       #''()
                       #;
                       (datum->syntax #f (cons 'list aspect-data))
-                      (datum->syntax #f aspect-data)
+                      #;(datum->syntax #f (quote-thing aspect-data))
+                      (let ([out (λ () aspect-data)
+                             #;
+                             (datum->syntax #f (quasiquote-thing (quasiquote-thing ,,aspect-data)))])
+                        (pretty-print out)
+                        out
+                        )
+                      
                       ;aspect-data
                       ; this is multi-location because
                       ; it is created out of multiple different input syntaxes
@@ -848,10 +860,11 @@
                      #'(begin-for-syntax
                          (set! name-data (cons value name-data)))]))
                 (define-syntax (name-get stx)  ; this works, but name-get without parens does not
+                  #;
                   (if (null? name-data)
                       #''()
                       (datum->syntax #f name-data))
-                  name-data)
+                  #`(quote #,name-data))
                 specialize-name)])
        #;
        (pretty-print (syntax->datum out))
@@ -961,8 +974,8 @@
                         [(_ value)
                          #'(begin-for-syntax
                              (set! name-impls-data (cons value name-impls-data)))]))
-                    (define-syntax (name-impls-get)  ; this works, but name-get without parens does not
-                      name-impls-data)
+                    (define-syntax (name-impls-get stx)  ; this works, but name-get without parens does not
+                      #`(quote #,name-impls-data))
                     
                     (define spec/name
                       `((.type . make)
@@ -976,7 +989,7 @@
                         (.steps (~? (~@ step.instruction ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
                         (.subprotocols subprotocols ...)
                         (.impls
-                         ,@(name-impls-get)
+                         ,@(name-impls-get)  ; QUESTION this ... triggers at runtime??
                          ;,@(get-specs name-impls #,stx)
                          )
                         (other body ...))))
