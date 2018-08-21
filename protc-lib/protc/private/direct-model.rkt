@@ -217,6 +217,7 @@
   (define (add spec) (set! specs (cons spec specs)))
   (values add get))
 
+#;
 (define-for-syntax (lookup-name name stx)
   (define (failure) (raise-syntax-error #f (format "couldn't find any data associated with ~a" name) stx))
     (let ([add-get (syntax-local-value name failure)])
@@ -224,6 +225,7 @@
 
 ; FIXME if we do this this way then we cannot add new specs at run time ...
 ; is this ok? yes no maybe?
+#;
 (define-syntax (get-specs stx)
   (syntax-parse stx
     [(_ name-data:id more-stx)
@@ -275,7 +277,7 @@
                                              (set! aspect-data (cons value aspect-data)))]))
                                     #f)
       #:attr shortaspect-get-stx (if (attribute aspect/shortname)
-                                     #'(define-syntax (shortaspect-get)
+                                     #'(define-syntax (shortaspect-get stx)
                                          aspect-data)
                                      #f)
 
@@ -284,7 +286,7 @@
                                                                   ; here's the infinite loop we've been waiting for
                                                                   (proc #:parent #f))
                                                            proc))
-                                       (aspect-get)
+                                       aspect-get  ; this is _already_ spliced
                                        ;((syntax-local-value #'aspect-get))
                                        #;(get-specs aspect-data #,stx)
                                        ))
@@ -299,7 +301,9 @@
                                  #'(define aspect/shortname aspect/name)
                                  #f)
      #:attr aspect-parent-add-stx (if (attribute parent-add)
-                                      #'(parent-add 'aspect/name)
+                                      (begin
+                                        (println '(adding #'aspect/name to #'parent) )
+                                        #'(parent-add 'aspect/name))
                                       #f)
      #:attr shortaspect-parent-add-stx (if (and (attribute parent-add)
                                                 (attribute aspect/shortname))
@@ -328,14 +332,23 @@
                 ;(~? (define-syntax aspect/shortname (list (~? parent) 'constructive-definition)))
                 aspect/name-stx
                 (~? aspect/shortname-stx)  ; have to use this form, otherwise it seems that the nested missing parent will force skip all...
-                (define-for-syntax aspect-data '())
-                (define-syntax (aspect-add stx)
-                  (syntax-parse stx
+                (define-for-syntax aspect-data #''())
+                (define-syntax (aspect-add stxi)
+                  (syntax-parse stxi
                     [(_ value)
                      #'(begin-for-syntax
-                         (set! aspect-data (cons value aspect-data)))]))
-                (define-syntax (aspect-get)  ; this works, but name-get without parens does not
-                  aspect-data)
+                         (set! aspect-data (datum->syntax #,stx (cons value (syntax->datum aspect-data)))))]))
+                (define-syntax (aspect-get stxi)  ; (aspect-get) doesnt work despite (name-get) working!?
+                  (if (null? aspect-data)
+                      #''()
+                      #;
+                      (datum->syntax #f (cons 'list aspect-data))
+                      (datum->syntax #f aspect-data)
+                      ;aspect-data
+                      ; this is multi-location because
+                      ; it is created out of multiple different input syntaxes
+                      ; which currently go in as datums not syntax ...
+                      ))  ; FIXME where should this anchor?
              
                 (~? shortaspect-add-stx)
                 (~? shortaspect-get-stx)
@@ -391,6 +404,7 @@
               (measure being aspect)  ; FIXME we do need to warn if this doesn't exist
               maybe-result)))]))
 
+#;
 (module+ test
   (define-aspect sasp some-aspect "some aspect parent")
   ;(debug-repl)
@@ -833,9 +847,13 @@
                     [(_ value)
                      #'(begin-for-syntax
                          (set! name-data (cons value name-data)))]))
-                (define-syntax (name-get)  ; this works, but name-get without parens does not
+                (define-syntax (name-get stx)  ; this works, but name-get without parens does not
+                  (if (null? name-data)
+                      #''()
+                      (datum->syntax #f name-data))
                   name-data)
                 specialize-name)])
+       #;
        (pretty-print (syntax->datum out))
        out)]
     [(_ (~or (make name (~optional spec-name)) (:> name (~optional spec-name))) ; make binds the output name as a being/symbol
@@ -1155,7 +1173,8 @@
                     export-stx))
                 #;
                 (define name:aspect specification-phase))])
-       #;(pretty-print (syntax->datum out))
+       #;
+       (pretty-print (syntax->datum out))
        out)
      ]
     [(_ (inverse-measure name aspect*))
@@ -1252,6 +1271,7 @@
                   '(data
                     export-stx))
                 (define name specification-phase))])
+       #;
        (pretty-print (syntax->datum out))
        out)
      ]
