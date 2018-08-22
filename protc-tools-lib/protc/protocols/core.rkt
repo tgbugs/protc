@@ -3,6 +3,7 @@
 ; what shows up from (require protc/protocols)
 
 (require protc/private/direct-model)
+(provide (for-export has-part?))
 
 (spec (black-box thing thing)
       "Any nameable subset of physical reality existing at a single point in time")
@@ -10,8 +11,7 @@
 (spec (measure parent child has-part?)  ; vs (measure has-part?) (.inputs child)
       (.symret boolean?))
 
-#;
-(impl (has-part?)
+(impl (measure has-part?)
         (.executor human)
         (and (observe? parent)  ; this is mostly implicit observe? -> (true? (*observe parent))
              (observe? child)
@@ -217,5 +217,8 @@ Contrast this with a human being, where one subset is called and arm and another
 (impl (conc-by-known-mass)
       )
 
-
-
+(module+ test
+  impl/conc-by-known-mass
+  (impl (error-no-spec))
+  impl/error-no-spec
+  )

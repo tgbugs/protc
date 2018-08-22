@@ -27,7 +27,7 @@
          (prefix-in pdf: scribble/pdf-render)
          (prefix-in latex: scribble/latex-render)
          (prefix-in html: scribble/html-render)
-         (for-syntax racket/base syntax/parse racket/syntax)
+         (for-syntax racket/base syntax/parse racket/syntax protc/private/utils)
          )
 
 (module+ test
@@ -668,10 +668,7 @@
         (~optional (.bind-vars vals ...))   ; TODO make sure it matches impl-name .vars spec... (obvs)
         type:expr ... ; TODO programs
         )
-     #:with name-ast (format-id #'name
-                                #:source #'name
-                                "~a-ast"
-                                (syntax-e #'name))
+     #:with name-ast (fmtid "~a-ast" #'name)
      #'(begin
          (let-values ([(name scrib) (protc->scribble name-ast #:user (get-user))])
            (scribble->many #:name name scrib type ...)))
