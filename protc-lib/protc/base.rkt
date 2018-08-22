@@ -5,10 +5,10 @@
 ; see https://docs.racket-lang.org/guide/language-collection.html
 
 (require protc/private/kernel
-         protc/private/base
+         protc/private/direct-model #;base
          )
 (provide (all-from-out protc/private/kernel)
-         (all-from-out protc/private/base)
+         (all-from-out protc/private/direct-model #;base)
          )
 
 (module reader syntax/module-reader protc/base
@@ -19,5 +19,4 @@
                                 (λ () "INFO: protc-tools are not installed there will be no error reporting"))
         #:module-wrapper protc-module-wrapper
         (require protc/private/reader
-                 ;(only-in protc/get-info protc/base-get-info)
                  (submod protc/private/kernel module-wrapper)))

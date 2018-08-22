@@ -4,7 +4,7 @@
 
 (define (protc/base-get-info key default default-filter)
   (case key
-    ;[(color-lexer) (dynamic-require 'protc/base/colorer 'color)]
+    [(color-lexer) (dynamic-require 'protc/base/color 'protc-color)]
     ;[(drracket:indentation) (dynamic-require 'protc/base/indenter 'indent)]
     ;[(drracket:indentation) (indent)]
     [(drracket:toolbar-buttons) (dynamic-require 'protc/protcheck 'button-list)]

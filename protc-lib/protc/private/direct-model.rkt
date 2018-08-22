@@ -1095,7 +1095,7 @@
   ; will be empty
   (syntax-parse stx
     #:datum-literals (::)
-    [(_ (~optional impl-name) (aspect:id name:id ...+) body ...)
+    [(_ (~optional impl-name:id) (aspect:id name:id ...+) body:expr ...)
      #'(impl (~? impl-name) (actualize name ... aspect) body ...)]
     [(_ (~optional impl-name) ([:: aspect:id ...] name:id ...+) body ...)
      #''TODO]
@@ -1186,8 +1186,7 @@
      #:do ((define name-e (syntax-e #'name))
            (define maybefix (datum->syntax stx
                                            (syntax->datum #`(begin (spec ((~? type make) top-input ... name)
-                                                                         "Create this spec section and fill it in.")
-                                                                   #,stx))
+                                                                         "Create this spec section and fill it in.") #,stx))
                                            (list (quote-source-file)
                                                  (quote-line-number)
                                                  (quote-column-number)
@@ -1195,8 +1194,8 @@
                                                  (quote-character-span))
                                            #;
                                            (build-source-location-list (quote-srcloc))))
-           (pretty-print (list 'maybefix (syntax-debug-info maybefix)))
-           (pretty-print (list 'text (syntax-debug-info #'"YOU SUCK")))
+           ;(pretty-print (list 'maybefix (syntax-debug-info maybefix)))
+           ;(pretty-print (list 'text (syntax-debug-info #'"argh")))
            )
      #:with (errors ...) (make-errors [(identifier-binding (attribute spec-name-impls-add))
                                        stx
@@ -1233,9 +1232,14 @@
                           (.errors (~? (~@ errors ...)))
                           (.measures)
                           (other body ...))
+     #:do ((unless (identifier-binding (attribute spec-name-impls-add))
+             (void)
+             #; ; this works, but we need to produce warnings not errors
+             (raise-syntax-error 'protc-warning "no spec" stx #'name '()
+                                 "\n  Please create a spec section.")))
      #:with main #'(begin
                      ;(~? no-spec-yet) ; no guts yet
-                     errors ...  ; because the src loc is set at definition time this is ok
+                     errors  ... ; because the src loc is set at definition time this is ok
                      (spec-name-impls-add 'impl/name)
                      (provide impl/name)
                      (define impl/name
