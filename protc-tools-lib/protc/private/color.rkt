@@ -6,7 +6,7 @@
 
 (define-lex-abbrev section (:or "spec" "impl"))
 (define-lex-abbrev dots (:or ".uses" ".vars" ".inputs" ".symret"))
-(define-lex-abbrev base-executor (:or "lookup" "given" "same"))
+(define-lex-abbrev base-executor (:or "lookup" "given" "same" "for-all"))
 (define-lex-abbrev activity (:or "measure" "actualize" "make"
                                  "*:" ":*" "**"
                                  ">^>" ">v>" ":>"
@@ -16,8 +16,8 @@
 (define protc-lexer
   (lexer
    [(eof) (values lexeme 'eof #f #f #f)]
-   [dots (values lexeme 'other lexeme (pos lexeme-start) (pos lexeme-end))]  ; FIXME would to have #: color
-   [base-executor (values lexeme 'keyword lexeme (pos lexeme-start) (pos lexeme-end))]
+   [dots (values lexeme 'hash-colon-keyword lexeme (pos lexeme-start) (pos lexeme-end))]  ; see Style & Color Names
+   [base-executor (values lexeme 'other lexeme (pos lexeme-start) (pos lexeme-end))]
    [section (values lexeme 'keyword lexeme (pos lexeme-start) (pos lexeme-end))]
    [activity (values lexeme 'keyword lexeme (pos lexeme-start) (pos lexeme-end))]
    #;
@@ -31,7 +31,7 @@
                      ":"
                      "impl-measure" "impl-actualize" "impl-make"
                      ".uses" ".vars" ".inputs" ".symret"
-                     "lookup" "given" "same")))
+                     "lookup" "given" "same" "for-all")))
 
 (define (any-head? peek)
   (for/or ([h heads]) (string-prefix? peek h)))
