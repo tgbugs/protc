@@ -1,8 +1,7 @@
-#lang racket/base
+#lang protc/base
 ; TODO consider making this main.rkt so that it is
 ; what shows up from (require protc/protocols)
 
-(require protc/private/direct-model)
 (provide (for-export has-part?))
 
 (spec (black-box thing thing)
@@ -220,5 +219,4 @@ Contrast this with a human being, where one subset is called and arm and another
 (module+ test
   impl/conc-by-known-mass
   (impl (error-no-spec))
-  impl/error-no-spec
-  )
+  impl/error-no-spec)

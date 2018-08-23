@@ -2,15 +2,12 @@
 
 (provide protc/base-get-info)
 
-(require protc/syntax-hl
-         protc/protcheck)
-
 (define (protc/base-get-info key default default-filter)
   (case key
-    [(color-lexer) protc-color]
+    [(color-lexer) (dynamic-require 'protc/syntax-hl 'protc-color)]
     ;[(drracket:indentation) (dynamic-require 'protc/base/indenter 'indent)]
     ;[(drracket:indentation) (indent)]
-    [(drracket:toolbar-buttons) button-list]
+    [(drracket:toolbar-buttons) (dynamic-require 'protc/protcheck 'button-list)]
     [(drracket:default-filters) '(["Protc Sources" "*.ptc"])]
     [(drracket:default-extension) "rkt"]
     [else (default-filter key default)]))
