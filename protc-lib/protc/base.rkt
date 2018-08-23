@@ -16,7 +16,11 @@
         ;#:read-syntax read-syntax
         ;#:whole-body-readers? #t
         #:info (dynamic-require 'protc/get-info 'protc/base-get-info
-                                (λ () "INFO: protc-tools are not installed there will be no error reporting"))
+                                (λ ()
+                                  (λ (key default default-filter)
+                                    (display "INFO: protc-tools are not installed there will be no error reporting")
+                                    (default-filter default key)
+                                    )))
         #:module-wrapper protc-module-wrapper
         (require protc/private/reader
                  (submod protc/private/kernel module-wrapper)))

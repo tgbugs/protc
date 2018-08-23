@@ -2,51 +2,54 @@
 (require racket/string brag/support syntax-color/racket-lexer)
 (provide protc-color)
 
-(define-lex-abbrev section (:or "spec" "impl"))
-(define-lex-abbrev activity (:or "measure" "actualize" "make"))
+(displayln "protc syntax highlighting alive")
 
-(define (protc-color port offset mode)
-  (define-values (line col pos) (port-next-location port))
-  (define c (read-char port))
-  (cond
-    [(eof-object? c)
-     (values c 'eof #f #f #f 0 mode)]
-    [else
-     (values (string c)
-             (if mode 'error 'error)
-             #f
-             (+ pos)
-             (+ pos 1)
-             0
-             (not mode))]))
+(define-lex-abbrev section (:or "spec" "impl"))
+(define-lex-abbrev dots (:or ".uses" ".vars" ".inputs" ".symret"))
+(define-lex-abbrev base-executor (:or "lookup" "given" "same"))
+(define-lex-abbrev activity (:or "measure" "actualize" "make"
+                                 "*:" ":*" "**"
+                                 ">^>" ">v>" ":>"
+                                 ":"
+                                 "impl-measure" "impl-actualize" "impl-make"))
 
 (define protc-lexer
   (lexer
    [(eof) (values lexeme 'eof #f #f #f)]
+   [dots (values lexeme 'other lexeme (pos lexeme-start) (pos lexeme-end))]  ; FIXME would to have #: color
+   [base-executor (values lexeme 'keyword lexeme (pos lexeme-start) (pos lexeme-end))]
    [section (values lexeme 'keyword lexeme (pos lexeme-start) (pos lexeme-end))]
    [activity (values lexeme 'keyword lexeme (pos lexeme-start) (pos lexeme-end))]
    #;
    [any-char (values lexeme 'error #f (pos lexeme-start) (pos lexeme-end))]))
 
-#;
-(define plog (make-logger 'protc-color #f #;'drracket-language 'info))
+(define heads (map (λ (s) (string-append s " "))
+                   '("spec" "impl"
+                     "measure" "actualize" "make"
+                     "*:" ":*" "**"
+                     ">^>" ">v>" ":>"
+                     ":"
+                     "impl-measure" "impl-actualize" "impl-make"
+                     ".uses" ".vars" ".inputs" ".symret"
+                     "lookup" "given" "same")))
 
-#;
-(define (protc-color in)
-  (log-message plog 'info "currently inside protc-color ...")
-  (let-values ([(lexeme type paren start end) (racket-lexer in)])
-    (values lexeme 'keyword paren start end)))
+(define (any-head? peek)
+  (for/or ([h heads]) (string-prefix? peek h)))
 
-#;
-(define (protc-color port offset #;racket-coloring-mode?)
+(define (protc-color port offset mode)
   (cond
-    [(let ([peek (peek-string 9 0 port)])
-       (println peek)
-       (or (string-prefix? peek "spec")  ; FIXME ick
-           (string-prefix? peek "impl")
-           (string-prefix? peek "measure")
-           (string-prefix? peek "actualize")
-           (string-prefix? peek "make")))
+    #;
+    [(let ([peek (peek-string 1 0 port)])
+       (equal? peek "("))
+     (define-values (str cat paren start end)
+       (racket-lexer port))
+     (values str cat paren start end 0 'head-position)]
+    [(and (eqv? mode 'head-position)
+          (let ([peek (peek-string 10 0 port)])  ; FIXME this is horrible, would be better to try/catch :/
+            (println peek)
+            (and
+             (not (eof-object? peek))
+             (any-head? peek))))
      (define-values (str cat paren start end)
        (protc-lexer port))
      (displayln (list 'color?: str) (current-output-port))
@@ -58,11 +61,17 @@
              (equal? s0 "(")
              (equal? s0 "[")
              (equal? s0 "{"))))
-     (values str cat paren start end 0 #;switch-to-racket-mode)]
+     (values str cat paren start end 0 switch-to-racket-mode)]
     [else
      (define-values (str cat paren start end)
        (racket-lexer port))
-     (values str 'error paren start end 0 #;#t)]))
+     (let ([ccat (if (eof-object? str)
+                     'eof ; if you don't set eof and send error on eof drr will error
+                     cat
+                     #;
+                     'error)]
+           [mode (if (equal? str "(") 'head-position #t)])
+       (values str ccat paren start end 0 mode))]))
 
 (module+ test
   (require (for-syntax racket/base syntax/parse))
@@ -70,31 +79,34 @@
     (syntax-parse stx
       [(_ asdf:expr)
        #'(call-with-values (λ () asdf) list)]))
+  (values->list (protc-color (open-input-string "") 0 #t))
 
-  (values->list (protc-color (open-input-string "a") 0))
-  (values->list (protc-color (open-input-string "aa") 0))
-  (values->list (protc-color (open-input-string "aaa") 0))
+  (values->list (protc-color (open-input-string "aaa") 0 #t))
 
-  (values->list (protc-color (open-input-string "spec") 0))
-  (values->list (protc-color (open-input-string "impl") 0))
+  (values->list (protc-color (open-input-string "a") 0 #f))
+  (values->list (protc-color (open-input-string "aa") 0 #f))
+  (values->list (protc-color (open-input-string "aaa") 0 #f))
 
-  (values->list (protc-color (open-input-string "make") 0))
-  (values->list (protc-color (open-input-string "make") 0))
-  (values->list (protc-color (open-input-string "measure") 0))
-  (values->list (protc-color (open-input-string "actualize") 0))
+  (values->list (protc-color (open-input-string "spec") 0 'head-position))
+  (values->list (protc-color (open-input-string "impl") 0 'head-position))
 
-  (values->list (protc-color (open-input-string " impl") 0))
-  (values->list (protc-color (open-input-string "impl ") 0))
-  (values->list (protc-color (open-input-string "mpl (") 0))
-  (values->list (protc-color (open-input-string "pl (m") 0))
-  (values->list (protc-color (open-input-string "l (ma") 0))
-  (values->list (protc-color (open-input-string " (mak") 0))
+  (values->list (protc-color (open-input-string "make") 0 #f))
+  (values->list (protc-color (open-input-string "make") 0 'head-position))
+  (values->list (protc-color (open-input-string "measure") 0 #f))
+  (values->list (protc-color (open-input-string "actualize") 0 #f))
 
-  (values->list (protc-color (open-input-string "impl ") 0))
-  (values->list (protc-color (open-input-string "implement") 0))
+  (values->list (protc-color (open-input-string " impl") 0 #f))
+  (values->list (protc-color (open-input-string "impl ") 0 #f))
+  (values->list (protc-color (open-input-string "mpl (") 0 #f))
+  (values->list (protc-color (open-input-string "pl (m") 0 #f))
+  (values->list (protc-color (open-input-string "l (ma") 0 #f))
+  (values->list (protc-color (open-input-string " (mak") 0 #f))
 
-  (values->list (protc-color (open-input-string "(spec") 0))
-  (values->list (protc-color (open-input-string "(make") 0))
+  (values->list (protc-color (open-input-string "impl ") 0 'head-position))
+  (values->list (protc-color (open-input-string "implement") 0 #f))
 
-  (values->list (protc-color (open-input-string "(impl (a b c)) (spec (c d e))") 0))
+  (values->list (protc-color (open-input-string "(spec") 0 #f))
+  (values->list (protc-color (open-input-string "(make") 0 #f))
+
+  (values->list (protc-color (open-input-string "(impl (a b c)) (spec (c d e))") 0 #f))
   )

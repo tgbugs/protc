@@ -1,5 +1,5 @@
 #lang racket/base
 
-(displayln "local alive")
+(displayln "protc tools check local alive")
 
 ;;; implementation of local protocol checking procedures

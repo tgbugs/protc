@@ -1,5 +1,5 @@
 #lang racket/base
 
-(displayln "remote alive")
+(displayln "protc tools check remote alive")
 
 ;;; implementation of protocol checking procedures against a remote

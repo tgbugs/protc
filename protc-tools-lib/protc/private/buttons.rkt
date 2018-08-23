@@ -1,5 +1,7 @@
 #lang racket/base
 
+(displayln "protc tools export alive")
+
 ; saved once again by https://beautifulracket.com/jsonic-2/toolbar-buttons.html
 ; ultimately this should be implemented as a tool@ as is being worked on
 ; elsewhere in the repo, but getting the basic functionality up first is a priority
