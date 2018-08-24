@@ -6,6 +6,7 @@
          ;protc/utils  ; this is private ...
          rdf/utils
          protc/private/utils
+         racket/contract
          racket/provide-syntax
          ;(for-meta -1 racket/base)  ; needed for docstringf?
          (for-meta 2 syntax/parse racket/syntax racket/base)
@@ -95,8 +96,28 @@
 (define (runtime-protocol . name:aspect) "current-protocol TODO")
 (define (runtime-measure-name . name:aspect) '(get-current-impl name:aspect))
 (define runtime-executor (make-parameter null))  ; looks like a function
+
+
 (struct struct/result (protc:value source:protocol source:measure-name executor datetime)
-  #:inspector (make-inspector))
+  #:transparent
+  ;#:inspector (make-inspector)
+  )
+
+(struct struct/prov (executor impl datetime git-hash)
+  ; ideally executor is an orcid
+  #:transparent
+  )
+
+(provide (contract-out [store-result ([any/c (or/c number? string?)] [any/c] . ->* . any)]))
+; remember -- inside a module exported contracts are not enforced
+(define (store-result aspect value [prov null])
+  "aspect can be unit-expr unit or aspect
+value is any number or a string if the aspect is right (TODO)
+if prov is null then the only recourse is to check whether the source is
+under version control, but that is notoriously unreliable, results without prov
+should be considered to be completely hocus pocus IF they are stored
+"
+  )
 
 (define-syntax (define/symbol->being stx)
   ;; "actualize some aspect of a thing"

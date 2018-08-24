@@ -61,7 +61,10 @@ All actualize sections should specify a variable name that will be used in inher
 
 (require syntax/parse
          racket/dict
+         racket/list
          racket/syntax
+         protc/units/si-units-data
+         protc/units/si-prefixes-data
          (only-in racket/class class? object?)
          'prims
          (for-template 'prims racket/base syntax/parse)
@@ -93,8 +96,8 @@ All actualize sections should specify a variable name that will be used in inher
 
   #;
   (pattern (: thing:id -aspect:id ...)  ; FIXME consumes ....
-            #:attr aspects #'(list -aspect ...)
-            #:attr values #'())
+           #:attr aspects #'(list -aspect ...)
+           #:attr values #'())
   #;
   (~and (~not ....))
   (pattern (: thing:id -aspect:id ... (~optional ([aspect-value:id value] ...)))
@@ -307,3 +310,38 @@ All actualize sections should specify a variable name that will be used in inher
 (define-syntax-class sc-block-type
   #:datum-literals (measure actualize make)
   (pattern (~or measure actualize make)))
+
+
+;;; units syntax classes
+; ideally these should be drawn from aspect definitions at syntax time
+
+(define-syntax-class sc-unit
+  (pattern symb:id
+           #:fail-unless (member (syntax->datum #'symb) (flatten units-si)) "not a unit?"))
+
+(define-syntax-class sc-prefix
+  (pattern symb:id
+           #:fail-unless (member (syntax->datum #'symb) (flatten prefixes-si)) "not an si prefix?"))
+
+(define-syntax-class sc-unit-expr
+  #:datum-literals (+ - * / ^ ** expt)
+  (pattern (_ unit:sc-unit (~optional prefix:sc-prefix)))
+  (pattern (_ (oper unit-expe:sc-unit-expr ...))))
+
+(module+ test
+  (require rackunit)
+  (check-true (syntax-parse #'m [unit:sc-unit #t]))
+  (check-true (syntax-parse #'meters [unit:sc-unit #t]))
+  (check-exn exn:fail:syntax? (λ () (syntax-parse #'wendigo [unit:sc-unit #t])))
+
+  (check-true (syntax-parse #'m [prefix:sc-prefix #t]))
+  (check-true (syntax-parse #'milli [prefix:sc-prefix #t]))
+  (check-exn exn:fail:syntax? (λ () (syntax-parse #'wendigo [prefix:sc-prefix #t])))
+
+  (check-true (syntax-parse #'(unit meters milli) [expr:sc-unit-expr #t]))
+  (check-exn exn:fail:syntax? (λ () (syntax-parse #'(unit-expr (unit meters milli)) [expr:sc-unit-expr #'expr])))
+  (syntax-parse #'(unit-expr (* (unit meters milli))) [expr:sc-unit-expr #'expr])
+  (syntax-parse #'(unit-expr (+ (unit meters milli))) [expr:sc-unit-expr #'expr])
+  )
+
+
