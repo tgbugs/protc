@@ -1,7 +1,8 @@
 #lang racket/base
 
 (module prims racket/base
-  (require syntax/parse (for-syntax racket/base syntax/parse))
+  (require syntax/parse
+           (for-syntax racket/base syntax/parse))
   (provide (all-defined-out)
            (rename-out [:* actualize]
                        [*: measure]
@@ -55,24 +56,32 @@ All actualize sections should specify a variable name that will be used in inher
     (syntax-parse stx
       [(_ name:id body:expr)
        #'(define name body)]))
+
   )
 
 ;(for-template (only-in racket/base #%top #%app quote))
 
-(require syntax/parse
-         racket/dict
+(require racket/dict
          racket/list
          racket/syntax
-         protc/units/si-units-data
-         protc/units/si-prefixes-data
+         syntax/parse
          (only-in racket/class class? object?)
          'prims
          (for-template 'prims racket/base syntax/parse)
-         (for-syntax 'prims racket/base syntax/parse)
+         (for-syntax 'prims
+                     racket/base
+                     racket/list
+                     syntax/parse
+                     protc/units/si-units-data
+                     protc/units/si-prefixes-data)
          (for-meta -1 'prims (only-in racket/base quote))  ; OH MY GOD FINALLY
          "utils.rkt")
 (provide (except-out (all-defined-out) -asp)
          (all-from-out 'prims))
+
+(module+ test
+  (require rackunit
+           racket/function))
 
 (define-syntax-class message-struct-sc
   (pattern (-name:id body-pattern ...)
@@ -311,37 +320,172 @@ All actualize sections should specify a variable name that will be used in inher
   #:datum-literals (measure actualize make)
   (pattern (~or measure actualize make)))
 
-
 ;;; units syntax classes
 ; ideally these should be drawn from aspect definitions at syntax time
 
-(define-syntax-class sc-unit
-  (pattern symb:id
-           #:fail-unless (member (syntax->datum #'symb) (flatten units-si)) "not a unit?"))
 
-(define-syntax-class sc-prefix
-  (pattern symb:id
-           #:fail-unless (member (syntax->datum #'symb) (flatten prefixes-si)) "not an si prefix?"))
+(define-syntax (flerp stx)
+  (syntax-parse stx
+    [(_ name)
+     #`(define-literal-set name
+         #:datum-literals
+         ; expand units-si to pull in additional units at runtime
+         #,(datum->syntax this-syntax (remove-duplicates (flatten units-si))) ())]))
 
-(define-syntax-class sc-unit-expr
-  #:datum-literals (+ - * / ^ ** expt)
-  (pattern (_ unit:sc-unit (~optional prefix:sc-prefix)))
-  (pattern (_ (oper unit-expe:sc-unit-expr ...))))
+(flerp funits)
+
+(define unit? (literal-set->predicate funits))
+
+(define-syntax (derp stx)
+  (syntax-parse stx
+    [(_ name)
+     #`(define-literal-set name
+         #:datum-literals
+         #,(datum->syntax this-syntax (remove-duplicates (flatten prefixes-si))) ())]))
+
+(derp fprefixes)
+
+(define prefix? (literal-set->predicate fprefixes))
+
+(define-syntax-class symbol
+  (pattern thing
+           #:do ((define sl (syntax->list #'thing)))
+           #:fail-unless ; this is dumb :/
+           (and sl (= 2 (length sl)) (identifier? (cadr sl))) "not a symbol"
+           #:attr ident (datum->syntax this-syntax (cadr sl))))
+
+(module+ test (check-true (syntax-parse #'(quote wat) [thing:symbol #t])))
+
+(define-syntax-class sc-unit-name
+  (pattern ident:id #:fail-unless (unit? #'ident) "not a unit")
+  (pattern symb:symbol
+           #:fail-unless (unit? #'symb.ident) "not a unit"
+           #:attr ident #'symb.ident))
 
 (module+ test
-  (require rackunit)
-  (check-true (syntax-parse #'m [unit:sc-unit #t]))
-  (check-true (syntax-parse #'meters [unit:sc-unit #t]))
-  (check-exn exn:fail:syntax? (λ () (syntax-parse #'wendigo [unit:sc-unit #t])))
+  (check-true (syntax-parse #''m [unit:sc-unit-name #t]))
+  (check-true (syntax-parse #''meters [unit:sc-unit-name #t]))
 
-  (check-true (syntax-parse #'m [prefix:sc-prefix #t]))
-  (check-true (syntax-parse #'milli [prefix:sc-prefix #t]))
-  (check-exn exn:fail:syntax? (λ () (syntax-parse #'wendigo [prefix:sc-prefix #t])))
+  (check-true (syntax-parse #'m [unit:sc-unit-name #t]))
+  (check-true (syntax-parse #'meters [unit:sc-unit-name #t]))
+  (check-exn exn:fail:syntax? (thunk (syntax-parse #'wendigo [unit:sc-unit-name #t]))))
 
-  (check-true (syntax-parse #'(unit meters milli) [expr:sc-unit-expr #t]))
-  (check-exn exn:fail:syntax? (λ () (syntax-parse #'(unit-expr (unit meters milli)) [expr:sc-unit-expr #'expr])))
-  (syntax-parse #'(unit-expr (* (unit meters milli))) [expr:sc-unit-expr #'expr])
-  (syntax-parse #'(unit-expr (+ (unit meters milli))) [expr:sc-unit-expr #'expr])
-  )
+(define-syntax-class sc-prefix-name
+  (pattern ident:id #:fail-unless (prefix? #'ident) "not a prefix")
+  (pattern symb:symbol
+           #:fail-unless
+           (prefix? #'symb.ident) "not a prefix"
+           #:attr ident #'symb.ident))
+(module+ test
+  (check-true (syntax-parse #''m [prefix:sc-prefix-name #t]))
+  (check-true (syntax-parse #''milli [prefix:sc-prefix-name #t]))
+
+  (check-true (syntax-parse #'m [prefix:sc-prefix-name #t]))
+  (check-true (syntax-parse #'milli [prefix:sc-prefix-name #t]))
+  (check-exn exn:fail:syntax? (thunk (syntax-parse #'wendigo [prefix:sc-prefix-name #t]))))
+
+(define-syntax-class sc-unit
+  (pattern (_ unit:sc-unit-name (~optional prefix:sc-prefix-name))))
+(module+ test
+  (check-true (syntax-parse #'(unit 'meters 'milli) [expr:sc-unit #t]))
+  (check-true (syntax-parse #'(unit meters milli) [expr:sc-unit #t])))
+
+
+(define-syntax-class sc-unit-oper
+  (pattern (oper:id (~or* expr:sc-unit-oper unit:sc-unit) ...)))
+(module+ test
+  (check-true (syntax? (syntax-parse #'(* (unit meters milli)) [expr:sc-unit-oper #'expr])))
+  (check-true (syntax? (syntax-parse #'(* (unit siemens mega)
+                                          (^ (unit seconds)))
+                         [expr:sc-unit-oper #'expr])))
+  (check-exn exn:fail:syntax? (thunk (syntax-parse #'(* 10
+                                                        (unit meters milli)
+                                                        (^ (unit seconds)))
+                                       [expr:sc-unit-oper #'expr]))))
+
+(define-syntax-class sc-unit-expr
+  #:datum-literals (param:unit-expr unit-expr)
+  ; TODO do the transformation here
+  ;(pattern (_ unit:sc-unit-name (~optional prefix:sc-prefix-name)))
+  (pattern ((~or* param:unit-expr unit-expr) unit-oper:sc-unit-oper)))
+(module+ test
+  (check-exn exn:fail:syntax? (thunk (syntax-parse #'(unit-expr (unit meters milli)) [expr:sc-unit-expr #'expr])))
+  (check-true (syntax? (syntax-parse #'(unit-expr (* (unit meters milli))) [expr:sc-unit-expr #'expr])))
+  (check-true (syntax? (syntax-parse #'(unit-expr (+ (unit meters milli))) [expr:sc-unit-expr #'expr.unit-oper])))
+  (check-true (syntax? (syntax-parse #'(unit-expr (/ (unit meters) (unit seconds)))
+                         [expr:sc-unit-expr #'expr.unit-oper]))))
+
+(define-syntax-class sc-quantity
+  #:datum-literals (quantity param:quantity)
+  (pattern ((~or* param:quantity quantity) value:number (~or unit:sc-unit unit-expr:sc-unit-expr))))
+(module+ test
+  (check-true
+   (syntax-parse #'(quantity 10 (unit seconds))
+     [expr:sc-quantity #t]))
+  (check-true
+   (syntax-parse #'(quantity 10 (unit-expr (/ (unit meters) (unit seconds))))
+     [expr:sc-quantity #t])))
+
+(define-syntax-class sc-cur-oper
+  (pattern (oper:id (~or* expr:sc-cur-oper quant:sc-quantity) ...)))
+
+(define-syntax-class sc-cur-expr
+  #:datum-literals (param:expr expr)
+  (pattern ((~or* expr param:expr) oper-expr:sc-cur-oper)))
+
+
+;;; curation syntax classes 
+
+(define-syntax (define-sc-aspect-lift stx)
+  (syntax-parse stx
+    [(_ name oper-name alt ...)
+     #:with internal-~? (datum->syntax this-syntax '~?)
+     #'(define-syntax-class name
+         #:datum-literals (oper-name alt ...)
+         (pattern ((~or* oper-name alt ...) prov quantity:sc-quantity)
+                  #:attr lifted #'(aspect prov
+                                          (internal-~? quantity.unit
+                                              (internal-~? quantity.unit-expr
+                                                  (raise-syntax-error
+                                                   'no-unit "quantity missing unit"
+                                                   this-syntax quantity)))
+                                          (oper-name 'lifted quantity))))]))
+
+(define-sc-aspect-lift sc-cur-parameter* parameter* param:parameter*)
+
+(define-sc-aspect-lift sc-cur-invariant invariant param:invariant)
+
+(define-syntax-class sc-cur-aspect
+  #:datum-literals (aspect protc:aspect protc:implied-aspect)
+  (pattern ((~or* aspect protc:aspect protc:implied-aspect)
+            name:str prov (~or* inv:sc-cur-invariant par:sc-cur-parameter*))))
+
+(module+ test
+  (check-equal? (syntax-parse #'(invariant (hyp: '0) (quantity 10 (unit meters)))
+                  [thing:sc-cur-invariant (syntax->datum #'thing.lifted)])
+                '(aspect (hyp: '0) (unit meters) (invariant 'lifted (quantity 10 (unit meters)))))
+
+  (check-equal? (syntax-parse #'(parameter* (hyp: '0) (quantity 10 (unit meters)))
+                  [thing:sc-cur-parameter* (syntax->datum #'thing.lifted)])
+                '(aspect (hyp: '0) (unit meters) (parameter* 'lifted (quantity 10 (unit meters)))))
+
+  (syntax-parse #'(parameter* (hyp: '0)
+                              (quantity 10
+                                        (unit-expr (/ (unit meters)
+                                                      (unit seconds)))))
+    [thing:sc-cur-parameter* #'thing.lifted])
+
+  (define-syntax (testthing stx)
+    ; ~? testing
+    (syntax-parse stx
+      [(_ (~optional a)
+          (~optional (~seq #:b b))
+          (~optional (~seq #:c c))
+          )
+       #'(~? a (~? b (~? c "d")))
+       #; ; well, this works other than I thought it did
+       #'(~? a b c "d")])))
+
+
 
 

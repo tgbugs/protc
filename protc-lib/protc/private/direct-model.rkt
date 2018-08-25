@@ -41,6 +41,14 @@
          bind/symbol->being
          being->symbol
          validate/being
+
+         define-make
+         define-measure
+         define-actualize
+
+         impl-make
+         impl-measure
+         impl-actualize
          )
 
 ;;; provide machinery
@@ -1093,6 +1101,23 @@ should be considered to be completely hocus pocus IF they are stored
      #''TODO]  ; FIXME aspect chain syntax :/
     ))
 
+(define-syntax (define-make stx)
+  (syntax-parse stx
+    [(_ (spec-name:id (~optional black-box:id)) body ...)
+     #:with name #'(~? black-box spec-name)
+     #:attr -spec-name (if (attribute black-box)
+                           #'spec-name
+                           #f)
+     #'(spec (make name (~? -spec-name))
+             ; spec-names in addition to names are a bad idea?
+             ; how many specs can we have for a black box?
+             ; one spec per bb? reconciling specs to the same
+             ; phenomena should be done with data not assertion???
+             ; think more about this ...
+
+             ; FIXME this totally fails to match up .inputs because of expansion to .inputs.1
+             body ...)]))
+
 (module+ test
   (define-measure (part-of? child parent)
     (.symret boolean?)
@@ -1102,6 +1127,10 @@ should be considered to be completely hocus pocus IF they are stored
   (define-actualize ([:: allocation mass] thing)
     (.expects (composite? thing))
     (.outputs '(subset thing) (- thing '(subset thing)))
+    )
+  (define-make (rig)
+    "put our rig together"
+    (.inputs objective bx51wi etc)
     )
   )
 
