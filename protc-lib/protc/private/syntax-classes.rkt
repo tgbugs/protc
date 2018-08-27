@@ -494,6 +494,14 @@ All actualize sections should specify a variable name that will be used in inher
   (check-true (syntax? (syntax-parse #'(unit-expr (/ (unit meters) (unit seconds)))
                          [expr:sc-unit-expr #'expr.unit-oper]))))
 
+
+(define-syntax-class sc-dilution  ; TODO
+  #:datum-literals (dilution param:dilution)
+  (pattern ((~or* dilution param:dilution) low:integer high:integer)
+           #:attr aspect #'"dilution"
+           #:attr normalized #'(dilution low high)
+           ))
+
 (define-syntax-class sc-quantity
   #:datum-literals (quantity param:quantity
                              fuzzy-quantity protc:fuzzy-quantity
@@ -512,6 +520,7 @@ All actualize sections should specify a variable name that will be used in inher
            #:attr unit #f
            #:attr unit-expr #f
            #:attr normalized #'(fuzzy-quantity fuzzy-value aspect))
+  
   (pattern ((~or* dimensions param:dimensions) quant:sc-quantity ...)  ; TODO
            #:attr aspect #f  ; TODO
            #:attr unit #f  ; TODO
@@ -552,14 +561,15 @@ All actualize sections should specify a variable name that will be used in inher
      #'(define-syntax-class name
          #:literals (aspect-lifted)
          #:datum-literals (oper-name alt ...)
-         (pattern ((~or* oper-name alt ...) quantity:sc-quantity (~optional rest) prov)
+         (pattern ((~or* oper-name alt ...) (~or* quantity:sc-quantity dil:sc-dilution) (~optional rest) prov)
                   #:attr lifted ;(syntax/loc this-syntax
                   #'(aspect-lifted (-~? quantity.aspect
-                                      (raise-syntax-error
-                                       'no-unit "quantity missing unit"
-                                       this-syntax quantity))
+                                        (-~? dil.aspect 
+                                             (raise-syntax-error
+                                              'no-unit "quantity missing unit"
+                                              this-syntax (~? quantity))))
                                  prov
-                                 (oper-name 'lifted quantity.normalized))))]))
+                                 (oper-name 'lifted (-~? quantity.normalized dil.normalized)))))]))
 
 (define-sc-aspect-lift sc-cur-parameter* parameter* protc:parameter*)
 
@@ -573,7 +583,15 @@ All actualize sections should specify a variable name that will be used in inher
 (define-syntax-class sc-cur-aspect
   #:datum-literals (aspect protc:aspect protc:implied-aspect)
   (pattern ((~or* aspect protc:aspect protc:implied-aspect)
-            name:str prov (~or* inv:sc-cur-invariant par:sc-cur-parameter*))))
+            name:str prov (~or* inv:sc-cur-invariant par:sc-cur-parameter*)))
+  #; ; FIXME this isn't working correctly
+  (pattern ((~or* aspect protc:aspect protc:implied-aspect)
+            ; TODO figure out the right way to handle these
+            ; the intention of the structure is clear, we just need to
+            ; figure out what to do with it
+            ; FIXME do not want?
+            name:str prov (~or* multi-inv:sc-cur-invariant multi-par:sc-cur-parameter*) +...))
+  )
 
 (define-syntax-class sc-cur-input
   #:datum-literals (input protc:input protc:implied-input)

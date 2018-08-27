@@ -148,6 +148,9 @@
 (define-syntax (i-have-no-idea stx)
   #''TODO)
 
+(define-syntax (para:dilution stx)
+  #''TODO)
+
 (module+ test
 
   (define-syntax (test?-2 stx)
