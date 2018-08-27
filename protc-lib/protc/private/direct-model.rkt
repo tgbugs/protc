@@ -8,6 +8,7 @@
          protc/private/utils
          racket/contract
          racket/provide-syntax
+         "aspects.rkt"
          ;(for-meta -1 racket/base)  ; needed for docstringf?
          (for-meta 2 syntax/parse racket/syntax racket/base)
          (for-syntax racket/base
@@ -255,126 +256,7 @@ should be considered to be completely hocus pocus IF they are stored
          ((list ))
          )]))
 
-(define-syntax (define-aspect stx)
-  ; FIXME this is still not as useful as I would like ...
-  (syntax-parse stx
-    [(_ shortname:id name:id
-        (~optional (~seq #:parent parent))
-        constructive-definition:expr  ; FIXME need a way to look inside of these
-        )
-     #;
-     ; TODO need this this as a way to document the arity of our aspects, also makes more sense logically
-     ; HOWEVER given that my use of aspect is _very_ close to 'measureable' this may be moot ...
-     ; and multi arity aspects will simply be treated as 'complex' and requiring some computation
-     ; e.g. (kD/allolosteric enzyme modulator) where temperature is implicit
-     ; as opposed to chained or typed aspects, where act mass is different from act [allocation mass]
-     (_ (~or (aspect:id being-name-multi:id ...+)
-             ([aspect-multi:id ...] being-name:id))
-        (~optional (~seq #:parent parent:id))
-        (~optional (~seq #:abbrev shortname:id))  ; aka shortaspect
-        constructive-definition:expr  ; FIXME need a way to look inside of these
-        )
-     ;#:with aspect/name (fmtid "aspect/~a" #'(~? aspect (aspect-multi ...)))  ; FIXME need (: a b c) macro
-     #:with aspect/name (fmtid "aspect/~a" #'name)
-     #:attr aspect/shortname (if (and (attribute shortname)
-                                      (not (eqv? (syntax-e #'name)
-                                                 (syntax-e #'shortname))))
-                                 (fmtid "aspect/~a" #'shortname)
-                                 #f)
-     #:attr -shortname (if (eqv? (syntax-e #'shortname) (syntax-e #'name)) #f #'shortname)
-     #:attr aspect/parent (if (attribute parent) (fmtid "aspect/~a" #'parent) #f)
-     #:with parent-data (if (attribute parent) (fmtid "~a-data" #'parent) #f)  ; this canont use attr??? or maybe it can?
-     #:attr parent-add (if (attribute parent) (fmtid "~a-add" #'parent) #f)
-     #:attr aspect/parent-stx (if (attribute aspect/parent)
-                                  ; FIXME get the original location of the syntax
-                                  #; ;FIXME why does this break!?
-                                  (syntax-local-value #'aspect/parent)
-                                  #'(parent #:children #f)
-                                  #f)
-     #:with aspect-data (fmtid "~a-data" #'name)
-     #:with aspect-add (fmtid "~a-add" #'name)
-     #:with aspect-get (fmtid "~a-get" #'name)
-     #:attr shortaspect-data (if (attribute aspect/shortname) (fmtid "~a-data" #'shortname) #f)
-     #:with shortaspect-add (fmtid "~a-add" #'shortname)  ; ok to define this unconditionally
-     #:with shortaspect-get (fmtid "~a-get" #'shortname)  ; ok to define this unconditionally
-     #:attr shortaspect-add-stx (if (attribute aspect/shortname)
-                                    #'(define-syntax (shortaspect-add stx)
-                                        (syntax-parse stx
-                                          [(_ value)
-                                           #'(aspect-add value)]))
-                                    #f)
-     #:attr shortaspect-get-stx (if (attribute aspect/shortname)
-                                    #'(define-syntax (shortaspect-get stx)
-                                        aspect-data)
-                                    #f)
 
-     #:with childs #'(.children ,@(map (λ (proc) (if (procedure? proc)
-                                                     (begin (println proc)
-                                                            ; here's the infinite loop we've been waiting for
-                                                            (proc #:parent #f))
-                                                     proc))
-                                       (aspect-get)
-                                       ))
-     #:with data-alist #``((.name . name)
-                           (.shortname . shortname)
-                           (.def . constructive-definition)
-                           (.parent (~? ,@aspect/parent-stx))
-                           childs
-                           )
-     #:attr aspect/name-stx #'(define aspect/name data-alist) ; TODO rosette integration
-     #:attr aspect/shortname-stx (if (attribute aspect/shortname)
-                                     #'(define aspect/shortname aspect/name)
-                                     #f)
-     #:attr aspect-parent-add-stx (if (attribute parent-add)
-                                      (begin
-                                        #;  ; debug
-                                        (println `(adding ,(syntax->datum #'aspect/name) to
-                                                          ,(syntax->datum #'parent)) )
-                                        #'(parent-add 'aspect/name))
-                                      #f)
-     ; TODO syntax-local-value to look this stuff up for use in rosette
-     #`(begin
-         (provide aspect/name (~? aspect/shortname))
-         aspect/name-stx
-         (~? aspect/shortname-stx)  ; have to use this form, otherwise it seems that the nested missing parent will force skip all...
-         (define-for-syntax aspect-data '())
-         (~? (define-for-syntax shortaspect-data aspect-data))
-         (define-syntax (aspect-add stxi)
-           (syntax-parse stxi
-             [(_ value)
-              #;  ; debug
-              (println `(adding ,(syntax->datum #'value) to name))
-              #'(begin-for-syntax
-                  (set! aspect-data (cons value aspect-data))
-                  (~? (set! shortaspect-data aspect-data))
-                  )]))
-         (define-syntax (aspect-get stx)
-           #`(quote #,aspect-data))
-
-         (~? shortaspect-add-stx)
-         (~? shortaspect-get-stx)
-
-         (~? aspect-parent-add-stx)
-         (define (name #:children [c #t] #:parent [p #t] [data data-alist])
-           ; FIXME can we do this at compile time?
-           (println (list 'rt: name c p))
-           (if c
-               (if p
-                   data
-                   (let ([r (reverse data)])
-                     (reverse (cons (car r) (cddr r)))))
-               (let ([r (reverse data)])
-                 (if p
-                     (reverse (cdr r))
-                     (reverse (cddr r)))))
-           #;
-           (cons `(.children ,@(get-specs aspect-data #,stx))
-                 data-alist))
-         (~? (define (-shortname #:children [c #t] #:parent [p #t]) (name #:children c #:parent p)))
-         )
-     ]
-    )
-  )
 
 (define-syntax (lookup stx)  ; FIXME this implementation is totally broken
   ; this is an export time function
@@ -400,18 +282,6 @@ should be considered to be completely hocus pocus IF they are stored
           (if (null? maybe-result)
               (measure being aspect)  ; FIXME we do need to warn if this doesn't exist
               maybe-result)))]))
-
-(module+ test
-  (define-aspect sasp some-aspect "some aspect parent")
-  ;(debug-repl)
-  ;(println (list "its workgin!??!" (get-specs sasp-data #'lol)))
-  (sasp)
-  ; LOL wow, ok, well, if you call (sasp) here, and a child has been defined
-  ; then it will try to reference aspect/some-aspect-child and fail ... wat
-  (define-aspect saspc some-aspect-child #:parent sasp "some aspect child")
-  (sasp)
-  (saspc)
-  )
 
 (define-syntax (define-participant stx)
   ; black boxes or participants
@@ -679,25 +549,14 @@ should be considered to be completely hocus pocus IF they are stored
                       ; carrying the information that it has been modified
 
                       black-box participant being
-
-                      order
-                      .executor
-                      .uses
-                      .vars
-                      .config-vars
-                      .inputs
-                      .outputs
-                      .symret
-                      .steps
-                      .measures  ; FIXME remove archaic
-
-                      )
+                      order)
+    #:literal-sets (protc-fields identifier-functions)
     #:local-conventions ([name id]
                          [spec-name id]
                          [specific-name id]
                          [parent-type id]
                          ;[aspect id]
-                         [docstring string]
+                         [docstring str]
                          [input id]
                          [constrained-input id]
                          [var id]
@@ -710,7 +569,10 @@ should be considered to be completely hocus pocus IF they are stored
                          [aspect-multi id]
                          [aspect* expr]  ; TODO
                          [oper id]
-                         [identifier string]  ; TODO or macro? (DOI: check my syntax please?)
+                         [identifier expr]  ; TODO or macro? (DOI: check my syntax please?)
+                         [cur-input sc-cur-input]
+                         [other-input expr]  ; TODO contract returns an identifier
+                         [body expr]
                          )
     [(_ (~or (black-box specific-name parent-type) (participant specific-name parent-type)
              (being specific-name parent-type))
@@ -781,19 +643,38 @@ should be considered to be completely hocus pocus IF they are stored
                (datum->syntax #f name-data))
            #`(quote #,name-data))
          specialize-name)]
-    [(_ (~or (make name (~optional spec-name)) (:> name (~optional spec-name))) ; make binds the output name as a being/symbol
+    [(_ (~or* (make name (~optional spec-name)) (:> name (~optional spec-name))) ; make binds the output name as a being/symbol
         ; this approach has the drawback that (make name) is now the only way to refer to this process?
         ; false, that is where impl comes in, but how do we deal with the 1000 different ways to spec
         ; (measure mouse is) ? most of the time we are not going to be 'making' mice... because we
         ; since that is essentially (begin (+ male-mouse female-mouse food water territory) (wait)) -> mice
         (~optional docstring)
-        (~optional (.id identifier))
-        (~optional (.uses import ...))  ; subProtocolOf ???
-        (~optional (.vars var ...))
-        ;(~optional (.inputs inputs ...))
-        (~optional (.inputs (~or input [oper constrained-input aspect* ...]) ...))
-        ;(.outputs outputs ...)  ; technically these should be extra-outputs?
-        (~optional (.steps step ...))
+        (~alt
+          (~optional (~seq #:inputs ((~alt
+                                      input
+                                      [oper constrained-input aspect* ...]
+                                      cur-input
+                                      other-input
+                                      ) ...
+                                     ;other-input ...
+                                     )))
+          (~optional (~seq #:constraints (constraint ...)))  ; these are implicitly on the output
+
+          #;
+          (~optional (.inputs (~alt input [oper constrained-input aspect* ...]
+                                    cur-input
+                                    ) ...))
+          #;
+          (~optional (.constraints constraint ...))  ; these are implicitly on the output
+          (~optional (~seq #:id identifier))  ; FIXME does this work? is it useful?
+          (~optional (~seq #:prov prov))  ; TODO do we need more than one?
+          (~optional (.uses import ...))  ; subProtocolOf ???
+          #;
+          (~optional (.vars var ...))
+          (~optional (~seq #:vars (var ...)))
+          ;(~optional (.inputs inputs ...))
+          ;(.outputs outputs ...)  ; technically these should be extra-outputs?
+          (~optional (~seq #:steps (step ...)))) ...
         body ...
         ;return-being  ; all we have is the name, the defining measures probably should return implicitly...
         )
@@ -824,10 +705,17 @@ should be considered to be completely hocus pocus IF they are stored
      #:with export-stx #'((.executor)
                           (.type . make)
                           (.name . (~? spec-name name))
+                          (.black-box name)
                           (.docstringf . docstringf)
                           (.docstring . (~? docstring ""))
-                          (.inputs (~? (~@ input ...)) (~? (~@ constrained-input ...)))
+                          (.inputs (~? (~@ input ...))
+                                   (~? (~@ ,cur-input ...))
+                                   (~? (~@ constrained-input ...))
+                                   (~? (~@ ,other-input ...))
+                                   )
+                          ;(.inputs (~? (~@ input ...)))
                           (.outputs name)
+                          (.constraints (~? (~@ ,constraint ...)))  ; principle of least surprise fails for ~optional but not for ~or* ???
                           (.vars (~? (~@ var ...)))  ; TODO these need to be requested before export to pdf
                           (.measures (~? (~@ (constrained-input aspect* ...) ...)))
                           (.steps (~? (~@ step.instruction ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
@@ -836,8 +724,10 @@ should be considered to be completely hocus pocus IF they are stored
                           ; the debug message is totally useless for (~optional (datum thing ...))
                           ; :/ took me 3 hours to figure out how to debug it properly
                           (.errors "example error")
-                          (.measures)
+                          (.prov (~? prov))
                           (other body ...)
+                          ; FIXME this fall through means that fail-unless syle errors
+                          ; just keep parsing and we end up with name errors
                      )
      #:with name-binding (let* ([-name #'name]
                                 [-name-stx #'name-stx])
@@ -865,7 +755,7 @@ should be considered to be completely hocus pocus IF they are stored
                       (set! name-impls-data (cons value name-impls-data)))]))
              (define-syntax (name-impls-get stx)  ; this works, but name-get without parens does not
                #`(quote #,name-impls-data))
-             (provide spec/name)
+             ;(provide spec/name)
              (define spec/name
                `export-stx))
          #`(begin
@@ -882,6 +772,7 @@ should be considered to be completely hocus pocus IF they are stored
              ; 1-ary aspects? TODO verify this claim
              )
         ; FIXME TODO arbitrary ordering ...
+        (~alt
         (~optional (.uses import ...))  ; the reason we do this is to keep the relevant names under control
         (~optional docstring)
         (~optional (.vars var ...))
@@ -898,6 +789,7 @@ should be considered to be completely hocus pocus IF they are stored
         ; TODO naming, this is really a type restriction ... also (values ...)
         ; but... how to spec data structure and binding for more complex cases
         ; also contracts...
+         ) ...
 
         body ...
         #;return-symbolic)  ; FIXME I think this is wrong...
@@ -949,7 +841,7 @@ should be considered to be completely hocus pocus IF they are stored
              (aspect-add '(name ...))  ; TODO transform to name-name-name-...?
              (define-syntax aspect-stx  ; FIXME still needed for some reason ...
                #'export-stx)
-             (provide spec/*aspect)
+             ;(provide spec/*aspect)
              (define spec/*aspect ; yes you can, you have to quasiquote it
                `export-stx)
              (define-for-syntax aspect-impls-data '())
@@ -1049,7 +941,7 @@ should be considered to be completely hocus pocus IF they are stored
                      ;(aspect-add '(name ...))  ; TODO transform to name-name-name-...?
                      (define-syntax aspect-stx  ; FIXME still needed for some reason ...
                        #'export-stx)
-                     (provide spec/aspect*)
+                     ;(provide spec/aspect*)
                      (define spec/aspect*
                        `export-stx)
                      (define-for-syntax aspect*-impls-data '())
@@ -1100,10 +992,21 @@ should be considered to be completely hocus pocus IF they are stored
     [(_ ([:: aspect:id ...] name:id ...+) body ...)
      #''TODO]  ; FIXME aspect chain syntax :/
     ))
+(module+ test
+  (define-measure (part-of? child parent)
+    (.symret boolean?)
+    ; TODO how to auto inherit impls from has-part?
+    (has-part? parent child))
+  (define-measure (composite? thing) "see definition in protc/protocols/core")
+  (define-actualize ([:: allocation mass] thing)
+    (.expects (composite? thing))
+    (.outputs '(subset thing) (- thing '(subset thing)))
+    ))
 
 (define-syntax (define-make stx)
   (syntax-parse stx
-    [(_ (spec-name:id (~optional black-box:id)) body ...)
+    [(_ (spec-name:id (~optional black-box:id))
+        body ...)
      #:with name #'(~? black-box spec-name)
      #:attr -spec-name (if (attribute black-box)
                            #'spec-name
@@ -1116,27 +1019,29 @@ should be considered to be completely hocus pocus IF they are stored
              ; think more about this ...
 
              ; FIXME this totally fails to match up .inputs because of expansion to .inputs.1
+             ;(~? doc)
              body ...)]))
 
+
 (module+ test
-  (define-measure (part-of? child parent)
-    (.symret boolean?)
-    ; TODO how to auto inherit impls from has-part?
-    (has-part? parent child))
-  (define-measure (composite? thing) "see definition in protc/protocols/core")
-  (define-actualize ([:: allocation mass] thing)
-    (.expects (composite? thing))
-    (.outputs '(subset thing) (- thing '(subset thing)))
-    )
+  (spec (make specrig)
+        "the spec make version of rig"
+        #:inputs (hahahah)  ; WHAT running this before vars BREAKS .var
+        #:vars (this works out)
+        #;(.inputs this currently fails??))
+
   (define-make (rig)
     "put our rig together"
-    (.inputs objective bx51wi etc)
-    )
+    ;#:inputs (objective bx51wi etc)
+    #:inputs (objective bx51wi etc "hello" (+ 1 2)))
+
   )
+
+
 
 (define-syntax (impl-measure stx)
   (syntax-parse stx
-    [(_ (~optional impl-name) (aspect:id name:id ...+) body ...)
+    [(_ (~optional impl-name) (aspect:id name:id ...+) body:lol ...)
      #'(impl (~? impl-name) (measure name ... aspect) body ...)]))
 
 (define-syntax (impl-actualize stx)
@@ -1179,7 +1084,8 @@ should be considered to be completely hocus pocus IF they are stored
                          [step sc-step-ref]
                          [type sc-block-type]
                          [docstring string])
-    #:datum-literals (order .executor .vars .inputs .steps make)
+    #:datum-literals (order make)
+    #:literal-sets (protc-fields)
     #;[(_ name body ...)
        #''TODO]
     #;[(_ (name) body ...)
@@ -1291,7 +1197,7 @@ should be considered to be completely hocus pocus IF they are stored
                      ;(~? no-spec-yet) ; no guts yet
                      errors  ... ; because the src loc is set at definition time this is ok
                      (spec-name-impls-add 'impl/name)
-                     (provide impl/name)
+                     ;(provide impl/name)
                      (define impl/name
                        `export-stx))
      (if (identifier-binding (attribute spec-name-impls-add))
@@ -1316,6 +1222,19 @@ should be considered to be completely hocus pocus IF they are stored
   (syntax-parse stx
     [(_ thing aspect ...)
      #''TODO])
+  )
+
+;;; literal sets
+(require syntax/parse)
+(provide protc-ops)
+(define-literal-set protc-ops
+  (define-make
+   define-measure
+   define-actualize
+   impl-make
+   impl-measure
+   impl-actualize
+    )
   )
 
 (module+ test

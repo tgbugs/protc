@@ -7,7 +7,7 @@
   (l . liters) ; often seen in ul or ml
   (mol . moles)
   (M . molarity) ; molar
-  (_m . molality) ;FIXME molal
+  (mol/kg . molality) ;FIXME NOTE molal is deprecated use mol/kg
   (K . kelvin)
   (°C . degrees-celcius)
   (~oC . degrees-celcius) ; Tom also accepts using the digraph for the degree symbol...
@@ -46,5 +46,5 @@
   (Gy . grays)
   (Sv . sieverts)
   (kat . katals)
-  (dB . decibels))
+  (dB . decibels))  ; FIXME not an SI unit ... dimensionless?
 )

@@ -72,6 +72,7 @@
          "the idea was correct, but these probably should just be symbolic measures, since it sounds warm and fuzzy to say 'we controlled for this by' when in fact there was really no choice, cold hard logic said that you couldn't interpret your results if you didn't do this. Therefore it is not a goal, controls are not aspirational. protc:objective* also does not work because in this case you aren't trying to induce a state of 'controlledness' on the world (in other cases you might do certain things to reduce/manage/control variance). Instead you are trying to make sure that the transformations you have to impose are not inducing your results.")
 (tag-doc 'protc:function '(ilxtr:deprecatedTag ilxtr:aspect)
          "Prefer `protc:symbolic-measure` which makes more sense in the context of `protc:*measure`. Usually an analysis function that converts data -> data. [3-15-18: The text that these target are usually apsects, often complex aspects that must be measured on symbolic inputs. The proper way to tag them is probably as protc:aspect ilxtr:hasInformationInput with the text box holding links to the intput?]")
+
 (tag-doc 'protc:has-part '()
          "used for asserting has part relationships for participants (black boxes)")
 (tag-doc 'protc:how '(ilxtr:implementation ilxtr:compoundTechnique)
@@ -132,6 +133,8 @@
          "")
 (tag-doc 'protc:parent-doi '()
          "")
+(tag-doc 'protc:fuzzy-quantity '(ilxtr:)
+         "Fuzzy quantities are quantities that have some meaning, but that are not strictly quantified. Some examples are \"room temperature\", and \"overnight\". [At the moment this is only used internally, it is not currently used in the curation workflow
 (tag-doc 'protc:referenced-for-use-by '()
          "")
 (tag-doc 'protc:references-for-evidence 'ilxtr:citationTag

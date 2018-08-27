@@ -1,8 +1,16 @@
 #!/usr/bin/env python3.6
+"""Run protcur analaysis
+Usage:
+    analysis [options]
+
+Options:
+    -s --sync   sync
+"""
 
 import os
 import re
 import ast
+import json
 from pathlib import PurePath
 from collections import Counter
 from IPython import embed
@@ -578,15 +586,18 @@ class AstGeneric(Hybrid):
                  'annotation-text:children',
                  'annotation-correction')
     children_tags = 'annotation-children:delete',
+    lang_line = ''
     #indentDepth = 2
     #objects = {}
     #_tagIndex = {}
     #_order = tuple()
     #_topLevel = tuple()
     linePreLen = 0
+
     @staticmethod
     def _value_escape(value):
-        return '"' + value.strip().replace('"', '\\"') + '"'
+        return json.dumps(value.strip())
+        #return '"' + value.strip().replace('"', '\\"') + '"'
 
     def _dispatch(self):
         def inner():
@@ -603,22 +614,31 @@ class AstGeneric(Hybrid):
 
     @classmethod
     def parsed(cls):
-        return ''.join(sorted(repr(o) for o in cls.objects.values() if o is not None and o.isAstNode))
+        return (cls.lang_line + '\n' +
+                ''.join(sorted(repr(o)
+                               for o in cls.objects.values()
+                               if o is not None and o.isAstNode)))
 
     @classmethod
     def topLevel(cls):
-        return ''.join(sorted(repr(o) for o in cls.objects.values()
-                              if o is not None and o.isAstNode and not o.hasAstParent and o.astType in cls._topLevel))
+        return (cls.lang_line + '\n' +
+                ''.join(sorted(repr(o) for o in cls.objects.values()
+                               if o is not None and
+                               o.isAstNode and
+                               not o.hasAstParent and
+                               o.astType in cls._topLevel)))
 
     @classmethod
     def parentless(cls):
-        return ''.join(sorted(repr(o) for o in cls.objects.values()
-                              if o is not None and o.isAstNode and not o.hasAstParent))
+        return (cls.lang_line + '\n' +
+                ''.join(sorted(repr(o) for o in cls.objects.values()
+                               if o is not None and o.isAstNode and not o.hasAstParent)))
 
     @classmethod
     def parentneed(cls):
-        return ''.join(sorted(repr(o) for o in cls.objects.values()
-                              if o is not None and o.needsParent))
+        return (cls.lang_line + '\n' +
+                ''.join(sorted(repr(o) for o in cls.objects.values()
+                               if o is not None and o.needsParent)))
 
     @property
     def astType(self):
@@ -627,7 +647,13 @@ class AstGeneric(Hybrid):
             for tag in self._order:
                 ctag = 'protc:' + tag
                 if ctag in tags:
-                    return ctag
+                    if (tag in ('input', 'implied-input') and
+                        not self.hasAstParent and
+                        list(self.children)):
+                        self._was_input = True  # FIXME make this clearer
+                        return 'protc:output'
+                    else:
+                        return ctag
             if len(tags) == 1:
                 return tags[0]
             elif len(list(self._cleaned_tags)) == 1:
@@ -721,17 +747,21 @@ class AstGeneric(Hybrid):
 
         start = '\n(' if top else '('  # ))
         #print('|'.join(''.join(str(_) for _ in range(1,10)) for i in range(12)))
-        return f'{start}{self.astType} {value}{childs}'
+
+        prov = f"(hyp: '{self.id})"
+
+        return f'{start}{self.astType} {value} {prov}{childs}'
 
 
 class protc(AstGeneric):
     prefix_ast = 'protc:',
+    lang_line = '#lang protc/ur'
     indentDepth = 2
     objects = {}  # TODO updates
     _tagIndex = {}
     _replies = {}  # without this Hybrid replies will creep in
     _astParentIndex = {}
-    _order = (  # ordered based on dependence and then by frequency of occurence for performance (TODO tagdefs stats automatically)
+    _order = (  # ordered based on dependence and then by frequency of occurence for performance
               'structured-data-record',  # needs to come first since record contents also have a type (e.g. protc:parameter*)
               'parameter*',
               'input',
@@ -781,6 +811,28 @@ class protc(AstGeneric):
     format_nl =  '*', '/', 'range', 'plus-or-minus', 'param:dimensions'
 
     format_nl_long =  '^'
+
+    _manual_fix = {
+        'roomtemperature':('protc:fuzzy-quantity', '"room temperature"', '"temperature"'),
+        'room temperature':('protc:fuzzy-quantity', '"room temperature"', '"temperature"'),
+
+        'ice-cold':('protc:fuzzy-quantity', '"ice cold"', '"temperature"'),
+
+        'overnight':('protc:fuzzy-quantity', '"overnight"', '"duration"'),
+        'over night':('protc:fuzzy-quantity', '"overnight"', '"duration"'),
+
+        'water':('protc:fuzzy-quantity', '"water"', '"immersion-type"'),
+        'oil':('protc:fuzzy-quantity', '"oil"', '"immersion-type"'),
+
+        'several thousand':('protc:fuzzy-quantity', '"several thousand"', '"ammount"'),  # FIXME vs count
+    }
+
+    def objective(self):
+        if self.value in (' room  temperature'):
+            return "'room-temperature"
+        else:
+            return self._value_escape(self.value)
+
     def parameter(self):
         def isLongNL(tuple_):
             if tuple_[0] in self.format_nl_long:
@@ -822,7 +874,11 @@ class protc(AstGeneric):
                 return '(' + out + ')'
 
         success, v, rest = getattr(self, '_parameter', (None, None, None))  # memoization of the parsed form
-        if v is None:
+
+        if self.value.strip().lower() in self._manual_fix:  # ICK
+            v = self._manual_fix[self.value.strip().lower()]
+            rest = ''
+        elif v is None:
             value = self.value
             if value == '':  # breaks the parser :/
                 return ''
@@ -841,56 +897,10 @@ class protc(AstGeneric):
                 rest = cleaned_orig
             self._parameter = success, v, rest
             test_params.append((value, (success, v, rest)))
+
         if v:
             v = format_value(v, self.linePreLen)#, LID=' ' * self.linePreLen)
         return repr(ParameterValue(success, v, rest, indent=self.linePreLen))  # TODO implement as part of processing the children?
-
-
-    def _parameter_parsec(self):  # more than 2x slower than my version >_<
-        #def parameter(self):
-        out = getattr(self, '_parameter', None)
-        if out is not None:
-            return repr(out)
-        value = self.value
-        if value == '':  # breaks the parser :/
-            return ''
-        cleaned = value.replace(' mL–1', ' * mL–1').replace(' kg–1', ' * kg–1')  # FIXME temporary (and bad) fix for superscript issues
-        cleaned = cleaned.strip()
-        cleaned_orig = cleaned
-
-        # ignore gargabe at the start
-        success = False
-        front = ''
-        max_ = len(cleaned)
-        v = None
-        for i in range(max_):
-            Value = parsing_parsec.parameter_expression(cleaned, i)
-            if Value.status:
-                v = Value.value
-                front = cleaned[:i]
-                rest = cleaned[Value.index:]
-                break
-
-        if v is None:
-            rest = cleaned
-            front = ''
-
-        def format_value(tuple_):
-            out = []
-            if tuple_:
-                for v in tuple_:
-                    if type(v) is tuple:
-                        v = format_value(v)
-                    if v is not None:
-                        out.append(f'{v}')
-            if out:
-                return '(' + ' '.join(out) + ')'
-
-        if v is not None:
-            v = format_value(v)
-        test_params.append((value, (Value.status, v, rest)))
-        self._parameter = ParameterValue(success, v, rest, front)
-        return repr(self._parameter)
 
     def invariant(self):
         return self.parameter()
@@ -958,10 +968,12 @@ class ParameterValue:
         self.indent = ' ' * indent
     def __repr__(self):
         success, v, rest = self.value
+        if rest:
+            rest = json.dumps(rest)  # slower but at least correct :/
         if not success:
-            out = f'{v}\n{self.indent}"{rest}"'
+            out = f'{v}\n{self.indent}{rest}'
         else:
-            out = v + (f'\n{self.indent}(rest "{rest}")' if rest else '')
+            out = v + (f'\n{self.indent}(rest {rest})' if rest else '')
         return out
 
 test_params = []
@@ -1038,7 +1050,9 @@ def main():
     from pprint import pformat
     from time import sleep, time
     from core import annoSync
+    from docopt import docopt
     import requests
+    args = docopt(__doc__)
 
     global annos  # this is now only used for making embed sane to use
     get_annos, annos, stream_loop = annoSync('/tmp/protcur-analysis-annos.pickle',
@@ -1090,7 +1104,8 @@ def main():
         perftest()
         text()
         more()
-    stream_loop.start()  # need this to be here to catch deletes
+    if args['--sync']:
+        stream_loop.start()  # need this to be here to catch deletes
     embed()
 
 def _more_main():

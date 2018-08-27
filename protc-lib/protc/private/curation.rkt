@@ -7,17 +7,13 @@
   racket/syntax
   syntax/parse
   "utils.rkt"
-  ;"direct-model.rkt"
+  "identifier-functions.rkt"
+  "direct-model.rkt"
   "syntax-classes.rkt"))
 
 (provide (all-defined-out)
+         (rename-out [input implied-input])
          (all-from-out "direct-model.rkt"))
-
-;;; identifier namespaces  TODO centralize this ...
-
-(define (hyp: id)
-  ; TODO struct?
-  (string-append "https://hyp.is/" (symbol->string id)))
 
 ;;;
 
@@ -51,19 +47,54 @@
 
 (define-syntax (output stx)
   (syntax-parse stx
-    #:datum-literals (hyp: quote)
-    [(_ name:str (hyp: (quote id)) (~alt asp:sc-cur-aspect par:sc-cur-parameter* input:expr) ...)
-     #:with spec-name #'id
+    #:datum-literals (hyp: quote spec make)
+    #:literal-sets (protc-fields protc-ops)  ; whis this not working?
+    [(_ name:str (hyp: (quote id)) (~alt asp:sc-cur-aspect
+                                         par:sc-cur-parameter*
+                                         inv:sc-cur-invariant
+                                         bbc:sc-cur-bbc
+                                         input:expr) ...)
+     #:with spec-name (if (number? (syntax-e #'id))
+                          (fmtid "_~a" #'id)  ; recall that #'_id doesn't work because the type is not strictly known
+                          #'id)
      #:with black-box (datum->syntax #'name (string->symbol (syntax-e #'name)))
      #'(define-make (spec-name black-box)
-         (.inputs input ...)
-         (.outputs (: black-box (~? asp) ... (~? par) ...))
+         "this is a docstring from curation!"
+         #:prov (hyp: 'id)
+         ;#:vars (what is the issue here folks)
+         ; othis stuff works at top level ...
+         ;#:inputs (input ...)
+         ;#:constraints ((~? asp) ... (~? par) ...)
+         #:inputs (input ...)
+         #:constraints ((~? asp) ... (~? par.lifted) ... (~? inv.lifted) ...)
          )
      ]))
+(module+ test
+  (output "thing" (hyp: 'prov-a)
+          (parameter* (quantity 100 (unit 'meters 'milli)) (hyp: 'prov-b)))
+  )
 
 (define (black-box-component name prov . aspects) #f)
 
-(define (aspect aspect/unit/unit-exp) #f)
+(define-syntax (aspect stx)
+  (syntax-parse stx
+    #:datum-literals (hyp: quote)
+    [(_ name:str
+        (hyp: (quote id))
+        (~optional
+         (~or* par:sc-cur-parameter*
+               inv:sc-cur-invariant)))
+     ; TODO check that the given unit matches
+     #`(quote #,stx)]))
+(module+ test
+  (aspect "mass" (hyp: '0))
+  (aspect "bob"
+          (hyp: '1)
+          (parameter*
+           (quantity
+            10
+            (unit 'kelvin 'milli))
+           (hyp: '2))))
 
 (define-syntax (unit stx)
   (syntax-parse stx
@@ -78,7 +109,19 @@
      ]))
 
 (define (invariant aspect value prov) #f)
-(define (parameter* aspect value prov) #f)
+
+(define-syntax (parameter* stx)
+  (syntax-parse stx
+    [_:sc-cur-parameter*
+     #`(quote #,stx)]))
+
+(module+ test
+  (parameter* (quantity 100 (unit 'meters 'milli)) (hyp: 'prov-0))
+  (output "thing" (hyp: 'prov-1)
+          (parameter* (quantity 100 (unit 'meters 'milli)) (hyp: 'prov-2)))
+  #; ; I think these are failing because I need a syntax level thunk not a normal thunk
+  (check-exn exn:fail:syntax? (thunk (parameter* 100 (unit 'meters 'milli) (hyp: 'prov-1)))))
+
 (define (objective* text prov) #f)
 (define (telos text prov) #f)
 (define (result aspect value prov) #f)
@@ -90,6 +133,80 @@
 (define (references-for-evidence) #f)
 
 (define (black-box) #f)
+
+;;; TODO
+
+(define-syntax (*measure stx)
+  #''TODO)
+
+(define-syntax (symbolic-measure stx)
+  #''TODO)
+
+(define-syntax (version stx)
+  #''TODO)
+
+(define-syntax (i-have-no-idea stx)
+  #''TODO)
+
+(module+ test
+
+  (define-syntax (test?-2 stx)
+    (syntax-parse stx
+      [(_ name:id one:expr two:expr)
+       #'(define-syntax (name stx)
+           (syntax-parse stx
+             [(_
+               (~optional (~seq #:1 one))
+               (~optional (~seq #:2 two))
+               )
+              #'(~? one two)]
+             )
+           )
+
+       ]))
+
+  (test?-2 all-opt
+           one
+           two)
+
+  (all-opt #:1 1 #:2 2)
+  )
+
+#;; also dones't work :/
+(module+ test
+  ; all the other variants just don't work :/ ~optional and ~seq complain
+  ; maybe there is a way to use with-syntax?
+  (with-syntax ([opt (datum->syntax #f '~optional)]
+                [seq (datum->syntax #f '~seq)]
+                )
+    (test?-2 all-opt-??
+             (#'opt (#'seq #:1 one))
+             (#'opt (#'seq #:2 two))))
+
+  (all-opt-?? 1 2))
+
+#;; this fails because ~? cannot take 3 arguments
+(module+ test
+  (define-syntax (test?-3 stx)
+    (syntax-parse stx
+      [(_ name:id one:expr two:expr three:expr)
+       #'(define-syntax (name stx)
+           (syntax-parse stx
+             [(_
+               one two three
+               )
+              #'(~? one two three)]))]))
+  (test?-3 all-opt
+           (~optional (~seq #:1 one))
+           (~optional (~seq #:2 two))
+           (~optional (~seq #:3 three)))
+
+  (all-opt #:1 '1)
+  (all-opt #:2 '2)
+  (all-opt #:3 '3)
+
+  )
+
 
 (module+ test
   (require rackunit
@@ -109,9 +226,9 @@
   #; ; i have no idea why this doesn't work
   (check-exn exn:fail:syntax? (thunk (test (parameter* (hyp: '0) (quantity 10 (unit 'meters))))))
 
-  (test (invariant (hyp: '0) (quantity 10 (unit meters))))
+  (test (invariant (quantity 10 (unit meters)) (hyp: '0)))
 
-  (input "thing" (hyp: '1) (parameter* (hyp: '2) (quantity 10 (unit meters))))
+  (input "thing" (hyp: '1) (parameter* (quantity 10 (unit meters)) (hyp: '2)))
 
   (define-syntax (unit-> stx)
     (syntax-parse stx

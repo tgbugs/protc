@@ -57,6 +57,8 @@ All actualize sections should specify a variable name that will be used in inher
       [(_ name:id body:expr)
        #'(define name body)]))
 
+  (define-syntax (aspect-lifted stx)
+    #`(quote #,stx))
   )
 
 ;(for-template (only-in racket/base #%top #%app quote))
@@ -73,8 +75,12 @@ All actualize sections should specify a variable name that will be used in inher
                      racket/list
                      syntax/parse
                      protc/units/si-units-data
+                     protc/units/si-units-extras
+                     protc/units/units-dimensionless
                      protc/units/si-prefixes-data)
          (for-meta -1 'prims (only-in racket/base quote))  ; OH MY GOD FINALLY
+         "identifier-functions.rkt"
+         "aspects.rkt"
          "utils.rkt")
 (provide (except-out (all-defined-out) -asp)
          (all-from-out 'prims))
@@ -320,17 +326,72 @@ All actualize sections should specify a variable name that will be used in inher
   #:datum-literals (measure actualize make)
   (pattern (~or measure actualize make)))
 
+(define-syntax-class lol
+  (pattern thingA:expr)
+  (pattern thingB:keyword))
+
+;;; literal sets
+
+#;
+(define-syntax .inputs  ; this KILLS the current implementation of .inputs
+  ; TODO syntax parameter?
+  #'(ya done goofed))
+
+(define-literal-set protc-fields
+  #:datum-literals
+  (.executor
+   .uses
+   .vars
+   .inputs
+   .outputs
+   .constraints  ; FIXME if an entry is missing from this list the error is completely nonsense
+   .config-vars
+   .symret
+   .steps
+   .measures  ; FIXME remove archaic
+   )
+  (;.inputs
+   ))
+
+(define-literal-set identifier-functions
+  (hyp:
+   DOI:
+   PMID:))
+
+(define id-func? (literal-set->predicate identifier-functions))
+
+(define-syntax-class sc-id-func
+  (pattern (func:id value)
+           #:fail-unless (id-func? #'func) "not a known identifier function"
+           ))
+
+(module+ test
+  (check-true (begin (hyp: 'TEST-TOTALLY-A-THING) #t))
+
+  (check-equal?
+   (syntax-parse #'(hyp: 'test)
+     (id:sc-id-func
+      (syntax->datum #'id.value)))
+   ''test)
+  )
+
 ;;; units syntax classes
 ; ideally these should be drawn from aspect definitions at syntax time
-
 
 (define-syntax (flerp stx)
   (syntax-parse stx
     [(_ name)
+     (define units
+       (remove-duplicates (flatten (append
+                                    units-si
+                                    units-extra
+                                    units-extra-prefix
+                                    units-dimensionless
+                                    units-dimensionless-prefix))))
      #`(define-literal-set name
          #:datum-literals
          ; expand units-si to pull in additional units at runtime
-         #,(datum->syntax this-syntax (remove-duplicates (flatten units-si))) ())]))
+         #,(datum->syntax this-syntax units) ())]))
 
 (flerp funits)
 
@@ -385,29 +446,47 @@ All actualize sections should specify a variable name that will be used in inher
   (check-exn exn:fail:syntax? (thunk (syntax-parse #'wendigo [prefix:sc-prefix-name #t]))))
 
 (define-syntax-class sc-unit
-  (pattern (_ unit:sc-unit-name (~optional prefix:sc-prefix-name))))
+  (pattern (_ unit:sc-unit-name (~optional prefix:sc-prefix-name))
+           #:attr ident #'unit.ident))
 (module+ test
   (check-true (syntax-parse #'(unit 'meters 'milli) [expr:sc-unit #t]))
-  (check-true (syntax-parse #'(unit meters milli) [expr:sc-unit #t])))
+  (check-true (syntax-parse #'(unit meters milli) [expr:sc-unit #t]))
+  (check-true (syntax-parse #'(param:prefix-unit 'pH) [expr:sc-unit #t]))
 
+  ;(protc:parameter* (param:quantity 7.4 (param:prefix-unit 'pH)) (hyp: 'QaiHMm5kEee7iSNIQtkMfg))
+  )
+
+(define-syntax-class sc-dim-unit
+  #:datum-literals (^)
+  (pattern (^ unit:sc-unit dim:integer)))
 
 (define-syntax-class sc-unit-oper
-  (pattern (oper:id (~or* expr:sc-unit-oper unit:sc-unit) ...)))
+  (pattern solo-dunit:sc-dim-unit)
+  (pattern (oper:id (~or* expr:sc-unit-oper unit:sc-unit dunit:sc-dim-unit) ...)))
 (module+ test
   (check-true (syntax? (syntax-parse #'(* (unit meters milli)) [expr:sc-unit-oper #'expr])))
   (check-true (syntax? (syntax-parse #'(* (unit siemens mega)
-                                          (^ (unit seconds)))
+                                          (^ (unit seconds) -1))
                          [expr:sc-unit-oper #'expr])))
   (check-exn exn:fail:syntax? (thunk (syntax-parse #'(* 10
                                                         (unit meters milli)
                                                         (^ (unit seconds)))
                                        [expr:sc-unit-oper #'expr]))))
 
+(define (simplify-unit expr)
+  ; lots of work to do here ...
+  ; convert to intermediate repr
+  ; then probably feed it into the conversion function
+  ; check on rosette interop to kill 2 birds with 1 stone
+  'joules)
+
 (define-syntax-class sc-unit-expr
   #:datum-literals (param:unit-expr unit-expr)
   ; TODO do the transformation here
   ;(pattern (_ unit:sc-unit-name (~optional prefix:sc-prefix-name)))
-  (pattern ((~or* param:unit-expr unit-expr) unit-oper:sc-unit-oper)))
+  (pattern ((~or* param:unit-expr unit-expr) unit-oper:sc-unit-oper)
+           #:attr unit (datum->syntax this-syntax (simplify-unit #'unit-oper))
+           ))
 (module+ test
   (check-exn exn:fail:syntax? (thunk (syntax-parse #'(unit-expr (unit meters milli)) [expr:sc-unit-expr #'expr])))
   (check-true (syntax? (syntax-parse #'(unit-expr (* (unit meters milli))) [expr:sc-unit-expr #'expr])))
@@ -416,14 +495,43 @@ All actualize sections should specify a variable name that will be used in inher
                          [expr:sc-unit-expr #'expr.unit-oper]))))
 
 (define-syntax-class sc-quantity
-  #:datum-literals (quantity param:quantity)
-  (pattern ((~or* param:quantity quantity) value:number (~or unit:sc-unit unit-expr:sc-unit-expr))))
+  #:datum-literals (quantity param:quantity
+                             fuzzy-quantity protc:fuzzy-quantity
+                             dimensions param:dimensions
+                             expr param:expr
+                             )
+  #:local-conventions ([body expr])
+  (pattern ((~or* param:quantity quantity) value:number (~optional (~or* unit:sc-unit unit-expr:sc-unit-expr)))
+           ; FIXME we do not want units to be optional, this is a bug in param:dimensions
+           #:attr aspect (datum->syntax this-syntax
+                                        (symbol->string
+                                         (unit->aspect
+                                          (syntax->datum #'(~? unit.ident (~? unit-expr.unit null))))))
+           #:attr normalized #'(quantity value (~? unit (~? unit-expr null))))
+  (pattern ((~or* protc:fuzzy-quantity fuzzy-quantity) fuzzy-value:str aspect:str)
+           #:attr unit #f
+           #:attr unit-expr #f
+           #:attr normalized #'(fuzzy-quantity fuzzy-value aspect))
+  (pattern ((~or* dimensions param:dimensions) quant:sc-quantity ...)  ; TODO
+           #:attr aspect #f  ; TODO
+           #:attr unit #f  ; TODO
+           #:attr unit-expr #f
+           #:attr normalized #'(dimesions quant ...))
+  (pattern ((~or* expr param:expr) body ...)  ; TODO
+           #:attr aspect #f  ; TODO
+           #:attr unit #f  ; TODO
+           #:attr unit-expr #f
+           #:attr normalized #'(expr body ...))
+  )
 (module+ test
   (check-true
    (syntax-parse #'(quantity 10 (unit seconds))
      [expr:sc-quantity #t]))
   (check-true
    (syntax-parse #'(quantity 10 (unit-expr (/ (unit meters) (unit seconds))))
+     [expr:sc-quantity #t]))
+  (check-true
+   (syntax-parse #'(fuzzy-quantity "overnight" "duration")
      [expr:sc-quantity #t])))
 
 (define-syntax-class sc-cur-oper
@@ -438,41 +546,59 @@ All actualize sections should specify a variable name that will be used in inher
 
 (define-syntax (define-sc-aspect-lift stx)
   (syntax-parse stx
+    ;#:datum-literals (aspect)
     [(_ name oper-name alt ...)
-     #:with internal-~? (datum->syntax this-syntax '~?)
+     #:with -~? (datum->syntax this-syntax '~?)
      #'(define-syntax-class name
+         #:literals (aspect-lifted)
          #:datum-literals (oper-name alt ...)
-         (pattern ((~or* oper-name alt ...) prov quantity:sc-quantity)
-                  #:attr lifted #'(aspect prov
-                                          (internal-~? quantity.unit
-                                              (internal-~? quantity.unit-expr
-                                                  (raise-syntax-error
-                                                   'no-unit "quantity missing unit"
-                                                   this-syntax quantity)))
-                                          (oper-name 'lifted quantity))))]))
+         (pattern ((~or* oper-name alt ...) quantity:sc-quantity (~optional rest) prov)
+                  #:attr lifted ;(syntax/loc this-syntax
+                  #'(aspect-lifted (-~? quantity.aspect
+                                      (raise-syntax-error
+                                       'no-unit "quantity missing unit"
+                                       this-syntax quantity))
+                                 prov
+                                 (oper-name 'lifted quantity.normalized))))]))
 
-(define-sc-aspect-lift sc-cur-parameter* parameter* param:parameter*)
+(define-sc-aspect-lift sc-cur-parameter* parameter* protc:parameter*)
 
-(define-sc-aspect-lift sc-cur-invariant invariant param:invariant)
+(define-sc-aspect-lift sc-cur-invariant invariant protc:invariant)
+
+(define-syntax-class sc-cur-bbc
+  #:datum-literals (black-box-component protc:black-box-component)
+  (pattern ((~or black-box-component protc:black-box-component) body ...)) ; TODO
+  )
 
 (define-syntax-class sc-cur-aspect
   #:datum-literals (aspect protc:aspect protc:implied-aspect)
   (pattern ((~or* aspect protc:aspect protc:implied-aspect)
             name:str prov (~or* inv:sc-cur-invariant par:sc-cur-parameter*))))
 
+(define-syntax-class sc-cur-input
+  #:datum-literals (input protc:input protc:implied-input)
+  (pattern ((~or* input protc:input protc:implied-input)
+            name:str prov body:expr ...)))
+
 (module+ test
-  (check-equal? (syntax-parse #'(invariant (hyp: '0) (quantity 10 (unit meters)))
+  ; FIXME this works for a datum but fails hard when syntax occurs
+  (check-equal? (syntax-parse #'(invariant (quantity 10 (unit meters)) (hyp: '0))
                   [thing:sc-cur-invariant (syntax->datum #'thing.lifted)])
-                '(aspect (hyp: '0) (unit meters) (invariant 'lifted (quantity 10 (unit meters)))))
+                '(aspect-lifted "length" (hyp: '0) (invariant 'lifted (quantity 10 (unit meters)))))
 
-  (check-equal? (syntax-parse #'(parameter* (hyp: '0) (quantity 10 (unit meters)))
+  (check-equal? 
+   (syntax-parse #'(invariant (fuzzy-quantity "room temperature" "temperature") (hyp: '0.5))
+     [thing:sc-cur-invariant (syntax->datum #'thing.lifted)])
+   '(aspect-lifted "temperature" (hyp: '0.5) (invariant 'lifted (fuzzy-quantity "room temperature" "temperature"))))
+
+  (check-equal? (syntax-parse #'(parameter* (quantity 10 (unit meters)) (hyp: '0))
                   [thing:sc-cur-parameter* (syntax->datum #'thing.lifted)])
-                '(aspect (hyp: '0) (unit meters) (parameter* 'lifted (quantity 10 (unit meters)))))
+                '(aspect-lifted "length" (hyp: '0) (parameter* 'lifted (quantity 10 (unit meters)))))
 
-  (syntax-parse #'(parameter* (hyp: '0)
-                              (quantity 10
+  (syntax-parse #'(parameter* (quantity 10
                                         (unit-expr (/ (unit meters)
-                                                      (unit seconds)))))
+                                                      (unit seconds))))
+                              (hyp: '0))
     [thing:sc-cur-parameter* #'thing.lifted])
 
   (define-syntax (testthing stx)
