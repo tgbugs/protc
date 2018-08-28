@@ -2,6 +2,7 @@
 
 ; really specifically for #%module-begin and friends for now
 (provide (except-out (all-from-out racket/base)
+                     #%top
                      read read-syntax version)
          (rename-out [version racket-version]))
 

@@ -9,6 +9,7 @@
          racket/contract
          racket/provide-syntax
          "aspects.rkt"
+         "identifier-functions.rkt"
          ;(for-meta -1 racket/base)  ; needed for docstringf?
          (for-meta 2 syntax/parse racket/syntax racket/base)
          (for-syntax racket/base
@@ -50,6 +51,12 @@
          impl-make
          impl-measure
          impl-actualize
+
+         (all-from-out "identifier-functions.rkt")
+         define-id-funcs
+         qname
+
+         (rename-out [rdf-top #%top])  ; from rdf/utils
          )
 
 ;;; provide machinery
