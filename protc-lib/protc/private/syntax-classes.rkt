@@ -583,14 +583,25 @@ All actualize sections should specify a variable name that will be used in inher
 (define-syntax-class sc-cur-aspect
   #:datum-literals (aspect protc:aspect protc:implied-aspect)
   (pattern ((~or* aspect protc:aspect protc:implied-aspect)
-            name:str prov (~or* inv:sc-cur-invariant par:sc-cur-parameter*)))
-  #; ; FIXME this isn't working correctly
+            name:str prov (~or* asp:sc-cur-aspect
+                                inv:sc-cur-invariant
+                                par:sc-cur-parameter*)))
   (pattern ((~or* aspect protc:aspect protc:implied-aspect)
             ; TODO figure out the right way to handle these
             ; the intention of the structure is clear, we just need to
             ; figure out what to do with it
             ; FIXME do not want?
-            name:str prov (~or* multi-inv:sc-cur-invariant multi-par:sc-cur-parameter*) +...))
+            name:str prov (~or* multi-asp:sc-cur-aspect
+                                multi-inv:sc-cur-invariant
+                                multi-par:sc-cur-parameter*) ...))
+  )
+
+(module+ test
+  (syntax-parse #'(aspect "length"
+                          'some-prov
+                          (parameter* (quantity 10 (unit 'meters 'milli)) 'p0)
+                          (parameter* (quantity 20 (unit 'meters 'milli)) 'p1))
+    [thing:sc-cur-aspect #'thing])
   )
 
 (define-syntax-class sc-cur-input

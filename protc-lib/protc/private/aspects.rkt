@@ -1,15 +1,50 @@
 #lang racket/base
 
-(require racket/string (for-syntax racket/base syntax/parse "utils.rkt"))
+(require racket/string
+         (prefix-in methods-helper/ NIF-Ontology/rkt/ttl/methods-helper)  ; TODO syntax for this ... store-in
+         (prefix-in methods/ NIF-Ontology/rkt/ttl/methods)
+         rdf/utils
+         "identifier-functions.rkt"
+         (for-syntax racket/base syntax/parse "utils.rkt"))
 (provide (all-defined-out))
 
+;; for sanity's sake, no inline definitions of aspects
+;; aspects are so fundamental that if they aren't defined by
+;; a prior protocol/module then they are not sufficiently
+;; logically prior in time
+
+;; as a result we do need to make sure that aspects defined by
+;; required modules are available to data in this file in the
+;; requiring file
+
 ; TODO sync with ontology
+
+;; basic model
+;; aspect
+;; quantity subClassOf aspect
+;; quantity hasUnit unit
+;; unit subClassOf aspect
+;; unit unitizes quantity
+;; fundamental subClassOf unit  ; not at all clear we need these defined here
+;; derived subClassOf unit  ; not at all clear we need these defined here
+;; local-quantity subClassOf quantity  ; note local assuming a co-inertial reference frame in many cases
+;; nonlocal-quantity subClassOf quantity  ; has implicit context
+;; location, allocation, plane of section, etc. all of reference frames in addition to units
+;; allocation reference frames can be quite simple, labeled black box components are sufficient
 
 (define-syntax (define-aspect stx)
   ; FIXME this is still not as useful as I would like ...
   (syntax-parse stx
+    #:datum-literals (::)
     [(_ shortname:id name:id
-        (~optional (~seq #:parent parent))
+        (~alt
+         (~optional (~seq #:parent parent))  ; aspect quantity unit
+         (~optional (~seq #:aspect aspect))  ; the _default_ aspect if parent is a unit
+         (~optional (~seq #:units (unit ...)))  ; if parent is aspect then the list of units that quantize the quantity
+         (~optional (~seq #:context (context-aspect ...)))  ; for nonlocal aspects, such as the saggital aspect, any above-protocl level information
+         (~optional (~seq #:chain [:: chain-aspect ...]))  ; equivalent chain of aspects
+         (~optional (~seq #:def definition))
+         ) ...
         constructive-definition:expr  ; FIXME need a way to look inside of these
         )
      #;
@@ -189,4 +224,79 @@
   (sasp)
   (saspc)
   (unit->aspect 'meters)
+  )
+
+(module aspects racket/base
+  ; It is important to distinguish between aspects as aspects and aspects as units
+  ; this is not the ultimate representation that we want for aspects either...
+
+  ; TODO I think that types for aspects and beings will help a whole lot and will be much faster to check
+  ;  at compile time than at run time...
+  ; TODO these need to be reworked to support si prefix notation etc...
+  ; they also need to implemented in such a way that it is natural for define-aspect to add addiational aspects
+  ; finally in the interim they probably need to support (: thing aspect ([aspect value])) syntax...
+  ; it also seems like there aren't that many cases where having programatic access the actual unit names is going to be needed?
+  ; so inside of (: could default to not needing to quote, and have another special form (-: (lol) or something that
+  ; allowed programic access
+  ; (aspect vs (aspect-variable or something
+  ;(require (except-in racket/base time))  ; sigh, how to fix
+  (provide (all-defined-out))
+  (struct aspect (shortname name def parent)  ; note that #:auto is global...
+    ; aka measurable
+    #:inspector #f)
+
+  ;(define unit (aspect 'unit 'unit "Units are not aspects but they can be used as aspects"))  ; units are not aspects their names can be...
+  ; TODO define all these using (define-aspect)
+  (define fq (aspect 'fq 'fundamental-quantity "The root for all fundamental quantities" 'root))
+
+  ;(define :scalar () ()) ??
+  (define count (aspect 'count 'count "How many?" fq))  ; discrete continuous
+  (define % (aspect '% 'percent "portion out of 100" count))  ; FIXME ratio
+  (define mass (aspect 'mass 'mass "The m in e = mc^2" fq))
+  (define energy (aspect 'energy 'energy "hoh boy" fq))  ; TODO synonyms... distance...
+  (define length-aspect (aspect 'length 'length "hoh boy" fq))
+  (define time-aspect (aspect 'time 'time "tick tock" fq))
+  (define temperature (aspect 'temp 'temperature "hot cold" fq))
+  ; FIXME charge is actually NOT fundamental either... it is the count of the number of electrons
+  ; times the elementary charge (heh)
+  (define charge (aspect 'Q 'charge "hoh boy" fq))  ; why is it current??? http://amasci.com/miscon/fund.html
+
+  (define dq (aspect 'dq 'derived-quantity "A quantity derived from some other quantity" 'root))
+  (define current (aspect 'I 'current '(/ charge time-aspect) dq))  ; TODO expand quoted definitions
+  (define weight (aspect 'weight 'weight "hrm..." mass))
+  (define distance (aspect 'distance 'distance "hrm..." length-aspect))
+
+  (define area (aspect 'area 'area '(expt length-aspect 2) dq))
+  (define volume (aspect 'vol 'volume '(expt length-aspect 3) dq))
+
+  (define duration (aspect 'dt 'duration '(- time-aspect time-aspect) dq))
+
+  (define mol (aspect 'mol 'mole "HRM" count))
+
+  (define _m 1e-3)
+
+  (define l (aspect 'l 'liters "SI unit of volume" volume))
+  (define L l)  ; TODO alternate forms that also have 'L as the short name (for example)
+  (define ml (aspect 'ml 'milli-liters "very small liters" '(* _m l)))  ; FIXME all of this needs to be done in rosette
+  (define mL ml)
+  (define g (aspect 'g 'grams "SI unit of weight" mass))
+
+  (define concentration (aspect 'concentration 'concentration "concentration" '(/ count volume)))
+  (define M (aspect 'M 'molarity "SI unit of concentration" '(/ mol L)))  ; FIXME HRM... mol/volume vs mol/liter how to support...
+  (define mM (aspect 'mM 'milli-molarity "SI unit of weight" '(* _m M)))  ; TODO auto prefix conversion because this is icky
+  )
+
+(module+ test
+  (require racket/path)
+  (define store (append methods-helper/store methods/store))  ; FIXME DANGERZONE overlapping bnode values!
+  (define-values (add-triple add-triples get-triples match-triples) (instrument-store store))
+  (map (compose (λ (p) (path-replace-extension p "")) file-name-from-path gen-value triple-s) (match-triples #:p (rdf: 'type) #:o (owl: 'Ontology)))
+  ; aspects from methods ontology ...
+  (define (category start)
+    (map #;(compose path->string file-name-from-path gen-value)
+         gen-short
+         (subjects (match-triples #:p (rdfs: 'subClassOf) #:o start #:transitive #t))))
+
+  (category (ilxtr: 'aspect))
+  (category (ilxtr: 'materialEntity))
   )
