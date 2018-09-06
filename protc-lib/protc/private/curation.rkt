@@ -8,7 +8,7 @@
   syntax/parse
   "utils.rkt"
   "identifier-functions.rkt"
-  "direct-model.rkt"
+  (except-in "direct-model.rkt" #%top)
   "syntax-classes.rkt"))
 
 (provide (all-defined-out)

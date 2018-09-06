@@ -24,6 +24,7 @@
          )
 
 (require "syntax-classes.rkt"  ; vs protc/private/syntax-classes
+         "aspects.rkt"
          "utils.rkt"
          (for-meta -1 protc/private/syntax-classes)
          (for-syntax protc/private/syntax-classes
@@ -41,6 +42,7 @@
          actualize measure make
          define-message
          ;(for-syntax name-join)
+         (all-from-out "aspects.rkt")
          (for-syntax (all-from-out racket/base))
          )
 
@@ -821,70 +823,6 @@ For example use @(def solution (a+b solute solvent))."
   (test-asp (: brain g ([volume 5])))
   (test-asp (: brain g ([volume 5] [volume 1000])))
   )
-
-(module aspects racket/base
-  ; It is important to distinguish between aspects as aspects and aspects as units
-  ; this is not the ultimate representation that we want for aspects either...
-
-  ; TODO I think that types for aspects and beings will help a whole lot and will be much faster to check
-  ;  at compile time than at run time...
-  ; TODO these need to be reworked to support si prefix notation etc...
-  ; they also need to implemented in such a way that it is natural for define-aspect to add addiational aspects
-  ; finally in the interim they probably need to support (: thing aspect ([aspect value])) syntax...
-  ; it also seems like there aren't that many cases where having programatic access the actual unit names is going to be needed?
-  ; so inside of (: could default to not needing to quote, and have another special form (-: (lol) or something that
-  ; allowed programic access
-  ; (aspect vs (aspect-variable or something
-  ;(require (except-in racket/base time))  ; sigh, how to fix
-  (provide (all-defined-out))
-  (struct aspect (shortname name def parent)  ; note that #:auto is global...
-    ; aka measurable
-    #:inspector #f)
-
-  ;(define unit (aspect 'unit 'unit "Units are not aspects but they can be used as aspects"))  ; units are not aspects their names can be...
-  ; TODO define all these using (define-aspect)
-  (define fq (aspect 'fq 'fundamental-quantity "The root for all fundamental quantities" 'root))
-
-  ;(define :scalar () ()) ??
-  (define count (aspect 'count 'count "How many?" fq))  ; discrete continuous
-  (define % (aspect '% 'percent "portion out of 100" count))  ; FIXME ratio
-  (define mass (aspect 'mass 'mass "The m in e = mc^2" fq))
-  (define energy (aspect 'energy 'energy "hoh boy" fq))  ; TODO synonyms... distance...
-  (define length-aspect (aspect 'length 'length "hoh boy" fq))
-  (define time-aspect (aspect 'time 'time "tick tock" fq))
-  (define temperature (aspect 'temp 'temperature "hot cold" fq))
-  ; FIXME charge is actually NOT fundamental either... it is the count of the number of electrons
-  ; times the elementary charge (heh)
-  (define charge (aspect 'Q 'charge "hoh boy" fq))  ; why is it current??? http://amasci.com/miscon/fund.html
-
-  (define dq (aspect 'dq 'derived-quantity "A quantity derived from some other quantity" 'root))
-  (define current (aspect 'I 'current '(/ charge time-aspect) dq))  ; TODO expand quoted definitions
-  (define weight (aspect 'weight 'weight "hrm..." mass))
-  (define distance (aspect 'distance 'distance "hrm..." length-aspect))
-
-  (define area (aspect 'area 'area '(expt length-aspect 2) dq))
-  (define volume (aspect 'vol 'volume '(expt length-aspect 3) dq))
-
-  (define duration (aspect 'dt 'duration '(- time-aspect time-aspect) dq))
-
-  (define mol (aspect 'mol 'mole "HRM" count))
-
-  (define _m 1e-3)
-
-  (define l (aspect 'l 'liters "SI unit of volume" volume))
-  (define L l)  ; TODO alternate forms that also have 'L as the short name (for example)
-  (define ml (aspect 'ml 'milli-liters "very small liters" '(* _m l)))  ; FIXME all of this needs to be done in rosette
-  (define mL ml)
-  (define g (aspect 'g 'grams "SI unit of weight" mass))
-
-  (define concentration (aspect 'concentration 'concentration "concentration" '(/ count volume)))
-  (define M (aspect 'M 'molarity "SI unit of concentration" '(/ mol L)))  ; FIXME HRM... mol/volume vs mol/liter how to support...
-  (define mM (aspect 'mM 'milli-molarity "SI unit of weight" '(* _m M)))  ; TODO auto prefix conversion because this is icky
-  )
-(require 'aspects)
-(provide (all-from-out 'aspects)
-         (prefix-out : (all-from-out 'aspects))  ; TODO remove these
-         )
 
 (define (run-tests)
   (define thing 'things-must-also-be-defined-beforehand)

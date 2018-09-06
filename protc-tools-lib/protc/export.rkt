@@ -670,7 +670,8 @@
         )
      #:with name-ast (fmtid "~a-ast" #'name)
      #'(begin
-         (let-values ([(name scrib) (protc->scribble name-ast #:user (get-user))])
+         ; FIXME name alone seems to work!?
+         (let-values ([(name scrib) (protc->scribble name #:user (get-user))])
            (scribble->many #:name name scrib type ...)))
      ]
     ))
