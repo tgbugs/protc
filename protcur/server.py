@@ -271,10 +271,10 @@ def make_app(annos):
 
 def main():
     from core import annoSync
-    get_annos, annos, stream_loop = annoSync('/tmp/protcur-server-annos.pickle',
-                                             helpers=(Hybrid, protc,))
-                                             #helpers=(HypothesisHelper, Hybrid, protc,))
-    stream_loop.start()
+    get_annos, annos, stream_thread, exit_loop = annoSync('/tmp/protcur-server-annos.pickle',
+                                                        helpers=(Hybrid, protc,))
+                                                        #helpers=(HypothesisHelper, Hybrid, protc,))
+    stream_thread.start()
     #[HypothesisHelper(a, annos) for a in annos]
     [Hybrid(a, annos) for a in annos]
     [protc(a, annos) for a in annos]
@@ -282,7 +282,8 @@ def main():
     app = make_app(annos)
     app.debug = False
     app.run(host='localhost', port=7000, threaded=True)  # nginxwoo
-    os.sys.exit()
+    exit_loop()
+    stream_thread.join()
 
 if __name__ == '__main__':
     main()

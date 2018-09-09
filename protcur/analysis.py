@@ -1055,8 +1055,8 @@ def main():
     args = docopt(__doc__)
 
     global annos  # this is now only used for making embed sane to use
-    get_annos, annos, stream_loop = annoSync('/tmp/protcur-analysis-annos.pickle',
-                                             helpers=(HypothesisHelper, Hybrid, protc))
+    get_annos, annos, stream_thread, exit_loop = annoSync('/tmp/protcur-analysis-annos.pickle',
+                                                          helpers=(HypothesisHelper, Hybrid, protc))
 
     problem_child = 'KDEZFGzEEeepDO8xVvxZmw'
     #test_annos(annos)
@@ -1105,8 +1105,11 @@ def main():
         text()
         more()
     if args['--sync']:
-        stream_loop.start()  # need this to be here to catch deletes
+        stream_thread.start()  # need this to be here to catch deletes
     embed()
+    exit_loop()
+    if args['--sync']:
+        stream_thread.join()
 
 def _more_main():
     input_text_args = [(basic_start(a).strip(),) for a in annos if 'protc:input' in a.tags or 'protc:output' in a.tags]

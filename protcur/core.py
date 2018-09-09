@@ -12,8 +12,9 @@ def annoSync(memoization_file='/tmp/protc-annotations.pickle', helpers=tuple()):
     helperSyncHandler.helpers = helpers
     annos = get_annos()
     yield annos
-    stream_loop = AnnotationStream(annos, prefilter, helperSyncHandler)()
-    yield stream_loop
+    stream_thread, exit_loop = AnnotationStream(annos, prefilter, helperSyncHandler)()
+    yield stream_thread
+    yield exit_loop
 
 def linewrap(text, start, end=80, sep='|', space=' ', ind=4, depth=0):
     text = text.replace('\n', ' ')
