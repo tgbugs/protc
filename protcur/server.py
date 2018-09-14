@@ -278,6 +278,8 @@ def main():
     #[HypothesisHelper(a, annos) for a in annos]
     [Hybrid(a, annos) for a in annos]
     [protc(a, annos) for a in annos]
+    Hybrid.byTags('protc:output')  # FIXME trigger index creation
+    protc.byTags('protc:output')  # FIXME trigger index creation
 
     app = make_app(annos)
     app.debug = False
