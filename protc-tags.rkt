@@ -133,8 +133,8 @@
          "")
 (tag-doc 'protc:parent-doi '()
          "")
-(tag-doc 'protc:fuzzy-quantity '(ilxtr:)
-         "Fuzzy quantities are quantities that have some meaning, but that are not strictly quantified. Some examples are \"room temperature\", and \"overnight\". [At the moment this is only used internally, it is not currently used in the curation workflow
+(tag-doc 'protc:fuzzy-quantity '(ilxtr:TODO)
+         "Fuzzy quantities are quantities that have some meaning, but that are not strictly quantified. Some examples are 'room temperature', and 'overnight'. [At the moment this is only used internally, it is not currently used in the curation workflow")
 (tag-doc 'protc:referenced-for-use-by '()
          "")
 (tag-doc 'protc:references-for-evidence 'ilxtr:citationTag
