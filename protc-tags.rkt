@@ -169,5 +169,7 @@
          "Explaining the purpose of a specific step. Differes from `protc:objective*` in that it may not be directly relevant for determining whether the goal of the current step has been achieved.")
 (tag-doc 'protc:textual-location-spec '()
          "")
+(tag-doc 'protc:unit '(ilxtr:unit)
+         "The particular discretization or quantization for a given aspect.")
 (tag-doc 'protc:version '(ilxtr:identifier)
          "The version of a piece of software or an edition of an atlas or a book.")
