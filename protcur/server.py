@@ -161,6 +161,25 @@ def make_app(annos):
                        title='papers',
                        styles=(table_style,))
 
+    @app.route('/curation/papers/<paper_id>/annotations', methods=['GET'])
+    def route_papers_star_annos(paper_id):
+        HYB = request.url + '#Hybrids'
+        PTC = request.url + '#protcs'
+        iri = paper_id.replace('hl:', 'https://hypothesis-local.olympiangods.org/')  # FIXME
+        try:
+            return htmldoc(''.join(
+                [f'<a href="{HYB}" id="protcs"><b>protcs</b></a><br>\n'] +
+                [a.__repr__(html=True, number=n + 1).replace('\n', '<br>\n')
+                 for n, a in  enumerate(sorted(protc.byIri(iri), key=lambda p: p.ast_updated, reverse=True))] +
+                [f'<br>\n<a href="{PTC}" id="Hybrids"><b>Hybrids</b></a><br>\n'] +
+                [a.__repr__(html=True, number=n + 1).replace('\n', '<br>\n')
+                 for n, a in  enumerate(sorted(Hybrid.byIri(iri), key=lambda p: p.ast_updated, reverse=True))]
+                ),
+                           title=f'{paper_id} annotations',
+                           styles=(table_style, monospace_body_style, details_style))
+        except KeyError:
+            return abort(404)
+
     @app.route('/curation/annotations', methods=['GET'])
     def route_annotations():
         stats = statistics(annos)

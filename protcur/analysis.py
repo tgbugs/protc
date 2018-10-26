@@ -907,8 +907,8 @@ class protc(AstGeneric):
 
     def input(self):
         value = self.value
-        #data = sgv.findByTerm(value)  # TODO could try the annotate endpoint? FIXME _extremely_ slow so skipping
-        data = None
+        data = sgv.findByTerm(value)  # TODO could try the annotate endpoint? FIXME _extremely_ slow so skipping
+        #data = None
         if data:
             subset = [d for d in data if value in d['labels']]
             if subset:
