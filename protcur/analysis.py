@@ -17,7 +17,7 @@ from IPython import embed
 from pyontutils.htmlfun import atag
 from pyontutils.hierarchies import creatTree
 from pyontutils.utils import async_getter, noneMembers, allMembers, anyMembers, TermColors as tc
-from pyontutils.core import makeGraph, makePrefixes
+from pyontutils.core import makeGraph, makePrefixes, OntTerm
 from pyontutils.scigraph_client import Vocabulary
 from pysercomb import parsing
 #from pysercomb import parsing_parsec
@@ -905,30 +905,77 @@ class protc(AstGeneric):
     def invariant(self):
         return self.parameter()
 
-    def input(self):
-        value = self.value
-        data = sgv.findByTerm(value)  # TODO could try the annotate endpoint? FIXME _extremely_ slow so skipping
+    def input(self, rank=('CHEBI', 'GO', 'UBERON', 'ilxtr', 'PATO')):
+        value = self.value.strip()
+        ont = ''
+        if '(ont' in value:
+            before, ont_after = value.split('(ont', 1)
+            ont, after = ont_after.rsplit(')', 1)  # FIXME bad parsing
+            ont = ' #:ont (ont' + ont
+            value = before + after
+            print(ont)
+
+        def manual_corrections(v):
+            if v == 'PB':
+                v = 'phosphate buffer'
+            elif v == 'PBS':
+                v = 'buffered phosphate saline'
+            elif v == 'APs':
+                v = 'action potential'  # plural ...
+            return v
+        value = manual_corrections(value)
+
+        # TODO OntTerm
+        # extend input to include black_box_component, aspect, etc
+        data = sgv.findByTerm(value, searchSynonyms=True, searchAbbreviations=True)  # TODO could try the annotate endpoint? FIXME _extremely_ slow so skipping
+        #data = list(OntTerm.query(value))  # can be quite slow if hitting interlex
         #data = None
         if data:
+            if rank:
+                def byRank(json, max=len(data)):
+                    if 'curie' in json:
+                        curie = json['curie']
+                        prefix, suffix = curie.split(':', 1)
+                        try:
+                            return rank.index(prefix)
+                        except ValueError:
+                            return max + 1
+                    else:
+                        return max + 2
+
+                data = sorted(data, key=byRank)
+
             subset = [d for d in data if value in d['labels']]
             if subset:
                 data = subset[0]
             else:
                 data = data[0]  # TODO could check other rules I have used in the past
             id_ = data['curie'] if 'curie' in data else data['iri']
-            value += f" ({id_}, {data['labels'][0]})"
+            #value += f" ({id_}, {data['labels'][0]})"
+            value = f"(term {id_} \"{data['labels'][0]}\" #:original \"{value}\"{ont})"
+            #value = ("term", id_, data['labels'][0], "#:original", value)
+            #raise ValueError(value)
+            return value
         else:
             test_input.append(value)
-        def manual_corrections(v):
-            if v == 'PB':
-                v = 'phosphate buffer'
-            elif v == 'PBS':
-                v = 'phosphate buffered saline'
-            return v
-        value = manual_corrections(value)
-        return self._value_escape(value)
+            return self._value_escape(value) + ont
+
+    def implied_input(self):
+        return self.input()
 
     def output(self):
+        return self.input()
+
+    def aspect(self):
+        return self.input()
+
+    def implied_aspect(self):
+        return self.input()
+
+    def black_box(self):
+        return self.input()
+
+    def black_box_component(self):
         return self.input()
 
     #def structured_data(self):
