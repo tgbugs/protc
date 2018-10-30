@@ -15,15 +15,24 @@ Many parts of the language will change substantially.
 ## Development installation
 Protc is built using [Racket](https://racket-lang.org/).
 I suggest using either DrRacket or emacs with racket-mode for developing and writing Protc.
-
 ``` bash
-cd protc-lib && raco pkg install && cd ..
-cd protc && raco pkg install && cd ..
-cd protc-tools-lib && raco pkg install && cd ..
-cd protc-tools && raco pkg install
+raco pkg install protc*/
 
 # building scribble docs requires
 raco pkg install scribble-math
+```
+
+## Additional setup requirements
+For some experimental features you will need [rkdf](https://github.com/tgubgs/rkdf)
+and the [NIF-Ontology](https://github.com/SciCrunch/NIF-Ontology) repo.
+```
+git clone https://github.com/tgbugs/rkdf.git
+git clone https://github.com/SciCrunch/NIF-Ontology.git
+pushd NIF-Ontology
+git checkout dev
+../rkdf/bin/rkdf-convert-all
+popd
+raco pkg install NIF-Ontology/
 ```
 
 ## Licensing
