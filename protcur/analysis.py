@@ -103,8 +103,10 @@ def readTagDocs():
     return tag_lookup
 
 tag_prefixes = 'ilxtr:', 'protc:', 'mo:', 'annotation-'
-def justTags():
-    for tag, doc in sorted(readTagDocs().items()):
+def justTags(tag_lookup=None):
+    if tag_lookup is None:
+        tag_lookup = readTagDocs()
+    for tag, doc in sorted(tag_lookup.items()):
         if anyMembers(tag, *tag_prefixes) and not doc.deprecated:
             yield tag
 
@@ -215,7 +217,9 @@ class Hybrid(HypothesisHelper):
     prefix_skip_tags = tuple()  # pattern for tags that should not be exported to the ast
     text_tags = tuple()  # tags controlling how the text of the current affects the parent's text
     children_tags = tuple()  # tags controlling how links in the text of the parent annotation are affected
-    prefix_ast = tuple()  # the tag prefix(es) that are part of the ast
+    namespace = None  # the tag prefix for this ast, ONE PREFIX PER CLASS, use NamespaceTranslators for multiple
+    tag_translators = {}
+    additional_namespaces = {}
     objects = {}  # TODO updates
     _tagIndex = {}
     _replies = {}
@@ -230,6 +234,15 @@ class Hybrid(HypothesisHelper):
             [p._addAstParent() for p in self.objects.values() if tuple(p.children)]  # handles updates
             # TODO deletes still an issue as always
 
+    @property
+    def prefix_ast(self):
+        """ namespace with the colon to make it simple to allow
+            namespaces that are substrings of other namespaces """
+        if self.namespace is not None:
+            return self.namespace + ':'
+        else:
+            return self.namespace
+
     def _fix_implied_input(self):
         if ': ' in self.text and 'hyp.is' in self.text:
             value_children_text = self.text.split(':', 1)[1]
@@ -239,10 +252,22 @@ class Hybrid(HypothesisHelper):
             return '', ''
 
     @property
+    def additional_tags(self):
+        if not hasattr(self, '_additional_tags'):
+            self._additional_tags = set(t for an in self.additional_namespaces.values()
+                                        for t in an(self).supported_tags)
+
+        return self._additional_tags
+
+
+    @property
     def isAstNode(self):
-        return (noneMembers(self._tags, *self.control_tags)
+        additional_tags = self.additional_tags
+        return (self.prefix_ast is not None
+                and noneMembers(self._tags, *self.control_tags)
                 and all(noneMembers(tag, *self.prefix_skip_tags) for tag in self.tags)
-                and any(anyMembers(tag, *self.prefix_ast) for tag in self.tags))
+                and (any(tag.startswith(self.prefix_ast) for tag in self.tags)
+                     or any(tag in additional_tags for tag in self.tags)))
 
     @property
     def ast_updated(self):
@@ -282,7 +307,7 @@ class Hybrid(HypothesisHelper):
             if correction:
                 return correction
 
-        if anyMembers(self.tags, *('protc:implied-' + s for s in ('input', 'output', 'aspect'))):  # FIXME hardcoded fix
+        if anyMembers(self.tags, *('protc:implied-' + s for s in ('input', 'output', 'aspect', 'section'))):  # FIXME hardcoded fix
             value, children_text = self._fix_implied_input()
             if value:
                 return value
@@ -317,7 +342,8 @@ class Hybrid(HypothesisHelper):
         for tag in self._tags:
             if tag not in skip_tags:
                 out.append(tag)
-        return out + add_tags
+
+        return list(self._translate_tags(out + add_tags))
 
     @property
     def _cleaned_tags(self):
@@ -330,6 +356,21 @@ class Hybrid(HypothesisHelper):
         for tag in self._tags:
             if not any(tag.startswith(prefix) for prefix in self.prefix_skip_tags):
                 yield tag
+
+    def _translate_tags(self, tags):
+        if self.tag_translators:
+            for tag in tags:
+                if ':' in tag and not tag.startswith(self.prefix_ast):  # FIXME use case for OntId
+                    prefix, suffix = tag.split(':', 1)
+                    if prefix in self.tag_translators:
+                        tt = self.tag_translators[prefix]
+                        yield tt(tag).translation
+                        continue
+
+                yield tag
+
+        else:
+            return tags
 
     @property
     def tag_corrections(self):
@@ -578,6 +619,7 @@ class Hybrid(HypothesisHelper):
 
 class AstGeneric(Hybrid):
     """ Base class that implements the core methods needed for parsing various namespaces """
+    generic_tags = 'TODO',
     control_tags = 'annotation-correction', 'annotation-tags:replace', 'annotation-tags:add', 'annotation-tags:delete'
     prefix_skip_tags = 'PROTCUR:', 'annotation-'
     text_tags = ('annotation-text:exact',
@@ -599,21 +641,44 @@ class AstGeneric(Hybrid):
         return json.dumps(value.strip())
         #return '"' + value.strip().replace('"', '\\"') + '"'
 
+    def _default_astValue(self):
+        return self._value_escape(self.value)
+
     def _dispatch(self):
-        def inner():
-            return self._value_escape(self.value)
         type_ = self.astType
         if type_ is None:
+            embed()
+            # FIXME super() doesn't work on the metaclasses below :/
             raise TypeError(f'Cannot dispatch on NoneType!\n{super().__repr__()}')
-        namespace, dispatch_on = type_.split(':', 1)
-        if namespace != self.__class__.__name__:
-            raise TypeError(f'{self.classn} does not dispatch on types from '
-                            f'another namespace ({namespace}).')
+
+        if ':' in type_:
+            namespace, dispatch_on = type_.split(':', 1)
+        else:  # generic
+            return self.additional_namespaces[None](self).astValue
+
+        if namespace != self.namespace:
+            if namespace in self.additional_namespaces:
+                # there is not a 1:1 mapping of controlled tags to annotation groups
+                # HOWEVER sometimes we may want to _remap_ the semantics of that
+                # namespace into the current handler
+                return self.additional_namespaces[namespace](self).astValue
+            else:
+                embed()
+                raise TypeError(f'{self.classn} does not dispatch on types from '
+                                f'another namespace ({namespace}) ({self.tags}).')
         dispatch_on = dispatch_on.replace('*', '').replace('-', '_')
-        return getattr(self, dispatch_on, inner)()
+        return getattr(self, dispatch_on, self._default_astValue)()
 
     @classmethod
     def parsed(cls):
+        return (cls.lang_line + '\n' +
+                ''.join(sorted(repr(o)
+                               for o in cls.objects.values()
+                               if o is not None and o.isAstNode)))
+
+    @classmethod
+    def protcurLang(cls):
+        """ A clean output for consumption by #lang protc/ur """
         return (cls.lang_line + '\n' +
                 ''.join(sorted(repr(o)
                                for o in cls.objects.values()
@@ -643,21 +708,23 @@ class AstGeneric(Hybrid):
     @property
     def astType(self):
         if self.isAstNode:
-            tags = self.tags
-            for tag in self._order:
-                ctag = 'protc:' + tag
-                if ctag in tags:
-                    if (tag in ('input', 'implied-input') and
+            tags = self.tags  # compute once since tags is a property
+            for suffix in self._order:
+                tag = 'protc:' + suffix
+                if tag in tags:
+                    if (suffix in ('input', 'implied-input') and
                         not self.hasAstParent and
                         list(self.children)):
                         self._was_input = True  # FIXME make this clearer
                         return 'protc:output'
                     else:
-                        return ctag
+                        return tag
             if len(tags) == 1:
                 return tags[0]
             elif len(list(self._cleaned_tags)) == 1:
                 return next(iter(self._cleaned_tags))
+            elif 'TODO' in tags and len(tags) == 2:  # FIXME remove hardcoding
+                return next(t for t in tags if t != 'TODO')
             else:
                 tl = ' '.join(f"'{t}" for t in sorted(tags))
                 printD(f'Warning: something weird is going on with (annotation-tags {tl}) and self._order {self._order}')
@@ -696,6 +763,7 @@ class AstGeneric(Hybrid):
                 out = f"'(circular-link no-type (cycle {cyc}))" + ')' * nparens
                 return out
             else:
+                printD(tc.red('WARNING:'), f'unhandled type for {self._repr} {self.tags}')
                 return super().__repr__(html=html, number=number)
 
         self.linePreLen = self.indentDepth * (depth - 1) + len('(') + len(str(self.astType)) +  len(' ')
@@ -754,7 +822,9 @@ class AstGeneric(Hybrid):
 
 
 class protc(AstGeneric):
-    prefix_ast = 'protc:',
+    namespace = 'protc'
+    tag_translators = {}
+    additional_namespaces = {}  # filled in by the child classes
     lang_line = '#lang protc/ur'
     indentDepth = 2
     objects = {}  # TODO updates
@@ -1006,6 +1076,161 @@ class protc(AstGeneric):
     #def measure(self): return self.value
     #def symbolic_measure(self): return self.value
 
+
+class NamespaceAstValueTranslator:
+    """ Base class for defining translators that operate on the astValue of
+        some other namespace. These cannot be used 
+    """
+
+
+class RegNVT(type):
+    def __init__(self, *args, **kwargs):
+        self.target_type.additional_namespaces[self.namespace] = self
+        super().__init__(*args, **kwargs)
+
+
+class NamespaceValueTranslator:
+    """ Base class used to translate naming convetions from one namespace
+        into another at the raw value stage rather than the astValue stage.
+
+        Subclasses of this class should never access the astValue of
+        self.base since these classes are used to generate self.base.astValue
+        and this will cause a recursion error.
+
+        NamespaceHelper.target_type should be set to the class that implements
+        the semantics that this namespace should translate into.
+
+    """
+
+    class BaseNamespaceMismatchError:
+        pass
+
+    target_type = None
+    classn  = HypothesisHelper.classn
+    prefix_ast = Hybrid.prefix_ast
+    _value_escape = AstGeneric._value_escape
+    _dispatch = AstGeneric._dispatch
+    astValue = AstGeneric.astValue
+    namespace = None
+    _order = tuple()
+    isAstNode = True
+    additional_namespaces = tuple()  # intentionally not a dict because dont want this
+
+    def __init__(self, target_instance):
+        self.target_instance = target_instance
+        if not isinstance(self.target_instance, self.target_type):
+            raise self.TargetNamespaceMismatchError('{type(self.target_instance)} is not a {self.targt_type}')
+
+    @property
+    def supported_tags(self):
+        for suffix in self._order:
+            yield self.prefix_ast + suffix
+
+    @property
+    def value(self):
+        return self.target_instance.value
+
+    @property
+    def tags(self):
+        return [t for t in self.target_instance.tags if t.startswith(self.prefix_ast)]
+
+    @property
+    def astType(self):
+        tags = self.tags
+        for suffix in self._order:
+            tag = self.prefix_ast + suffix
+            if tag in tags:
+                return tag
+
+    def _default_astValue(self):
+        #type_ = self.astType
+        #predicate = type_ if type_ is not None else '/'.join(self.tags)
+        return self.target_instance._default_astValue()
+        #return f'({predicate} {self.target_instance._default_astValue()})'
+        # we don't have to set the prefix here because
+        # in order to get this far the parent has to know about this
+        # tag, otherwise it will abort
+
+
+embed()
+class protc_generic(NamespaceValueTranslator, metaclass=RegNVT):
+    """ tags without namespaces """
+    target_type = protc
+    namespace = None
+    _order = 'TODO',
+    #target_type.additional_namespaces[namespace] = protc_generic  # FIXME
+
+    def __init__(self, generic_instance):
+        self.namespace = ''  # hack so we can reuse _dispatch
+        super().__init__(generic_instance)
+
+    @property
+    def prefix_ast(self):
+        # hack to fool dispatch, these are NO namespace, not empty namespace
+        return ''
+
+    @property
+    def tags(self):
+        return [t for t in self.target_instance.tags if ':' not in t]
+
+    @property
+    def astType(self):
+        for tag in self._order:
+            if tag in self.target_instance.tags:
+                return ':' + tag  # hack to fool _dispatch into thinking there is an empty namespace
+
+    #def TODO(self):
+        #return '(TODO {self.target_instace._default_astValue())})'
+    
+
+class protc_ilxtr(NamespaceValueTranslator, metaclass=RegNVT):
+    target_type = protc
+    namespace = 'ilxtr'
+    _order = 'technique',
+    def __init__(self, protc_instance):
+        super().__init__(protc_instance)
+
+    def technique(self):
+        # techniques lacking sections are converted to impls
+        # since they are likely to involve many steps and impl
+        # is the correct place holder for things with just words
+        return '(protc:impl {self.value})'
+
+
+class RegTT(type):
+    def __init__(self, *args, **kwargs):
+        for target_type in self.target_types:
+            target_type.tag_translators[self.namespace] = self
+
+        super().__init__(*args, **kwargs)
+
+
+class TagTranslator:
+    """ Use for pre ast translation of tags """
+
+    _tag_lookup = readTagDocs()
+    order_ = tuple(t for t in justTags(_tag_lookup) if t.startswith('mo:'))
+    namespace = None
+    target_namespace = None
+
+    def __init__(self, tag):
+        self.tag = tag
+
+    @property
+    def translation(self):
+        if self.tag in self._tag_lookup:
+            tagdoc = self._tag_lookup[self.tag]
+            return next(t for t in tagdoc.parents if t.startswith(self.target_namespace + ':'))
+        else:
+            return self.tag
+
+
+class mo_to_ilxtr(TagTranslator, metaclass=RegTT):
+    target_types = protc,
+    namespace = 'mo'
+    target_namespace = 'ilxtr'
+
+
 #
 # utility
 
@@ -1144,6 +1369,8 @@ def main():
         with open('/tmp/pl-protcur.rkt', 'wt') as f: f.write(pl)
         pn = protc.parentneed()
         with open('/tmp/pn-protcur.rkt', 'wt') as f: f.write(pn)
+        lang_output = protc.protcurLang()
+        with open('/tmp/protcur-lang.rkt', 'wt') as f: f.write(lang_output)
     more()
     def update():
         protc.objects = {}

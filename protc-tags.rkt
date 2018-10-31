@@ -38,6 +38,8 @@
          "Detailed description involving the desired outcome, probably should be `protc:objective*`.")
 (tag-doc 'mo:technique 'ilxtr:technique
          "Simple, concise verbs describing procedure (that you can learn)")
+(tag-doc 'mo:tool 'ilxtr:participant
+         "")
 (tag-doc 'protc:*check '(ilxtr:deprecatedTag ilxtr:measure)
          "conflation of a *measure and a check against some logical condition, this may come back at some point")
 (tag-doc 'protc:*make* '(ilxtr:deprecatedTag ilxtr:participant)
