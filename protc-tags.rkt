@@ -42,9 +42,9 @@
          "conflation of a *measure and a check against some logical condition, this may come back at some point")
 (tag-doc 'protc:*make* '(ilxtr:deprecatedTag ilxtr:participant)
          "Descriptions of how to set up the lab environment (microscope, etc) or a specific input. See also `protc:output`, `protc:input` [3-15-18 This is an old usage, should be replaced by protc:output and protc:input if it is also used within the protocol (it usually is).]")
-(tag-doc 'protc:*measure '(ilxtr:measure ilxtr:aspect)
+(tag-doc 'protc:*measure '(protc:section ilxtr:measure ilxtr:aspect)
          "Takes `protc:input`s. Returns a `protc:symbolic-output`. The name of the subset of the world that we are interested in producing a number about?? [stick to the function name version of this?] [3-15-18: The actual text of most of these are aspects. From the text it is clear that they are aspects that are intended to be measured. The correct way to model these is probably with protc:aspect + protc:*measure] ")
-(tag-doc 'protc:actualize 'ilxtr:actualizing
+(tag-doc 'protc:actualize '(protc:section ilxtr:actualizing)
          "actualizen node, normally associated with spec")
 (tag-doc 'protc:ambigious-error '(typo)
          "typo do not display in list")
@@ -79,7 +79,7 @@
          "Specific details and descriptions of ways to perform each step.")
 (tag-doc 'protc:i-have-no-idea 'ilxtr:executorSemantics
          "I understand what is going on, but I have no idea how to break it down into its parts, often VERY dense text that contains tons of information, may imply `protc:delegated-instructions` or `protc:executor-verb`.")
-(tag-doc 'protc:impl 'protc:control-flow
+(tag-doc 'protc:impl 'protc:section
          "protc:impl indicates that the text in question, or its translation into protc sould be contained in an impl section.")
 (tag-doc 'protc:implementation-note '(TODO)
          "")
@@ -89,6 +89,8 @@
          "Use this tag only in a reply to an annotation where there is an implied `protc:input` that has no annotateable reference or anchor in the text.")
 (tag-doc 'protc:implied-output 'ilxtr:participant
          "Use this tag only in a reply to an annotation where there is an implied `protc:output` that has no annotateable reference or anchor in the text.")
+(tag-doc 'protc:implied-section 'protc:section
+         "Use this tag only in a reply to an annotation where there is an implied `protc:section` that has not annotateable reference or anchor in the text.")
 (tag-doc 'protc:input 'ilxtr:participant
          "Equipment used in the lab, tools, chemical solutions, research subjects, anything that is an input to a step that you need to retrieve or refer to for any reason.")
 (tag-doc 'protc:input-instance '(ilxtr:participant)
@@ -147,7 +149,9 @@
          "A number generated as the result of a `protc:*measure`.")
 (tag-doc 'protc:same-reference '(ilxtr:citationTag)
          "")
-(tag-doc 'protc:spec '()
+(tag-doc 'protc:section '()
+         "This tag should not be used directly. Subclasses of this tag instruct the construction of the corresponding protc code block. When annotating methdos sections it is common to encounter cases where the section type is entirely implied, or conflated with the output. If you want an explicit section in these cases use `protc:implied-section`. NOTE: in theory many of these sections can and are inferred from the designation of input and output. However, more complex sections, especially impl or ordering sections usually require the section to be created by the annotator. At the very least, subclasses of this tag can be used to resolve ambiguous cases where ```#lang protc/ur``` needs help.")
+(tag-doc 'protc:spec '(protc:section)
          "spec section node")
 (tag-doc 'protc:specification '()
          "")
