@@ -11,19 +11,25 @@ import os
 import re
 import ast
 import json
-from pathlib import PurePath
+import inspect
+from pathlib import PurePath, Path
 from collections import Counter
-from IPython import embed
-from pyontutils.htmlfun import atag
-from pyontutils.hierarchies import creatTree
+import rdflib
+import ontquery as oq
+from pyontutils.core import makeGraph, makePrefixes, OntId, simpleOnt
 from pyontutils.utils import async_getter, noneMembers, allMembers, anyMembers, TermColors as tc
-from pyontutils.core import makeGraph, makePrefixes, OntTerm
+from pyontutils.config import devconfig
+from pyontutils.htmlfun import atag
+from pyontutils.namespaces import ilxtr
+from pyontutils.hierarchies import creatTree
 from pyontutils.scigraph_client import Vocabulary
+from pyontutils.closed_namespaces import rdf, rdfs, owl
 from pysercomb import parsing
 #from pysercomb import parsing_parsec
 from hyputils.hypothesis import HypothesisAnnotation, HypothesisHelper, idFromShareLink, shareLinkFromId
 from protcur.core import linewrap
 from desc.prof import profile_me
+from IPython import embed
 
 try:
     from misc.debug import TDB
@@ -343,7 +349,7 @@ class Hybrid(HypothesisHelper):
             if tag not in skip_tags:
                 out.append(tag)
 
-        return list(self._translate_tags(out + add_tags))
+        return sorted(set(self._translate_tags(out + add_tags)))
 
     @property
     def _cleaned_tags(self):
@@ -647,9 +653,11 @@ class AstGeneric(Hybrid):
     def _dispatch(self):
         type_ = self.astType
         if type_ is None:
-            embed()
-            # FIXME super() doesn't work on the metaclasses below :/
-            raise TypeError(f'Cannot dispatch on NoneType!\n{super().__repr__()}')
+            if isinstance(self, HypothesisHelper):
+                raise TypeError(f'Cannot dispatch on NoneType!\n{super()!r}')
+            else:
+                raise TypeError('Cannot dispatch on NoneType!\n'
+                                f'{HypothesisHelper.__repr__(self.target_instance)}')
 
         if ':' in type_:
             namespace, dispatch_on = type_.split(':', 1)
@@ -741,9 +749,13 @@ class AstGeneric(Hybrid):
         elif not other.isAstNode:
             return True
         else:
+            type_ = self.astType
+            type_ = type_ if type_ is not None else 'zzzzzzzzzzzzzzzzzzzzzzz'
+            oat = other.astType
+            oat = oat if oat is not None else 'zzzzzzzzzzzzzzzzzzzzzzz'
             try:
                 #return self.astType + self.astValue >= other.astType + other.astValue
-                return self.astType + self.value >= other.astType + other.value
+                return type_ + self.value >= oat + other.value
             except TypeError as e:
                 embed()
                 raise e
@@ -1152,7 +1164,26 @@ class NamespaceValueTranslator:
         # tag, otherwise it will abort
 
 
-embed()
+class order_deco:  # FIXME make it so we dont' have to init every time
+    """ define functions in order to get order! """
+    def __init__(self):
+        self.order = tuple()
+
+    def mark(self, cls):
+        if not hasattr(cls, '_order'):
+            cls._order = self.order
+        else:
+            cls._order += self.order
+
+        return cls
+
+    def __call__(self, function):
+        self.order += function.__name__,
+        return function
+
+
+od = order_deco()
+@od.mark
 class protc_generic(NamespaceValueTranslator, metaclass=RegNVT):
     """ tags without namespaces """
     target_type = protc
@@ -1183,18 +1214,25 @@ class protc_generic(NamespaceValueTranslator, metaclass=RegNVT):
         #return '(TODO {self.target_instace._default_astValue())})'
     
 
+od = order_deco()
+@od.mark
 class protc_ilxtr(NamespaceValueTranslator, metaclass=RegNVT):
     target_type = protc
     namespace = 'ilxtr'
-    _order = 'technique',
     def __init__(self, protc_instance):
         super().__init__(protc_instance)
 
+    @od
     def technique(self):
         # techniques lacking sections are converted to impls
         # since they are likely to involve many steps and impl
         # is the correct place holder for things with just words
         return '(protc:impl {self.value})'
+
+    @od
+    def participant(self):
+        # FIXME ambiguous
+        return '(protc:input {self.value})'
 
 
 class RegTT(type):
@@ -1229,6 +1267,85 @@ class mo_to_ilxtr(TagTranslator, metaclass=RegTT):
     target_types = protc,
     namespace = 'mo'
     target_namespace = 'ilxtr'
+
+
+# sparc translation
+
+from pyontutils.core import Source
+from pyontutils.annotation import AnnotationMixin
+
+
+class protcur_to_technique:
+    """ protocolExecution, techniqueExecution, as well as high level techinques """
+    def __init__(self):
+        pass
+
+
+class technique_to_sparc(AnnotationMixin):
+    # we have 3 options for how to do this, neurons style, methods style, or parcellation style
+    def __init__(self):
+        olr = Path(devconfig.ontology_local_repo)
+        g = (rdflib.Graph()
+            .parse((olr / 'ttl/sparc-methods.ttl').as_posix(),
+                    format='turtle')
+            .parse((olr / 'ttl/methods-core.ttl').as_posix(),
+                    format='turtle')
+            .parse((olr / 'ttl/methods-helper.ttl').as_posix(),
+                    format='turtle')
+            .parse((olr / 'ttl/methods.ttl').as_posix(),
+                    format='turtle'))
+
+        rq = oq.plugin.get('rdflib')(g)
+        self.rq = rq
+        query = oq.OntQuery(rq)
+        oq.OntCuries({p:i for p, i in g.namespaces()})
+        oq.OntTerm.query = query
+        oq.query.QueryResult._OntTerm = oq.OntTerm
+        OntTerm = oq.OntTerm
+
+
+        # if you don't set this QueryResult will switch to pyontutils and hit interlex so very slow
+        sparc_ents = OntTerm.search(None, prefix='sparc')
+        ontids = sorted(OntId(u) for u in
+                        set(e for t in g for e in t
+                            if isinstance(e, rdflib.URIRef) and 'sparc/' in e))
+
+        self._triples = tuple()  # TODO
+
+
+    @property
+    def onts(self):
+        #self.onts = rq.onts  # FIXME this is obscure and indirect sort the imports so it is clear
+        yield from self.rq.onts
+
+    @property
+    def protocols(self):
+        yield from (p for p in protc if '.html' in p.uri or any('.html' in p for p in p.astParents))
+
+    @property
+    def inputs(self):
+        yield from (p for p in protocol if p.astType == 'protc:input')
+
+    @property
+    def triples(self):
+        yield from self._triples
+
+
+def sparc_mapping():
+    tts = technique_to_sparc()
+
+    metadata_example = simpleOnt(filename=f'sparc-metadata-example',
+                                 prefixes=oq.OntCuries._dict,  # FIXME 
+                                 imports=[o for o in tts.onts if 'sparc-methods' in o],
+                                 triples=tts.triples,
+                                 comment='example converstion to sparc metadata',
+                                 path='ttl/',
+                                 branch='sparc',
+                                 fail=False,
+                                 _repo=True,
+                                 write=False)
+
+    embed()
 
 
 #
@@ -1380,10 +1497,13 @@ def main():
         more()
     if args['--sync']:
         stream_thread.start()  # need this to be here to catch deletes
-    embed()
+
+    sparc_mapping()
+    #embed()
     exit_loop()
     if args['--sync']:
         stream_thread.join()
+
 
 def _more_main():
     input_text_args = [(basic_start(a).strip(),) for a in annos if 'protc:input' in a.tags or 'protc:output' in a.tags]
