@@ -1310,7 +1310,27 @@ class technique_to_sparc(AnnotationMixin):
                         set(e for t in g for e in t
                             if isinstance(e, rdflib.URIRef) and 'sparc/' in e))
 
+        {
+            'protc:*measure': 'sparc:Acquisition',
+            ('protc:aspect', ()): 'sparc:Anesthesia',
+            ()
+            ('protc:aspect'): 'sparc:Acquisition',   # not actualized probably
+            None: 'sparc:perfusionProtocol',
+            }
+        # first pass
+        # # do a first pass to have 0 or 1 on all the edges
+
+        # collapse
+        # link all parts of protocls into experiments
+        embed()
         self._triples = tuple()  # TODO
+
+        protocol = list(self.protocols)
+        inputs = [p for p in protocol if p.astType == 'protc:input']
+        aspects = [p for p in protocol if p.astType == 'protc:aspect']
+        parameters = [p for p in protocol if p.astType == 'protc:parameter*']
+        measure = [p for p in protocol if p.astType == 'protc:*measure' or p.astType == 'protc:symbolic-measure']
+        telos = [p for p in protocol if p.astType == 'protc:telos']
 
 
     @property
@@ -1320,7 +1340,7 @@ class technique_to_sparc(AnnotationMixin):
 
     @property
     def protocols(self):
-        yield from (p for p in protc if '.html' in p.uri or any('.html' in p for p in p.astParents))
+        yield from (p for p in protc if '.html' in p.uri)# or (any('.html' in p for p in p.astParents if p is not None) if p.astParents is not None else False))
 
     @property
     def inputs(self):
@@ -1334,6 +1354,7 @@ class technique_to_sparc(AnnotationMixin):
 def sparc_mapping():
     tts = technique_to_sparc()
 
+    protocols = list(tts.protocols)
     metadata_example = simpleOnt(filename=f'sparc-metadata-example',
                                  prefixes=oq.OntCuries._dict,  # FIXME 
                                  imports=[o for o in tts.onts if 'sparc-methods' in o],
