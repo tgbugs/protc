@@ -10,8 +10,8 @@ def annoSync(memoization_file='/tmp/protc-annotations.pickle', helpers=tuple(), 
     prefilter = preFilter(groups=[group], tags=tags).export()
     helperSyncHandler.memoizer = get_annos
     helperSyncHandler.helpers = helpers
-    def include_only_tag_prefix():
-    helperSyncHandler.filter = 
+    #def include_only_tag_prefix():
+    #helperSyncHandler.filter = 
     annos = get_annos()
     if tags:
         annos = [a for a in annos if any(any(ft in at for ft in tags) for at in a.tags)]

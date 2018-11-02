@@ -399,6 +399,7 @@ class Hybrid(HypothesisHelper):
     @property
     def _cleaned_tags(self):
         for tag in self.tags:
+            #print(self.prefix_skip_tags, self.tags)
             if not any(tag.startswith(prefix) for prefix in self.prefix_skip_tags):
                 yield tag
 
@@ -970,12 +971,13 @@ class protc(AstGeneric):
 
     @property
     def mapped_tags(self):
-        try:
-            s = SparcMI.byId(self.id)
-            if s.protc_unit_mapping:
-                yield 'protc:parameter*'
-        except Warning:
-            pass
+        if self._done_loading and SparcMI._done_loading:
+            try:
+                s = SparcMI.byId(self.id)
+                if s.protc_unit_mapping:
+                    yield 'protc:parameter*'
+            except Warning:
+                pass
 
     def objective(self):
         if self.value in (' room  temperature'):
@@ -1359,8 +1361,9 @@ class GraphOutputClass(iterclass):
             graph.add(t)
 
         for obj in self.objects.values():
-            for t in obj.triples:
-                graph.add(t)
+            if obj.isAstNode:
+                for t in obj.triples:
+                    graph.add(t)
 
         [graph.bind(p, n) for p, n in obj.graph.namespaces()]  # FIXME not quite right?
         # TODO add and remove triples on websocket update
@@ -1411,9 +1414,13 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
     def only_tag(self):
         """ just in case """
         try:
-            return next(iter(self.tags))
+            return next(t for t in self.tags if self.prefix_ast in t)
         except StopIteration:
             return None
+
+    #@property
+    #def isAstNode(self):
+        #bool([t for t in self.tags if self.prefix_ast in t])
 
     @property
     def astType(self):
@@ -1422,51 +1429,61 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
     @property
     def isClass(self):
         """ the tag used is a class implies the start of a named individual """
-        return self.only_tag in self.all_classes
+        return self.only_tag in self.all_classes()
 
     @property
     def isProperty(self):
-        return self.only_tag in self.all_properties
+        return self.only_tag in self.all_properties()
 
-    @property
-    def all_properties(self):
-        if not hasattr(self, '_all_properties'):
-            # FIXME OntId duplicates rdflib qname
-            self._all_properties = set(OntId(s).curie for s, o in self.graph[:rdf.type:]
-                                       if isinstance(s, rdflib.URIRef) and
-                                       OntId(s).prefix == self.namespace and
-                                       o in (owl.ObjectProperty,
-                                             owl.DatatypeProperty,
-                                             owl.AnnotationProperty))
+    @classmethod
+    def all_properties(cls):
+        if cls.graph:
+            if not hasattr(cls, '_all_properties'):
+                # FIXME OntId duplicates rdflib qname
+                cls._all_properties = set(OntId(s).curie for s, o in cls.graph[:rdf.type:]
+                                        if #not print(s, o) and
+                                            isinstance(s, rdflib.URIRef) and
+                                        OntId(s).prefix == cls.namespace and
+                                        o in (owl.ObjectProperty,
+                                                owl.DatatypeProperty,
+                                                owl.AnnotationProperty))
 
-        return self._all_properties
+            return cls._all_properties
+        else:
+            pass
 
-    @property
-    def all_classes(self):
-        if not hasattr(self, '_all_classes'):
-            self._all_classes = set(OntId(s).curie for s, o in self.graph[:rdf.type:]
-                                    if isinstance(s, rdflib.URIRef) and
-                                    OntId(s).prefix == self.namespace and
-                                    o == owl.Class)
-        return self._all_classes
+    @classmethod
+    def all_classes(cls):
+        if cls._done_loading:
+            if not hasattr(cls, '_all_classes'):
+                cls._all_classes = set(OntId(s).curie for s, o in cls.graph[:rdf.type:]
+                                        if isinstance(s, rdflib.URIRef) and
+                                        OntId(s).prefix == cls.namespace and
+                                        o == owl.Class)
+            return cls._all_classes
 
     @property
     def protc_unit_mapping(self):
-        return self.astType in self.um
+        return self.astType in self.um()
 
-    @property
-    def um(self):  # FIXME this needs to be class level
-        if not hasattr(self, '_um'):
-            self._um = set(t for t in self.all_properties if 'Weight' in t)
+    @classmethod
+    def um(cls):  # FIXME this needs to be class level
+        if cls.graph is not None:
+            if not hasattr(cls, '_um'):
+                cls._um = set(t for t in cls.all_properties() if 'Weight' in t)
 
-        return self._um
+            return cls._um
+        else:
+            return tuple()
 
     @property
     def value(self):
         v = super().value
         if 'hyp.is' in v:
-            a, b = v.split('https://hyp.is')
+            a, b = v.split('https://hyp.is', 1)  # hyp.is comes second
+            v = a
         return v 
+
     @property
     def subject(self):
         # TODO just get the subject from the 'children'
@@ -1495,10 +1512,9 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         if self.isClass:
             return rdf.type
         elif self.isProperty:
-            p = next(t for t in self.tags if t in self.all_properties)  # FIXME for now are going with 1 tag
+            p = next(t for t in self.tags if t in self.all_properties())  # FIXME for now are going with 1 tag
             return OntId(p).u
         else:
-            print(self.tags)
             return ilxtr.WHAT
 
     @property
@@ -1506,7 +1522,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         if self.isClass:
             return owl.NamedIndividual
         else:
-            if self.astType in self.um:
+            if self.astType in self.um():
                 v = protc.byId(self.id).astValue
                 if '(rest' in v:
                     v, junk = v.rsplit('(rest', 1)
@@ -1526,7 +1542,6 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
     @property
     def triples(self):
         t = self.subject, self.predicate, self.object
-        print(t, self.id)
         po = ilxtr.literatureReference, rdflib.URIRef(self.shareLink)
         yield t
         yield from self.extra_triples

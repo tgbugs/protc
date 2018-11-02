@@ -330,15 +330,19 @@ def make_sparc(app=Flask('sparc curation services')):
 def main():
     from core import annoSync
     get_annos, annos, stream_thread, exit_loop = annoSync('/tmp/protcur-server-annos.pickle',
-                                                          helpers=(Hybrid, protc))
+                                                          helpers=(Hybrid, protc, SparcMI))
     stream_thread.start()
     #[HypothesisHelper(a, annos) for a in annos]
+    [SparcMI(a, annos) for a in annos]
     [Hybrid(a, annos) for a in annos]
     [protc(a, annos) for a in annos]
-    Hybrid.byTags('protc:output')  # FIXME trigger index creation
-    protc.byTags('protc:output')  # FIXME trigger index creation
+    SparcMI.byTags('sparc:lastName')
 
     app = make_app(annos)
+    make_sparc(app)
+
+    Hybrid.byTags('protc:output')  # FIXME trigger index creation
+    protc.byTags('protc:output')  # FIXME trigger index creation
 
     app.debug = False
     app.run(host='localhost', port=7000, threaded=True)  # nginxwoo
@@ -364,4 +368,4 @@ def sparc_main():
 
 if __name__ == '__main__':
 
-    sparc_main()
+    main()
