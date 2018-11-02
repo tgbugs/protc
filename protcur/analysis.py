@@ -13,20 +13,24 @@ import ast
 import json
 import inspect
 from pathlib import PurePath, Path
+from datetime import datetime
+from itertools import chain
 from collections import Counter
 import rdflib
 import ontquery as oq
+from pyontutils import combinators as cmb
 from pyontutils.core import makeGraph, makePrefixes, OntId, simpleOnt
 from pyontutils.utils import async_getter, noneMembers, allMembers, anyMembers, TermColors as tc
 from pyontutils.config import devconfig
 from pyontutils.htmlfun import atag
-from pyontutils.namespaces import ilxtr
+from pyontutils.annotation import AnnotationMixin
+from pyontutils.namespaces import ilxtr, TEMP
 from pyontutils.hierarchies import creatTree
 from pyontutils.scigraph_client import Vocabulary
 from pyontutils.closed_namespaces import rdf, rdfs, owl
 from pysercomb import parsing
 #from pysercomb import parsing_parsec
-from hyputils.hypothesis import HypothesisAnnotation, HypothesisHelper, idFromShareLink, shareLinkFromId
+from hyputils.hypothesis import HypothesisAnnotation, HypothesisHelper, idFromShareLink, shareLinkFromId, iterclass
 from protcur.core import linewrap
 from desc.prof import profile_me
 from IPython import embed
@@ -216,6 +220,7 @@ def inputRefs(annos):
                         yield id_
 
 
+
 class Hybrid(HypothesisHelper):
     """ Base class for building abstract syntax trees
         from hypothes.is annotations. """
@@ -248,6 +253,41 @@ class Hybrid(HypothesisHelper):
             return self.namespace + ':'
         else:
             return self.namespace
+
+    def ontLookup(self, value, rank=('CHEBI', 'GO', 'UBERON', 'ilxtr', 'PATO')):
+
+        # TODO OntTerm
+        # extend input to include black_box_component, aspect, etc
+        data = sgv.findByTerm(value, searchSynonyms=True, searchAbbreviations=True)  # TODO could try the annotate endpoint? FIXME _extremely_ slow so skipping
+        #data = list(OntTerm.query(value))  # can be quite slow if hitting interlex
+        #data = None
+        if not data:
+            return None, None
+
+        if rank:
+            def byRank(json, max=len(data)):
+                if 'curie' in json:
+                    curie = json['curie']
+                    prefix, suffix = curie.split(':', 1)
+                    try:
+                        return rank.index(prefix)
+                    except ValueError:
+                        return max + 1
+                else:
+                    return max + 2
+
+            data = sorted(data, key=byRank)
+
+        subset = [d for d in data if value in d['labels']]
+        if subset:
+            data = subset[0]
+        else:
+            data = data[0]  # TODO could check other rules I have used in the past
+
+        id = data['curie'] if 'curie' in data else data['iri']
+        label = data['labels'][0]
+
+        return id, label
 
     def _fix_implied_input(self):
         if ': ' in self.text and 'hyp.is' in self.text:
@@ -642,7 +682,7 @@ class AstGeneric(Hybrid):
     """ Base class that implements the core methods needed for parsing various namespaces """
     generic_tags = 'TODO',
     control_tags = 'annotation-correction', 'annotation-tags:replace', 'annotation-tags:add', 'annotation-tags:delete'
-    prefix_skip_tags = 'PROTCUR:', 'annotation-'
+    prefix_skip_tags = 'PROTCUR:', 'annotation-', 'sparc:'
     text_tags = ('annotation-text:exact',
                  'annotation-text:text',
                  'annotation-text:value',
@@ -1002,7 +1042,7 @@ class protc(AstGeneric):
     def invariant(self):
         return self.parameter()
 
-    def input(self, rank=('CHEBI', 'GO', 'UBERON', 'ilxtr', 'PATO')):
+    def input(self):  # TODO reinstate rank as an arg
         value = self.value.strip()
         ont = ''
         if '(ont' in value:
@@ -1010,7 +1050,7 @@ class protc(AstGeneric):
             ont, after = ont_after.rsplit(')', 1)  # FIXME bad parsing
             ont = ' #:ont (ont' + ont
             value = before + after
-            print(ont)
+            #print(ont)
 
         def manual_corrections(v):
             if v == 'PB':
@@ -1022,39 +1062,16 @@ class protc(AstGeneric):
             return v
         value = manual_corrections(value)
 
-        # TODO OntTerm
-        # extend input to include black_box_component, aspect, etc
-        data = sgv.findByTerm(value, searchSynonyms=True, searchAbbreviations=True)  # TODO could try the annotate endpoint? FIXME _extremely_ slow so skipping
-        #data = list(OntTerm.query(value))  # can be quite slow if hitting interlex
-        #data = None
-        if data:
-            if rank:
-                def byRank(json, max=len(data)):
-                    if 'curie' in json:
-                        curie = json['curie']
-                        prefix, suffix = curie.split(':', 1)
-                        try:
-                            return rank.index(prefix)
-                        except ValueError:
-                            return max + 1
-                    else:
-                        return max + 2
-
-                data = sorted(data, key=byRank)
-
-            subset = [d for d in data if value in d['labels']]
-            if subset:
-                data = subset[0]
-            else:
-                data = data[0]  # TODO could check other rules I have used in the past
-            id_ = data['curie'] if 'curie' in data else data['iri']
+        id, label = self.ontLookup(value)
+        if id:
             #value += f" ({id_}, {data['labels'][0]})"
-            value = f"(term {id_} \"{data['labels'][0]}\" #:original \"{value}\"{ont})"
+            value = f"(term {id} \"{label}\" #:original \"{value}\"{ont})"
             #value = ("term", id_, data['labels'][0], "#:original", value)
             #raise ValueError(value)
             return value
         else:
             test_input.append(value)
+            #print(value, ont)
             return self._value_escape(value) + ont
 
     def implied_input(self):
@@ -1287,7 +1304,225 @@ class mo_to_ilxtr(TagTranslator, metaclass=RegTT):
 # sparc translation
 
 from pyontutils.core import Source
-from pyontutils.annotation import AnnotationMixin
+
+class GraphOutputClass(iterclass):
+    """ TODO accumulate triples as we go """
+
+    def __init__(self, *args, **kwargs):
+        self._n = -1
+        super().__init__(*args, **kwargs)
+
+    def __iter__(self):
+        # FIXME this should be implemented somewhere else
+        for obj in super().__iter__():
+            if obj.astType:
+                yield obj
+
+    @property
+    def n(self):
+        self._n += 1
+        return self._n
+
+    @property
+    def metadata(self):
+        """ ontology metadata ala interlex """
+        nowish = datetime.utcnow()  # request doesn't have this
+        epoch = nowish.timestamp()
+        iso = nowish.isoformat()
+        ontid = TEMP['sparc/all-annotations']  # FIXME abstract this
+        ver_ontid = rdflib.URIRef(ontid + f'/version/{epoch}/all-annotations')
+
+        yield ontid, rdf.type, owl.Ontology
+        yield ontid, owl.versionIRI, ver_ontid
+        yield ontid, owl.versionInfo, rdflib.Literal(iso)
+        yield ontid, rdfs.comment, rdflib.Literal('All annotations for SPARC metadata.')
+
+    def ttl(self):
+        return self.serialize().decode()
+
+    def serialize(self, format='nifttl'):
+        graph = rdflib.Graph()
+        for t in self.metadata:
+            graph.add(t)
+
+        for obj in self.objects.values():
+            for t in obj.triples:
+                graph.add(t)
+
+        [graph.bind(p, n) for p, n in obj.graph.namespaces()]  # FIXME not quite right?
+        # TODO add and remove triples on websocket update
+        return graph.serialize(format=format)
+
+
+class SparcMI(AstGeneric, metaclass=GraphOutputClass):
+    """ Class for transforming Hypothes.is annotations
+        into sparc datamodel rdf"""
+    namespace = 'sparc'
+    prefix_skip_tags = 'protc:', 'PROTCUR:', 'annotation-'
+
+    generic_tags = tuple()
+    tag_translators = {}
+
+    indentDepth = 2
+    objects = {}  # TODO updates
+    _tagIndex = {}
+    _replies = {}  # without this Hybrid replies will creep in
+    _astParentIndex = {}
+
+    graph = None  # TODO set at
+
+    # TODO trigger add to graph off websocket
+    # to do this modify HypothesisHelper so that
+    # classes can define a class method for
+    # add, update, and delete that will fire additional actions
+
+    __repr__ = Hybrid.__repr__
+
+    def __init__(self, *args, **kwargs):
+        self._subject = None
+        self.extra_triples = tuple()
+        super().__init__(*args, **kwargs)
+        self.ttl = self._instance_ttl
+        self.serialize = self._instance_serialize
+
+    @property
+    def domain(self):
+        # TODO read predicate domains
+        return set()
+
+    @property
+    def only_tag(self):
+        """ just in case """
+        try:
+            return next(iter(self.tags))
+        except StopIteration:
+            return None
+
+    @property
+    def astType(self):
+        return self.only_tag
+
+    @property
+    def isClass(self):
+        """ the tag used is a class implies the start of a named individual """
+        return self.only_tag in self.all_classes
+
+    @property
+    def isProperty(self):
+        return self.only_tag in self.all_properties
+
+    @property
+    def all_properties(self):
+        if not hasattr(self, '_all_properties'):
+            # FIXME OntId duplicates rdflib qname
+            self._all_properties = set(OntId(s).curie for s, o in self.graph[:rdf.type:]
+                       if isinstance(s, rdflib.URIRef) and
+                                       OntId(s).prefix == self.namespace and
+                                       o in (owl.ObjectProperty,
+                                             owl.DatatypeProperty,
+                                             owl.AnnotationProperty))
+
+        return self._all_properties
+
+    @property
+    def all_classes(self):
+        if not hasattr(self, '_all_classes'):
+            self._all_classes = set(OntId(s).curie for s, o in self.graph[:rdf.type:]
+                                    if isinstance(s, rdflib.URIRef) and
+                                    OntId(s).prefix == self.namespace and
+                                    o == owl.Class)
+        return self._all_classes
+
+    @property
+    def subject(self):
+        # TODO just get the subject from the 'children'
+        # ie just paste the hypothesis link to the subject in!
+        # we know what parent object to attach this to
+        if self._subject is None:
+            if self.isClass:
+                self._subject = TEMP['sparc/instances/{self.n}']
+                return
+            for child in self.children:
+                if not self.domain or self.domain and child.subject in self.domain:
+                    if child.isClass:
+                        self._subject = child.subject
+                        return
+
+        self._subject = rdflib.BNode()
+        return self._subject
+
+    @property
+    def predicate(self):
+        if self.isClass:
+            return rdf.type
+        elif self.isProperty:
+            p = next(t for t in self.tags if t in self.all_properties)  # FIXME for now are going with 1 tag
+            return OntId(p).u
+
+    @property
+    def object(self):
+        if self.isClass:
+            return owl.NamedIndividual
+        else:
+            id, label = self.ontLookup(self.value)
+            if id is None:
+                return rdflib.Literal(self.value)
+            else:
+                o = OntId(id).u
+                if label:
+                    et = self.extra_triples
+                    t = o, rdfs.label, rdflib.Literal(label)
+                    self.extra_triples = (_ for _ in chain(et, (t,)))
+                return o
+
+    @property
+    def triples(self):
+        t = self.subject, self.predicate, self.object
+        po = ilxtr.literatureReference, rdflib.URIRef(self.shareLink)
+        yield t
+        yield from self.extra_triples
+        yield from cmb.annotation(t, po)()
+        # TODO any additional stuff
+
+    def _instance_ttl(self):
+        """ instance ttl """
+        return self.serialize()
+
+    def _instance_serialize(self, format='nifttl'):
+        """ instance serialize """
+        graph = rdflib.Graph()
+        for t in self.triples:
+            graph.add(t)
+
+        if self.isClass:
+            for t in self.graph.transitive_objects(self.subject, None):
+                graph.add(t)
+
+        # FIXME slooow
+        [graph.bind(p, n) for p, n in self.graph.namespaces()]  # FIXME not quite right?
+        # TODO add and remove triples on websocket update
+        return graph.serialize(format=format)
+
+    def __repr__(self):
+        """ turtle repr of class leaving prefixes implicit """
+        # when its empty all you get is the anno > nice
+        return b'\n\n'.join([s for s in self.ttl().split(b'\n\n') if s.endswith(b'.')][1:]).decode()
+
+def oqsetup():
+    import ontquery as oq
+    ghq = oq.plugin.get('GitHub')('SciCrunch', 'NIF-Ontology',
+                                  'ttl/methods-helper.ttl',
+                                  'ttl/sparc-methods.ttl',
+                                  'ttl/methods-core.ttl',
+                                  'ttl/methods.ttl',
+                                  branch='sparc')
+    SparcMI.graph = ghq.graph
+    query = oq.OntQuery(ghq)
+    oq.OntCuries(ghq.curies)
+    oq.OntTerm.query = query
+    oq.query.QueryResult._OntTerm = oq.OntTerm
+    OntTerm = oq.OntTerm
+    return OntTerm, ghq
 
 
 class protcur_to_technique:
@@ -1533,8 +1768,13 @@ def main():
     if args['--sync']:
         stream_thread.start()  # need this to be here to catch deletes
 
-    sparc_mapping()
-    #embed()
+    #sparc_mapping()
+    OntTerm, ghq = oqsetup()
+    SparcMI.graph = ghq.graph
+    smi = [SparcMI(a, annos) for a in annos
+           if any(t.startswith('sparc:') for t in a.tags)]
+    s = smi[0]
+    embed()
     exit_loop()
     if args['--sync']:
         stream_thread.join()
@@ -1583,7 +1823,7 @@ def _more_main():
     #with open(os.path.expanduser('~/ni/nifstd/chebimissing_ids2.txt'), 'wt') as f: f.write('\n'.join(missing))
 
     embed()
-    # HOW DO I KILL THE STREAM LOOP!??!
+    # HOW DO I KILL THE STREAM LOOP!??! << answered, though quite a bit more complicated than expected
 
 if __name__ == '__main__':
     main()

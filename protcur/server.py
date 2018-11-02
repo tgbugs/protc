@@ -9,7 +9,7 @@ from hyputils.hypothesis import HypothesisUtils
 from pyontutils.htmlfun import htmldoc, atag, deltag, titletag, render_table
 from pyontutils.htmlfun import monospace_body_style, table_style, details_style
 from protcur.analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid
-from protcur.analysis import citation_tree, papers, statistics, readTagDocs, justTags, addDocLinks, Hybrid, protc
+from protcur.analysis import citation_tree, papers, statistics, readTagDocs, justTags, addDocLinks, Hybrid, protc, SparcMI
 from IPython import embed
 from flask import Flask, url_for, redirect, request, render_template, render_template_string, make_response, abort 
 
@@ -290,36 +290,48 @@ def make_app(annos):
 
 
 def make_sparc(app):
-    import ontquery as oq
-    ghq = oq.plugin.get('GitHub')('SciCrunch', 'NIF-Ontology',
-                                  'ttl/methods-helper.ttl',
-                                  'ttl/sparc-methods.ttl',
-                                  'ttl/methods-core.ttl',
-                                  'ttl/methods.ttl',
-                                  branch='sparc')
-    query = oq.OntQuery(ghq)
-    oq.OntCuries(ghq.curies)
-    oq.OntTerm.query = query
-    oq.query.QueryResult._OntTerm = oq.OntTerm
-    OntTerm = oq.OntTerm
+    from analysis import oqsetup
+    OntTerm, ghq = oqsetup()
+    SparcMI.graph = ghq.graph
     sparc_ents = OntTerm.search(None, prefix='sparc')
     tags = '\n'.join(sorted(t.curie for t in sparc_ents))
+
     @app.route('/sparc/controlled-tags', methods=['GET'])
     def sparc_controlled_tags():
+        """
+        The js required for this in the google docs script editory is quite simple.
+        ```
+        function loadFromUrl() {
+        var url = "https://url.to/your/controlled-tags";
+        var doc = DocumentApp.openById("GOOGLE-DOC-IDENTIFIER");
+        var paragraph = doc.getParagraphs()[0];
+        var resp = UrlFetchApp.fetch(url);
+        var newText = resp.getContentText();
+        paragraph.setText(newText);
+        }
+        ```"""
         return tags, 200, {'Content-Type':'text/plain; charset=utf-8'}
+
+    @app.route('/sparc/all-annotations<extension>')
+    def sparc_all_annotations_ttl(extension):
+        # TODO actually use the extension
+        return SparcMI.ttl(), {'Content-Type':'text/plain'}
 
 
 def main():
     from core import annoSync
     get_annos, annos, stream_thread, exit_loop = annoSync('/tmp/protcur-server-annos.pickle',
-                                                        helpers=(Hybrid, protc,))
+                                                        helpers=(Hybrid, protc, SparcMI))
                                                         #helpers=(HypothesisHelper, Hybrid, protc,))
     stream_thread.start()
     #[HypothesisHelper(a, annos) for a in annos]
     [Hybrid(a, annos) for a in annos]
     [protc(a, annos) for a in annos]
+    [SparcMI(a, annos) for a in annos
+     if any(t.startswith('sparc:') for t in a.tags)]
     Hybrid.byTags('protc:output')  # FIXME trigger index creation
     protc.byTags('protc:output')  # FIXME trigger index creation
+    SparcMI.byTags('sparc:lastName')
 
     app = make_app(annos)
     make_sparc(app)
