@@ -10,8 +10,10 @@ Options:
 import os
 import re
 import ast
+import csv
 import json
 import inspect
+from io import StringIO
 from pathlib import PurePath, Path
 from datetime import datetime
 from itertools import chain
@@ -1355,7 +1357,41 @@ class GraphOutputClass(iterclass):
     def ttl(self):
         return self.serialize().decode()
 
-    def serialize(self, format='nifttl'):
+    def report(self, format='tsv'):
+        # TODO actual format
+        #obj = next(iter(self.objects.values()))
+        graph = self.populate_graph()
+        strio = StringIO(newline='\n')
+        writer = csv.writer(strio, delimiter='\t')
+        #writer.writerows()
+        xc = set()
+        xp = set()
+        for s, p, o in sorted(graph):
+            p = OntId(p)
+            if p.prefix != self.namespace:
+                continue
+            else:
+                p = p.curie
+            if isinstance(s, rdflib.URIRef):
+                s = OntId(s).curie
+            else:
+                s = ''
+            if isinstance(o, rdflib.URIRef):
+                o = OntId(o).curie
+
+            xc.add(s)
+            xp.add(p)
+            row = [s, p, o]
+            writer.writerow(row)
+        
+        for s in sorted(self.all_classes() - xc):
+            writer.writerow([s, '', ''])
+        for p in sorted(self.all_properties() - xp):
+            writer.writerow(['', p, ''])
+
+        return strio.getvalue()
+
+    def populate_graph(self):
         graph = rdflib.Graph()
         for t in self.metadata:
             graph.add(t)
@@ -1365,6 +1401,11 @@ class GraphOutputClass(iterclass):
                 for t in obj.triples:
                     graph.add(t)
 
+        return graph 
+
+    def serialize(self, format='nifttl'):
+        graph = self.populate_graph()
+        obj = next(iter(self.objects.values()))
         [graph.bind(p, n) for p, n in obj.graph.namespaces()]  # FIXME not quite right?
         # TODO add and remove triples on websocket update
         return graph.serialize(format=format)
@@ -1468,9 +1509,13 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
 
     @classmethod
     def um(cls):  # FIXME this needs to be class level
+        substrings = (
+            'Weight',
+            'temperature',
+        )
         if cls.graph is not None:
             if not hasattr(cls, '_um'):
-                cls._um = set(t for t in cls.all_properties() if 'Weight' in t)
+                cls._um = set(t for t in cls.all_properties() if anyMembers(t, *substrings))
 
             return cls._um
         else:
@@ -1493,9 +1538,8 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         if self._subject is None:
             if isClass:
                 self._subject = TEMP[f'sparc/instances/{self.n()}']
-                et = self.extra_triples
                 t = self._subject, rdf.type, OntId(self.astType).u
-                self.extra_triples = (_ for _ in chain(et, (t,)))
+                self.extra_triples += (t,)
                 return self._subject
             for child in self.children:
                 if not self.domain or self.domain and child.subject in self.domain:
@@ -1534,9 +1578,10 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
             else:
                 o = OntId(id).u
                 if label:
-                    et = self.extra_triples
+                    #et = self.extra_triples
                     t = o, rdfs.label, rdflib.Literal(label)
-                    self.extra_triples = (_ for _ in chain(et, (t,)))
+                    self.extra_triples += (t,) #(_ for _ in chain(et, (t,)))
+                    #self.extra_triples = (_ for _ in chain(et, (t,)))
                 return o
 
     @property

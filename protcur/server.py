@@ -290,7 +290,6 @@ def make_app(annos):
 
 
 def make_sparc(app=Flask('sparc curation services')):
-    import csv
     from analysis import oqsetup
     OntTerm, ghq = oqsetup()
     SparcMI.graph = ghq.graph
@@ -316,13 +315,11 @@ def make_sparc(app=Flask('sparc curation services')):
     @app.route('/sparc/all-annotations<extension>')
     def sparc_all_annotations_ttl(extension):
         # TODO actually use the extension
-        return SparcMI.ttl(), {'Content-Type':'text/plain'}
+        return SparcMI.ttl(), 200, {'Content-Type':'text/plain; charset=utf-8'}
 
     @app.route('/sparc/coverage.tsv')
     def sparc_coverage():
-        writer = csv.writer()
-        # sep \t
-        return ''
+        return SparcMI.report(format='tsv'), 200, {'Content-Type':'text/plain; charset=utf-8'}
 
     return app
 
