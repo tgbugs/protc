@@ -289,7 +289,8 @@ def make_app(annos):
     return app
 
 
-def make_sparc(app):
+def make_sparc(app=Flask('sparc curation services')):
+    import csv
     from analysis import oqsetup
     OntTerm, ghq = oqsetup()
     SparcMI.graph = ghq.graph
@@ -317,13 +318,17 @@ def make_sparc(app):
         # TODO actually use the extension
         return SparcMI.ttl(), {'Content-Type':'text/plain'}
 
+    @app.route('/sparc/coverage.tsv')
+    def sparc_coverage():
+        writer = csv.writer()
+        # sep \t
+        return ''
+
 
 def main():
     from core import annoSync
     get_annos, annos, stream_thread, exit_loop = annoSync('/tmp/protcur-server-annos.pickle',
-                                                        helpers=(Hybrid, protc, #SparcMI
-                                                        ))
-                                                        #helpers=(HypothesisHelper, Hybrid, protc,))
+                                                          helpers=(Hybrid, protc))
     stream_thread.start()
     #[HypothesisHelper(a, annos) for a in annos]
     [Hybrid(a, annos) for a in annos]
@@ -332,16 +337,26 @@ def main():
     protc.byTags('protc:output')  # FIXME trigger index creation
 
     app = make_app(annos)
-    make_sparc(app)
-
-    sannos = [a for a in annos if any(t.startswith('sparc:') for t in a.tags)]
-    [SparcMI(a, sannos) for a in sannos]
-    SparcMI.byTags('sparc:lastName')
 
     app.debug = False
     app.run(host='localhost', port=7000, threaded=True)  # nginxwoo
     exit_loop()
     stream_thread.join()
 
+
+def sparc_main():
+    from core import annoSync
+    get_annos, annos, stream_thread, exit_loop = annoSync('/tmp/sparc-server-annos.pickle', tags=('sparc:',), helpers=(SparcMI,))
+    stream_thread.start()
+    [SparcMI(a, annos) for a in annos
+     if any(t.startswith('sparc:') for t in a.tags)]
+    SparcMI.byTags('sparc:lastName')
+    app = make_sparc()
+    app.debug = False
+    app.run(host='localhost', port=7001, threaded=True)  # nginxwoo
+    exit_loop()
+    stream_thread.join()
+
 if __name__ == '__main__':
-    main()
+
+    sparc_main()
