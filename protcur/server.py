@@ -327,14 +327,16 @@ def main():
     #[HypothesisHelper(a, annos) for a in annos]
     [Hybrid(a, annos) for a in annos]
     [protc(a, annos) for a in annos]
-    [SparcMI(a, annos) for a in annos
-     if any(t.startswith('sparc:') for t in a.tags)]
     Hybrid.byTags('protc:output')  # FIXME trigger index creation
     protc.byTags('protc:output')  # FIXME trigger index creation
-    SparcMI.byTags('sparc:lastName')
 
     app = make_app(annos)
     make_sparc(app)
+
+    [SparcMI(a, annos) for a in annos
+     if any(t.startswith('sparc:') for t in a.tags)]
+    SparcMI.byTags('sparc:lastName')
+
     app.debug = False
     app.run(host='localhost', port=7000, threaded=True)  # nginxwoo
     exit_loop()

@@ -682,7 +682,7 @@ class AstGeneric(Hybrid):
     """ Base class that implements the core methods needed for parsing various namespaces """
     generic_tags = 'TODO',
     control_tags = 'annotation-correction', 'annotation-tags:replace', 'annotation-tags:add', 'annotation-tags:delete'
-    prefix_skip_tags = 'PROTCUR:', 'annotation-', 'sparc:'
+    prefix_skip_tags = 'PROTCUR:', 'annotation-'  # reminder that these zap the anno from the ast
     text_tags = ('annotation-text:exact',
                  'annotation-text:text',
                  'annotation-text:value',
@@ -963,6 +963,19 @@ class protc(AstGeneric):
 
         'several thousand':('protc:fuzzy-quantity', '"several thousand"', '"ammount"'),  # FIXME vs count
     }
+
+    @property
+    def tags(self):
+        return super().tags + list(self.mapped_tags)
+
+    @property
+    def mapped_tags(self):
+        try:
+            s = SparcMI.byId(self.id)
+            if s.protc_unit_mapping:
+                yield 'protc:parameter*'
+        except Warning:
+            pass
 
     def objective(self):
         if self.value in (' room  temperature'):
@@ -1384,6 +1397,10 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         super().__init__(*args, **kwargs)
         self.ttl = self._instance_ttl
         self.serialize = self._instance_serialize
+        self.n = self._instance_n
+
+    def _instance_n(self):
+        return self.__class__.n
 
     @property
     def domain(self):
@@ -1416,7 +1433,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         if not hasattr(self, '_all_properties'):
             # FIXME OntId duplicates rdflib qname
             self._all_properties = set(OntId(s).curie for s, o in self.graph[:rdf.type:]
-                       if isinstance(s, rdflib.URIRef) and
+                                       if isinstance(s, rdflib.URIRef) and
                                        OntId(s).prefix == self.namespace and
                                        o in (owl.ObjectProperty,
                                              owl.DatatypeProperty,
@@ -1434,21 +1451,43 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         return self._all_classes
 
     @property
+    def protc_unit_mapping(self):
+        return self.astType in self.um
+
+    @property
+    def um(self):  # FIXME this needs to be class level
+        if not hasattr(self, '_um'):
+            self._um = set(t for t in self.all_properties if 'Weight' in t)
+
+        return self._um
+
+    @property
+    def value(self):
+        v = super().value
+        if 'hyp.is' in v:
+            a, b = v.split('https://hyp.is')
+        return v 
+    @property
     def subject(self):
         # TODO just get the subject from the 'children'
         # ie just paste the hypothesis link to the subject in!
         # we know what parent object to attach this to
+        isClass = self.isClass  # has to be called before _subject
         if self._subject is None:
-            if self.isClass:
-                self._subject = TEMP['sparc/instances/{self.n}']
-                return
+            if isClass:
+                self._subject = TEMP[f'sparc/instances/{self.n()}']
+                et = self.extra_triples
+                t = self._subject, rdf.type, OntId(self.astType).u
+                self.extra_triples = (_ for _ in chain(et, (t,)))
+                return self._subject
             for child in self.children:
                 if not self.domain or self.domain and child.subject in self.domain:
                     if child.isClass:
                         self._subject = child.subject
-                        return
+                        return self._subject
 
-        self._subject = rdflib.BNode()
+            self._subject = rdflib.BNode()
+
         return self._subject
 
     @property
@@ -1458,12 +1497,21 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         elif self.isProperty:
             p = next(t for t in self.tags if t in self.all_properties)  # FIXME for now are going with 1 tag
             return OntId(p).u
+        else:
+            print(self.tags)
+            return ilxtr.WHAT
 
     @property
     def object(self):
         if self.isClass:
             return owl.NamedIndividual
         else:
+            if self.astType in self.um:
+                v = protc.byId(self.id).astValue
+                if '(rest' in v:
+                    v, junk = v.rsplit('(rest', 1)
+                    v = v.strip()
+                return rdflib.Literal(v, datatype=TEMP['protc:unit'])
             id, label = self.ontLookup(self.value)
             if id is None:
                 return rdflib.Literal(self.value)
@@ -1478,6 +1526,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
     @property
     def triples(self):
         t = self.subject, self.predicate, self.object
+        print(t, self.id)
         po = ilxtr.literatureReference, rdflib.URIRef(self.shareLink)
         yield t
         yield from self.extra_triples
@@ -1495,8 +1544,13 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
             graph.add(t)
 
         if self.isClass:
-            for t in self.graph.transitive_objects(self.subject, None):
-                graph.add(t)
+            for p, o in self.graph[self.subject::]:
+                if p != rdf.type:
+                    t = self.subject, p, o
+                    graph.add(t)
+            # TODO proper transitive closure
+            #for t in self.graph.transitive_objects(self.subject, None):
+                #graph.add(t)
 
         # FIXME slooow
         [graph.bind(p, n) for p, n in self.graph.namespaces()]  # FIXME not quite right?
@@ -1510,6 +1564,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
 
 def oqsetup():
     import ontquery as oq
+    from pyontutils.namespaces import PREFIXES
     ghq = oq.plugin.get('GitHub')('SciCrunch', 'NIF-Ontology',
                                   'ttl/methods-helper.ttl',
                                   'ttl/sparc-methods.ttl',
@@ -1519,6 +1574,7 @@ def oqsetup():
     SparcMI.graph = ghq.graph
     query = oq.OntQuery(ghq)
     oq.OntCuries(ghq.curies)
+    oq.OntCuries(PREFIXES)
     oq.OntTerm.query = query
     oq.query.QueryResult._OntTerm = oq.OntTerm
     OntTerm = oq.OntTerm
@@ -1715,7 +1771,7 @@ def main():
 
     global annos  # this is now only used for making embed sane to use
     get_annos, annos, stream_thread, exit_loop = annoSync('/tmp/protcur-analysis-annos.pickle',
-                                                          helpers=(HypothesisHelper, Hybrid, protc))
+                                                          helpers=(HypothesisHelper, Hybrid, protc, SparcMI))
 
     problem_child = 'KDEZFGzEEeepDO8xVvxZmw'
     #test_annos(annos)
