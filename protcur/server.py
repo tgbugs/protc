@@ -324,6 +324,8 @@ def make_sparc(app=Flask('sparc curation services')):
         # sep \t
         return ''
 
+    return app
+
 
 def main():
     from core import annoSync
@@ -346,8 +348,11 @@ def main():
 
 def sparc_main():
     from core import annoSync
-    get_annos, annos, stream_thread, exit_loop = annoSync('/tmp/sparc-server-annos.pickle', tags=('sparc:',), helpers=(SparcMI,))
+    get_annos, annos, stream_thread, exit_loop = annoSync('/tmp/sparc-server-annos.pickle',
+                                                          #tags=('sparc:',),
+                                                          helpers=(SparcMI,))
     stream_thread.start()
+    [protc(a, annos) for a in annos]
     [SparcMI(a, annos) for a in annos
      if any(t.startswith('sparc:') for t in a.tags)]
     SparcMI.byTags('sparc:lastName')
