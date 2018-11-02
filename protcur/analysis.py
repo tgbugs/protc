@@ -1384,10 +1384,10 @@ class GraphOutputClass(iterclass):
             row = [s, p, o]
             writer.writerow(row)
         
-        for s in sorted(self.all_classes() - xc):
-            writer.writerow([s, '', ''])
         for p in sorted(self.all_properties() - xp):
             writer.writerow(['', p, ''])
+        for s in sorted(self.all_classes() - xc):
+            writer.writerow([s, '', ''])
 
         return strio.getvalue()
 
