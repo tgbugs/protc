@@ -321,7 +321,8 @@ def make_sparc(app):
 def main():
     from core import annoSync
     get_annos, annos, stream_thread, exit_loop = annoSync('/tmp/protcur-server-annos.pickle',
-                                                        helpers=(Hybrid, protc, SparcMI))
+                                                        helpers=(Hybrid, protc, #SparcMI
+                                                        ))
                                                         #helpers=(HypothesisHelper, Hybrid, protc,))
     stream_thread.start()
     #[HypothesisHelper(a, annos) for a in annos]
@@ -333,8 +334,8 @@ def main():
     app = make_app(annos)
     make_sparc(app)
 
-    [SparcMI(a, annos) for a in annos
-     if any(t.startswith('sparc:') for t in a.tags)]
+    sannos = [a for a in annos if any(t.startswith('sparc:') for t in a.tags)]
+    [SparcMI(a, sannos) for a in sannos]
     SparcMI.byTags('sparc:lastName')
 
     app.debug = False
