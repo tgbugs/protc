@@ -349,7 +349,12 @@ class Hybrid(HypothesisHelper):
             if tag not in skip_tags:
                 out.append(tag)
 
-        return sorted(set(self._translate_tags(out + add_tags)))
+        # I hate python excpetions, things fail silentlty and
+        # you think everything is ok, but no, some error has been caught
+        # inadvertently, raising a builtin python error should be and uncatchable
+        # python error so that these kinds of mistakes and never happen >_<
+        tout = sorted(set(self._translate_tags(out + add_tags)))
+        return tout
 
     @property
     def _cleaned_tags(self):
@@ -370,13 +375,23 @@ class Hybrid(HypothesisHelper):
                     prefix, suffix = tag.split(':', 1)
                     if prefix in self.tag_translators:
                         tt = self.tag_translators[prefix]
-                        yield tt(tag).translation
-                        continue
-
+                        translated = tt(tag).translation
+                        if translated:
+                            yield translated
+                            continue
+                        #
+                    #
+                #
                 yield tag
+            #
 
         else:
-            return tags
+            #return tags
+            # so ... for reasons beyond my understanding calling return tags here
+            # instead of yielding results in this function returning None, or maybe
+            # actually raising stop iteration rather than returning the list
+            # WHAT THE HOW THE
+            yield from tags
 
     @property
     def tag_corrections(self):
@@ -1313,8 +1328,7 @@ class technique_to_sparc(AnnotationMixin):
         {
             'protc:*measure': 'sparc:Acquisition',
             ('protc:aspect', ()): 'sparc:Anesthesia',
-            ()
-            ('protc:aspect'): 'sparc:Acquisition',   # not actualized probably
+            ('protc:aspect',): 'sparc:Acquisition',   # not actualized probably
             None: 'sparc:perfusionProtocol',
             }
         # first pass

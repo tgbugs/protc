@@ -288,6 +288,27 @@ def make_app(annos):
 
     return app
 
+
+def make_sparc(app):
+    import ontquery as oq
+    ghq = oq.plugin.get('GitHub')('SciCrunch', 'NIF-Ontology',
+                                  'ttl/methods-helper.ttl',
+                                  'ttl/sparc-methods.ttl',
+                                  'ttl/methods-core.ttl',
+                                  'ttl/methods.ttl',
+                                  branch='sparc')
+    query = oq.OntQuery(ghq)
+    oq.OntCuries(ghq.curies)
+    oq.OntTerm.query = query
+    oq.query.QueryResult._OntTerm = oq.OntTerm
+    OntTerm = oq.OntTerm
+    sparc_ents = OntTerm.search(None, prefix='sparc')
+    tags = '\n'.join(sorted(t.curie for t in sparc_ents))
+    @app.route('/sparc/controlled-tags', methods=['GET'])
+    def sparc_controlled_tags():
+        return tags, 200, {'Content-Type':'text/plain; charset=utf-8'}
+
+
 def main():
     from core import annoSync
     get_annos, annos, stream_thread, exit_loop = annoSync('/tmp/protcur-server-annos.pickle',
@@ -301,6 +322,7 @@ def main():
     protc.byTags('protc:output')  # FIXME trigger index creation
 
     app = make_app(annos)
+    make_sparc(app)
     app.debug = False
     app.run(host='localhost', port=7000, threaded=True)  # nginxwoo
     exit_loop()
