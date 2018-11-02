@@ -1389,10 +1389,9 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
     # classes can define a class method for
     # add, update, and delete that will fire additional actions
 
+    __repr__ = Hybrid.__repr__
+
     def __init__(self, *args, **kwargs):
-        #if not any(self.prefix_ast in t for t in self._tags):
-            #self.skip = True
-            #return
         self._subject = None
         self.extra_triples = tuple()
         super().__init__(*args, **kwargs)
@@ -1499,7 +1498,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
             p = next(t for t in self.tags if t in self.all_properties)  # FIXME for now are going with 1 tag
             return OntId(p).u
         else:
-            #print(self.tags)
+            print(self.tags)
             return ilxtr.WHAT
 
     @property
@@ -1527,7 +1526,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
     @property
     def triples(self):
         t = self.subject, self.predicate, self.object
-        #print(t, self.id)
+        print(t, self.id)
         po = ilxtr.literatureReference, rdflib.URIRef(self.shareLink)
         yield t
         yield from self.extra_triples
