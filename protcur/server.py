@@ -312,6 +312,54 @@ def make_sparc(app=Flask('sparc curation services')):
         ```"""
         return tags, 200, {'Content-Type':'text/plain; charset=utf-8'}
 
+    @app.route('/sparc/tags', methods=['GET'])
+    def sparc_tags():
+        # TODO
+        def uriconv(v):
+            uri = request.base_url + '/' + v
+            return uri
+
+        ptags = {t:len([p for p in v if p.isAstNode]) for t, v in protc._tagIndex.items()}
+        def renderprotct(tag, acount):
+            count = ptags.get(tag, 0)
+            sc = str(count)
+            link = atag(uriconv(tag + '/annotations'), sc) + '\u00A0' * (5 - len(sc))  # will fail with > 9999 annos (heh)
+            if count > acount:
+                return link + '+'
+            elif count == acount:
+                return link
+            elif not count:
+                return ''
+            else:
+                return link + '-'
+        tag_docs = readTagDocs()
+        def rendertagname(tag):
+            if tag in tag_docs and tag_docs[tag].deprecated:
+                return deltag(tag)
+            else:
+                return tag
+
+        skip = ('RRID:', 'NIFORG:', 'CHEBI:', 'SO:')
+        atags = {t:len(v) for t, v in Hybrid._tagIndex.items()}
+        tags = [[atag(uriconv(t), rendertagname(t)),
+                 atag(hutils.search_url(tag=t), d),
+                 renderprotct(t, d)]
+                for t, d in atags.items()
+                if all(p not in t for p in skip)]
+
+        total = sum([c for t, c in atags.items() if all(p not in t for p in skip)])
+        ptotal = sum([c for t, c in ptags.items() if all(p not in t for p in skip)])
+
+        return htmldoc(render_table(sorted(tags),
+                                    f'Tags n={len(tags)}',
+                                    #f'Count n={sum(int(v.split(">",1)[1].split("<")[0]) for _, v in tags)}'
+                                    f'Count n={total}',
+                                    f'Count n={ptotal}'),
+                       title='Tags',
+                       styles=(table_style,))
+
+
+
     @app.route('/sparc/all-annotations<extension>')
     def sparc_all_annotations_ttl(extension):
         # TODO actually use the extension
