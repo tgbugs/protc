@@ -6,7 +6,7 @@ from pathlib import Path
 from datetime import date
 from markdown import markdown
 from hyputils.hypothesis import HypothesisUtils
-from pyontutils.htmlfun import htmldoc, atag, deltag, titletag, render_table
+from pyontutils.htmlfun import htmldoc, atag, deltag, titletag, render_table, zerotag
 from pyontutils.htmlfun import monospace_body_style, table_style, details_style
 from protcur.analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid
 from protcur.analysis import citation_tree, papers, statistics, readTagDocs, justTags, addDocLinks, Hybrid, protc, SparcMI
@@ -228,7 +228,7 @@ def make_app(annos):
             else:
                 return tag
 
-        skip = ('RRID:', 'NIFORG:', 'CHEBI:', 'SO:')
+        skip = ('RRID:', 'NIFORG:', 'CHEBI:', 'SO:', 'sparc:')
         atags = {t:len(v) for t, v in Hybrid._tagIndex.items()}
         tags = [[atag(uriconv(t), rendertagname(t)),
                  atag(hutils.search_url(tag=t), d),
@@ -319,8 +319,8 @@ def make_sparc(app=Flask('sparc curation services')):
             uri = request.base_url + '/' + v
             return uri
 
-        ptags = {t:len([p for p in v if p.isAstNode]) for t, v in protc._tagIndex.items()}
-        def renderprotct(tag, acount):
+        ptags = {t:len([p for p in v if p.isAstNode]) for t, v in SparcMI._tagIndex.items()}
+        def rendersparct(tag, acount):
             count = ptags.get(tag, 0)
             sc = str(count)
             link = atag(uriconv(tag + '/annotations'), sc) + '\u00A0' * (5 - len(sc))  # will fail with > 9999 annos (heh)
@@ -332,38 +332,78 @@ def make_sparc(app=Flask('sparc curation services')):
                 return ''
             else:
                 return link + '-'
-        tag_docs = readTagDocs()
-        def rendertagname(tag):
+
+        tag_docs = SparcMI.makeTagDocs()
+        def rendertagname(tag, acount):
             if tag in tag_docs and tag_docs[tag].deprecated:
                 return deltag(tag)
+            elif acount == 0:
+                return zerotag(tag)
             else:
                 return tag
 
-        skip = ('RRID:', 'NIFORG:', 'CHEBI:', 'SO:')
-        atags = {t:len(v) for t, v in Hybrid._tagIndex.items()}
-        tags = [[atag(uriconv(t), rendertagname(t)),
-                 atag(hutils.search_url(tag=t), d),
-                 renderprotct(t, d)]
+        skip = ('protc:', 'RRID:', 'NIFORG:', 'CHEBI:', 'SO:', 'PROCUR:', 'mo:', 'annotation-')
+        atags = {t:0 for t in tag_docs}
+        atags.update({t:len(v) for t, v in Hybrid._tagIndex.items()})
+        _tags = [[atag(uriconv(t), rendertagname(t, d)),
+                  atag(hutils.search_url(tag=t), d),
+                  rendersparct(t, d),
+                  ' '.join(tag_docs[t].types) if t in tag_docs else '']
                 for t, d in atags.items()
                 if all(p not in t for p in skip)]
+        tags = sorted(_tags, key=lambda t:t[3])  # sort by type
 
         total = sum([c for t, c in atags.items() if all(p not in t for p in skip)])
         ptotal = sum([c for t, c in ptags.items() if all(p not in t for p in skip)])
 
-        return htmldoc(render_table(sorted(tags),
+        return htmldoc(render_table(tags,
                                     f'Tags n={len(tags)}',
                                     #f'Count n={sum(int(v.split(">",1)[1].split("<")[0]) for _, v in tags)}'
                                     f'Count n={total}',
-                                    f'Count n={ptotal}'),
+                                    f'Count n={ptotal}',
+                                    'Types'),
                        title='Tags',
                        styles=(table_style,))
 
+    @app.route('/sparc/tags/<tagname>', methods=['GET'])
+    def sparc_tags_star(tagname):
+        try:
+            tag_docs = SparcMI.makeTagDocs()
+            return markdown(addDocLinks(request.base_url.rsplit('/',1)[0],
+                                        tag_docs[tagname].doc))
+        except KeyError:
+            return abort(404)
 
+    @app.route('/sparc/tags/<tagname>/annotations', methods=['GET'])
+    def sparc_tags_star_annos(tagname):
+        HYB = request.url + '#Hybrids'
+        SPC = request.url + '#sparc'
+        try:
+            return htmldoc(''.join(
+                ['<div class="sparc">\n',
+                 f'<a href="{HYB}" id="sparc"><b>sparc</b></a><br>\n'] +
+                [a.__repr__(html=True, number=n + 1) + '<br>\n<br>\n'
+                 for n, a in  enumerate(sorted(SparcMI.byTags(tagname),
+                                               key=lambda p: p.ast_updated, reverse=True))] +
+                ['\n</div>\n'
+                 f'<br>\n<a href="{SPC}" id="Hybrids"><b>Hybrids</b></a><br>\n'] +
+                [a.__repr__(html=True, number=n + 1).replace('\n', '<br>\n')
+                 for n, a in  enumerate(sorted(Hybrid.byTags(tagname),
+                                               key=lambda p: p.ast_updated, reverse=True))]
+                ),
+                           title=f'{tagname} annotations',
+                           styles=(table_style, monospace_body_style, details_style,
+                                   '.sparc a:link { text-decoration: none; }'))
+        except KeyError:
+            return abort(404)
 
     @app.route('/sparc/all-annotations<extension>')
     def sparc_all_annotations_ttl(extension):
         # TODO actually use the extension
-        return SparcMI.ttl(), 200, {'Content-Type':'text/plain; charset=utf-8'}
+        style = 'body { font-family: monospace }\na:link { text-decoration: none; }'
+        return htmldoc(SparcMI.html(),
+                       title='all-annotations',
+                       styles=(table_style, style))
 
     @app.route('/sparc/coverage.tsv')
     def sparc_coverage():

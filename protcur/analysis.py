@@ -26,7 +26,7 @@ from pyontutils.utils import async_getter, noneMembers, allMembers, anyMembers, 
 from pyontutils.config import devconfig
 from pyontutils.htmlfun import atag
 from pyontutils.annotation import AnnotationMixin
-from pyontutils.namespaces import ilxtr, TEMP
+from pyontutils.namespaces import ilxtr, TEMP, definition
 from pyontutils.hierarchies import creatTree
 from pyontutils.scigraph_client import Vocabulary
 from pyontutils.closed_namespaces import rdf, rdfs, owl
@@ -93,7 +93,8 @@ def url_pmid(pmid):
 
 class TagDoc:
     _depflags = 'ilxtr:deprecatedTag', 'typo'
-    def __init__(self, doc, parents):
+    def __init__(self, doc, parents, types=tuple()):
+        self.types = types
         self.parents = parents if isinstance(parents, tuple) else (parents,)
         if anyMembers(self.parents, *self._depflags):
             self.doc = '**DEPRECATED** ' + doc
@@ -124,7 +125,7 @@ def justTags(tag_lookup=None):
 
 def addDocLinks(base_url, doc):
     prefix = base_url + '/'
-    return re.sub(r'`((?:protc|mo):[^\s]+)`', rf'[\1]({prefix}\1)', doc)
+    return re.sub(r'`((?:protc|mo|sparc):[^\s]+)`', rf'[\1]({prefix}\1)', doc)
 
 # stats
 
@@ -1357,6 +1358,9 @@ class GraphOutputClass(iterclass):
     def ttl(self):
         return self.serialize().decode()
 
+    def html(self):
+        return self.serialize(format='htmlttl').decode()
+
     def report(self, format='tsv'):
         # TODO actual format
         #obj = next(iter(self.objects.values()))
@@ -1440,6 +1444,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         self.extra_triples = tuple()
         super().__init__(*args, **kwargs)
         self.ttl = self._instance_ttl
+        self.html = self._instance_html
         self.serialize = self._instance_serialize
         self.n = self._instance_n
 
@@ -1482,10 +1487,10 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
             if not hasattr(cls, '_all_properties'):
                 # FIXME OntId duplicates rdflib qname
                 cls._all_properties = set(OntId(s).curie for s, o in cls.graph[:rdf.type:]
-                                        if #not print(s, o) and
-                                            isinstance(s, rdflib.URIRef) and
-                                        OntId(s).prefix == cls.namespace and
-                                        o in (owl.ObjectProperty,
+                                          if #not print(s, o) and
+                                          isinstance(s, rdflib.URIRef) and
+                                          OntId(s).prefix == cls.namespace and
+                                          o in (owl.ObjectProperty,
                                                 owl.DatatypeProperty,
                                                 owl.AnnotationProperty))
 
@@ -1498,10 +1503,34 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         if cls._done_loading:
             if not hasattr(cls, '_all_classes'):
                 cls._all_classes = set(OntId(s).curie for s, o in cls.graph[:rdf.type:]
-                                        if isinstance(s, rdflib.URIRef) and
-                                        OntId(s).prefix == cls.namespace and
-                                        o == owl.Class)
+                                       if isinstance(s, rdflib.URIRef) and
+                                       OntId(s).prefix == cls.namespace and
+                                       o == owl.Class)
             return cls._all_classes
+
+    @classmethod
+    def _docs(cls):
+        for tag in sorted(cls.all_classes() | cls.all_properties()):
+            uri = OntId(tag).u  # FIXME inefficient
+            types = sorted(OntId(_type).curie for _type in cls.graph[uri:rdf.type])
+            subThingOf = rdfs.subPropertyOf if any('Property' in t for t in types) else rdfs.subClassOf
+            parents = [OntId(p).curie for p in cls.graph[uri:subThingOf]]
+
+            try:
+                _def = ' ' + next(cls.graph[uri:definition])
+            except StopIteration:
+                _def = ' No definition.'
+
+            doc = f'**{" ".join(types) if types else ""}**{_def}'
+            yield types, tag, parents, doc
+
+    @classmethod
+    def makeTagDocs(cls):
+        if cls._done_loading:
+            if not hasattr(cls, '_tag_lookup') or not cls._tag_lookup:
+                cls._tag_lookup = {tag:TagDoc(doc, parents, types) for types, tag, parents, doc in cls._docs()}
+
+            return cls._tag_lookup
 
     @property
     def protc_unit_mapping(self):
@@ -1597,6 +1626,9 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         """ instance ttl """
         return self.serialize()
 
+    def _instance_html(self):
+        return self.serialize(format='htmlttl')
+
     def _instance_serialize(self, format='nifttl'):
         """ instance serialize """
         graph = rdflib.Graph()
@@ -1617,10 +1649,18 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         # TODO add and remove triples on websocket update
         return graph.serialize(format=format)
 
-    def __repr__(self):
+    def __repr__(self, html=False, number=0):
         """ turtle repr of class leaving prefixes implicit """
         # when its empty all you get is the anno > nice
-        return b'\n\n'.join([s for s in self.ttl().split(b'\n\n') if s.endswith(b'.')][1:]).decode()
+        if html:
+            text = self.html()
+            sep = b'<br>\n<br>\n'
+        else:
+            text = self.ttl()
+            sep = b'\n\n'
+
+        return sep.join([s for s in text.split(sep) if s.endswith(b'.')][1:]).decode()
+
 
 def oqsetup():
     import ontquery as oq
