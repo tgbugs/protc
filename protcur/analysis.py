@@ -1361,7 +1361,7 @@ class GraphOutputClass(iterclass):
     def html(self):
         return self.serialize(format='htmlttl').decode()
 
-    def report(self, format='tsv'):
+    def _report(self, format='tsv'):
         # TODO actual format
         #obj = next(iter(self.objects.values()))
         graph = self.populate_graph()
@@ -1392,6 +1392,29 @@ class GraphOutputClass(iterclass):
             writer.writerow(['', p, ''])
         for s in sorted(self.all_classes() - xc):
             writer.writerow([s, '', ''])
+
+        return strio.getvalue()
+
+    def report(self, format='tsv'):
+        ptags = {t:len([p for p in v if p.isAstNode]) for t, v in self._tagIndex.items()}
+        def pcount(tag):
+            return ptags.get(tag, 0)
+
+        tag_docs = self.makeTagDocs()
+        skip = ('protc:', 'RRID:', 'NIFORG:', 'CHEBI:', 'SO:', 'PROCUR:', 'mo:', 'annotation-')
+        atags = {t:0 for t in tag_docs}
+        atags.update({t:len(v) for t, v in self._tagIndex.items()})
+        _tags = [[t, d, pcount(t), ','.join(tag_docs[t].types) if t in tag_docs else '']
+                 for t, d in atags.items()
+                 if all(p not in t for p in skip)
+        ]
+        tags = sorted(_tags, key=lambda t:t[3])  # sort by type
+
+        strio = StringIO(newline='\n')
+        writer = csv.writer(strio, delimiter='\t')
+        writer.writerow(['tag', 'annos', 'converted', 'type'])
+        for row in tags:
+            writer.writerow(row)
 
         return strio.getvalue()
 
