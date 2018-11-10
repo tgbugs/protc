@@ -5,19 +5,25 @@ import subprocess
 from pathlib import Path
 from datetime import date
 from markdown import markdown
-from hyputils.hypothesis import HypothesisUtils
+from hyputils.hypothesis import HypothesisUtils, makeSimpleLogger
 from pyontutils.htmlfun import htmldoc, atag, deltag, titletag, render_table, zerotag
 from pyontutils.htmlfun import monospace_body_style, table_style, details_style
 from protcur.analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid
-from protcur.analysis import citation_tree, papers, statistics, readTagDocs, justTags, addDocLinks, Hybrid, protc, SparcMI
+from protcur.analysis import citation_tree, papers, statistics, ast_statistics
+from protcur.analysis import readTagDocs, justTags, addDocLinks, Hybrid, protc, SparcMI
 from IPython import embed
 from flask import Flask, url_for, redirect, request, render_template, render_template_string, make_response, abort 
 
+log = makeSimpleLogger('protcur.server')
 PID = os.getpid()
 UID = os.getuid()
 THIS_FILE = Path(__file__).absolute()
 
 hutils = HypothesisUtils(username='')
+
+def uriconv(v):
+    uri = request.base_url + '/' + v
+    return uri
 
 def get_proper_citation(xml):
     root = etree.fromstring(xml)
@@ -48,32 +54,21 @@ def export_json_impl(annos):
 
 # rendering
 
-def render_idents(idents, stats):
-    #print(idents)
+def render_idents(idents, stats, ast_stats):
     HLN, DOI, PMID, ISBN, PDOI = 'hl:', 'DOI:', 'PMID:', 'ISBN:', 'protc:parent-doi'
     records = []
-    #output.append(f'{HLN:<{cols[HLN]}}{DOI:<{cols[DOI]}}{PMID:<{cols[PMID]}}{PDOI:<{cols[PDOI]}}')
-    #output.append(f'<tr><th>{HLN}</th><th>{DOI}</th><th>{PMID}</th><th>{PDOI}</th></tr>')
     for hl, others in sorted(idents.items()):
         hl_uri = hypothesis_local(hl)
-        doi = atag(others[DOI], uriconv=url_doi) if DOI in others else ''
-        pmid = atag(others[PMID], uriconv=url_pmid) if PMID in others else ''
+        doi = atag(others[DOI], new_tab=True, uriconv=url_doi) if DOI in others else ''
+        pmid = atag(others[PMID], new_tab=True, uriconv=url_pmid) if PMID in others else ''
         isbn = others[ISBN] if ISBN in others else ''
-        pdoi = atag(others[PDOI], uriconv=url_doi) if PDOI in others else ''
-        count = atag(hutils.search_url(url=hl_uri), stats[hl])
-        records.append([atag(hl_uri, hl), doi, pmid, isbn, pdoi, count])
+        pdoi = atag(others[PDOI], new_tab=True, uriconv=url_doi) if PDOI in others else ''
+        count = atag(hutils.search_url(url=hl_uri), stats[hl], new_tab=True)
+        ast_count = atag(uriconv(HLN + hl + '/annotations'), ast_stats[hl], new_tab=True)
+        records.append([atag(hl_uri, hl, new_tab=True), doi, pmid, isbn, pdoi, count, ast_count])
         continue
-        #output.append(f'{hl_name:<{cols[HLN]}}{doi:<{cols[DOI]}}{pmid:<{cols[PMID]}}{pdoi:<{cols[PDOI]}}')
-        output.append(f'<tr><th><a href={hypothesis_local(hl_name)}>{hl_name}</a></th>'
-                      f'<th><a href={url_doi(doi)}>{doi}</th>'
-                      f'<th><a href={url_pmid(pmid)}>{pmid}</th>'
-                      f'<th><a href={url_doi(pdoi)}>{pdoi}</th></tr>')
 
-    return render_table(records, HLN, DOI, PMID, ISBN, PDOI, '# annos')
-    #out = '<pre>' + '\n'.join(output) + '</pre>'
-    out = '<table>' + '\n'.join(output) + '</table>'
-    #print(out)
-    return out
+    return render_table(records, HLN, DOI, PMID, ISBN, PDOI, '# annos', '# ast')
 
 def render_2col_table(dict_, h1, h2, uriconv=lambda a:a):  # FIXME this sucks and uriconv only works on the first row...
     output = []
@@ -157,7 +152,9 @@ def make_app(annos):
     @app.route('/curation/papers', methods=['GET'])
     def route_papers():
 
-        return htmldoc(render_idents(papers(annos), statistics(annos)),
+        return htmldoc(render_idents(papers(annos),
+                                     statistics(annos),
+                                     ast_statistics(protc)),
                        title='papers',
                        styles=(table_style,))
 
@@ -165,16 +162,20 @@ def make_app(annos):
     def route_papers_star_annos(paper_id):
         HYB = request.url + '#Hybrids'
         PTC = request.url + '#protcs'
-        iri = paper_id.replace('hl:', 'https://hypothesis-local.olympiangods.org/')  # FIXME
+        if 'hl:' not in paper_id:
+            return abort(404)
+        iri = hypothesis_local(paper_id.split(':', 1)[-1])  # FIXME risk of fail if no visit to papers
+        log.debug(f'iri? {iri!r}')
         try:
             return htmldoc(''.join(
                 [f'<a href="{HYB}" id="protcs"><b>protcs</b></a><br>\n'] +
                 [a.__repr__(html=True, number=n + 1).replace('\n', '<br>\n')
-                 for n, a in  enumerate(sorted(protc.byIri(iri), key=lambda p: p.ast_updated, reverse=True))] +
+                 for n, a in  enumerate(sorted(protc.byIri(iri),
+                                               key=lambda p: p.ast_updated, reverse=True))] +
                 [f'<br>\n<a href="{PTC}" id="Hybrids"><b>Hybrids</b></a><br>\n'] +
                 [a.__repr__(html=True, number=n + 1).replace('\n', '<br>\n')
-                 for n, a in  enumerate(sorted(Hybrid.byIri(iri), key=lambda p: p.ast_updated, reverse=True))]
-                ),
+                 for n, a in  enumerate(sorted(Hybrid.byIri(iri),
+                                               key=lambda p: p.ast_updated, reverse=True))]),
                            title=f'{paper_id} annotations',
                            styles=(table_style, monospace_body_style, details_style))
         except KeyError:
@@ -204,10 +205,6 @@ def make_app(annos):
 
     @app.route('/curation/tags', methods=['GET'])
     def route_tags():
-        def uriconv(v):
-            uri = request.base_url + '/' + v
-            return uri
-
         ptags = {t:len([p for p in v if p.isAstNode]) for t, v in protc._tagIndex.items()}
         def renderprotct(tag, acount):
             count = ptags.get(tag, 0)
@@ -263,10 +260,12 @@ def make_app(annos):
             return htmldoc(''.join(
                 [f'<a href="{HYB}" id="protcs"><b>protcs</b></a><br>\n'] +
                 [a.__repr__(html=True, number=n + 1).replace('\n', '<br>\n')
-                 for n, a in  enumerate(sorted(protc.byTags(tagname), key=lambda p: p.ast_updated, reverse=True))] +
+                 for n, a in  enumerate(sorted(protc.byTags(tagname),
+                                               key=lambda p: p.ast_updated, reverse=True))] +
                 [f'<br>\n<a href="{PTC}" id="Hybrids"><b>Hybrids</b></a><br>\n'] +
                 [a.__repr__(html=True, number=n + 1).replace('\n', '<br>\n')
-                 for n, a in  enumerate(sorted(Hybrid.byTags(tagname), key=lambda p: p.ast_updated, reverse=True))]
+                 for n, a in  enumerate(sorted(Hybrid.byTags(tagname),
+                                               key=lambda p: p.ast_updated, reverse=True))]
                 ),
                            title=f'{tagname} annotations',
                            styles=(table_style, monospace_body_style, details_style))
@@ -291,34 +290,57 @@ def make_app(annos):
 
 def make_sparc(app=Flask('sparc curation services')):
     from analysis import oqsetup
+    from scibot.papers import KeyAccessor  # TODO
     OntTerm, ghq = oqsetup()
     SparcMI.graph = ghq.graph
     sparc_ents = OntTerm.search(None, prefix='sparc')
     tags = '\n'.join(sorted(t.curie for t in sparc_ents))
 
-    @app.route('/sparc/controlled-tags', methods=['GET'])
-    def sparc_controlled_tags():
-        """
-        The js required for this in the google docs script editory is quite simple.
-        ```
-        function loadFromUrl() {
-        var url = "https://url.to/your/controlled-tags";
-        var doc = DocumentApp.openById("GOOGLE-DOC-IDENTIFIER");
-        var paragraph = doc.getParagraphs()[0];
-        var resp = UrlFetchApp.fetch(url);
-        var newText = resp.getContentText();
-        paragraph.setText(newText);
-        }
-        ```"""
-        return tags, 200, {'Content-Type':'text/plain; charset=utf-8'}
+    @app.route('/sparc/documents', methods=['GET'])
+    def sparc_documents():
+        hls = set(get_hypothesis_local(uri) for uri in SparcMI.uris)
+        p = {k:v for k, v in papers(SparcMI._annos_list).items() if k in hls}
+        s = {k:v for k, v in statistics(SparcMI._annos_list).items() if k in hls}
+        ast = {k:v for k, v in ast_statistics(SparcMI).items() if k in hls}
+        return htmldoc(render_idents(p, s, ast),
+                       title='documents',
+                       styles=(table_style,))
+
+    @app.route('/sparc/documents/<document_id>/annotations', methods=['GET'])
+    def sparc_documents_star_annos(document_id):
+        HYB = request.url + '#Hybrids'
+        SPC = request.url + '#sparc'
+        if 'hl:' not in document_id:
+            return abort(404)
+        iri = hypothesis_local(document_id.split(':', 1)[-1])  # FIXME risk of fail if no visit to documents
+        log.debug(f'iri? {iri!r}')
+        try:
+            return htmldoc(''.join(
+                [f'<a href="{HYB}" id="sparc"><b>sparc</b></a><br>\n'] +
+                [a.__repr__(html=True, number=n + 1).replace('\n', '<br>\n')
+                 for n, a in  enumerate(sorted(SparcMI.byIri(iri),
+                                               key=lambda p: p.ast_updated, reverse=True))] +
+                [f'<br>\n<a href="{SPC}" id="Hybrids"><b>Hybrids</b></a><br>\n'] +
+                [a.__repr__(html=True, number=n + 1).replace('\n', '<br>\n')
+                 for n, a in  enumerate(sorted(Hybrid.byIri(iri),
+                                               key=lambda p: p.ast_updated, reverse=True))]
+                ),
+                           title=f'{document_id} annotations',
+                           styles=(table_style, monospace_body_style, details_style))
+        except KeyError:
+            return abort(404)
+
+
+    @app.route('/sparc/annotations/<id>', methods=['GET'])
+    def sparc_annotations_star(id):
+        return '<html>' ''.join((
+            # repr(HypothesisHelper.byId(id)).replace('\n', '<br>\n'),
+            Hybrid.byId(id).__repr__(html=True, number='').replace('\n', '<br>\n'),
+            SparcMI.byId(id).__repr__(html=True, number='').replace('\n', '<br>\n'),
+            )) + '</html>'
 
     @app.route('/sparc/tags', methods=['GET'])
     def sparc_tags():
-        # TODO
-        def uriconv(v):
-            uri = request.base_url + '/' + v
-            return uri
-
         ptags = {t:len([p for p in v if p.isAstNode]) for t, v in SparcMI._tagIndex.items()}
         def rendersparct(tag, acount):
             count = ptags.get(tag, 0)
@@ -389,25 +411,61 @@ def make_sparc(app=Flask('sparc curation services')):
                  f'<br>\n<a href="{SPC}" id="Hybrids"><b>Hybrids</b></a><br>\n'] +
                 [a.__repr__(html=True, number=n + 1).replace('\n', '<br>\n')
                  for n, a in  enumerate(sorted(Hybrid.byTags(tagname),
-                                               key=lambda p: p.ast_updated, reverse=True))]
-                ),
+                                               key=lambda p: p.ast_updated, reverse=True))]),
                            title=f'{tagname} annotations',
                            styles=(table_style, monospace_body_style, details_style,
                                    '.sparc a:link { text-decoration: none; }'))
         except KeyError:
             return abort(404)
 
+    @app.route('/sparc/ast')
     @app.route('/sparc/all-annotations<extension>')
-    def sparc_all_annotations_ttl(extension):
-        # TODO actually use the extension
+    def sparc_all_annotations_ttl(extension='.html'):
+        if not extension.startswith('.'):
+            return abort(404)
+
+        extension = extension[1:]
+
+        body = SparcMI.html() if extension == 'html' else SparcMI.ttl()  # FIXME more
         style = 'body { font-family: monospace }\na:link { text-decoration: none; }'
-        return htmldoc(SparcMI.html(),
+        return htmldoc(body,
                        title='all-annotations',
                        styles=(table_style, style))
 
-    @app.route('/sparc/coverage.tsv')
-    def sparc_coverage():
-        return SparcMI.report(format='tsv'), 200, {'Content-Type':'text/plain; charset=utf-8'}
+    @app.route('/sparc/coverage')
+    @app.route('/sparc/coverage<extension>')
+    def sparc_coverage(extension='.tsv'):
+        if not extension.startswith('.'):
+            return abort(404)
+
+        extension = extension[1:]
+        return SparcMI.report(format=extension), 200, {'Content-Type':'text/plain; charset=utf-8'}
+
+    @app.route('/sparc', methods=['GET'])
+    @app.route('/sparc/', methods=['GET'])
+    def sparc_curation():
+        body = []
+        for route in 'documents', 'tags', 'ast', 'coverage':
+            url = request.base_url + route
+            body.append(atag(url, route, new_tab=True) + '<br>\n')
+        return htmldoc(*body,
+                       title='sparc curation dashboard')
+
+    @app.route('/sparc/controlled-tags', methods=['GET'])
+    def sparc_controlled_tags():
+        """
+        The js required for this in the google docs script editory is quite simple.
+        ```
+        function loadFromUrl() {
+        var url = "https://url.to/your/controlled-tags";
+        var doc = DocumentApp.openById("GOOGLE-DOC-IDENTIFIER");
+        var paragraph = doc.getParagraphs()[0];
+        var resp = UrlFetchApp.fetch(url);
+        var newText = resp.getContentText();
+        paragraph.setText(newText);
+        }
+        ```"""
+        return tags, 200, {'Content-Type':'text/plain; charset=utf-8'}
 
     return app
 

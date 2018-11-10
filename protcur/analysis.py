@@ -55,13 +55,19 @@ error_output = []
 
 # utility
 
+_known_extensions = {}
+# FIXME very much a hack on a bad id scheme
+# and assumes that get_ is always called first
 def get_hypothesis_local(uri):
     if 'hypothesis-local' in uri:
-        return PurePath(uri).stem
+        pp = PurePath(uri)
+        _known_extensions[pp.stem] = pp.suffix
+        return pp.stem
 
 HLPREFIX = '://hypothesis-local.olympiangods.org/'
 def hypothesis_local(hln, s=True):
-    return ('https' if s else 'http') + HLPREFIX + hln + '.pdf'
+    # FIXME log.warning on hln not in _known_extensions
+    return ('https' if s else 'http') + HLPREFIX + hln + _known_extensions.get(hln, '.pdf')
 
 def extract_links_from_markdown(text):
     def doline(line):
@@ -209,9 +215,21 @@ def statistics(annos):
 
     return stats
 
+def ast_statistics(ast):
+    stats = {}
+    for a in ast:
+        hl = get_hypothesis_local(a.uri)
+        if hl not in stats:
+            stats[hl] = 0
+        if a.isAstNode:
+            stats[hl] += 1
+
+    return stats
+
 def splitLines(text):
     for line in text.split('\n'):
         yield line
+
 
 def inputRefs(annos):
     for anno in annos:
@@ -221,7 +239,6 @@ def inputRefs(annos):
                     id_ = idFromShareLink(line)
                     if id_:
                         yield id_
-
 
 
 class Hybrid(HypothesisHelper):
@@ -239,6 +256,15 @@ class Hybrid(HypothesisHelper):
     _replies = {}
     _astParentIndex = {}
 
+    def __new__(cls, anno, annos):
+        """ namespace with the colon to make it simple to allow
+            namespaces that are substrings of other namespaces """
+        cls.prefix_ast = None
+        if cls.namespace is not None:
+            cls.prefix_ast = cls.namespace + ':'
+
+        return HypothesisHelper.__new__(cls, anno, annos)
+
     def __init__(self, anno, annos):
         super().__init__(anno, annos)
         if len(self.objects) == len(self._annos):  # all loaded
@@ -247,15 +273,6 @@ class Hybrid(HypothesisHelper):
             [c for p in self.objects.values() for c in p.children]
             [p._addAstParent() for p in self.objects.values() if tuple(p.children)]  # handles updates
             # TODO deletes still an issue as always
-
-    @property
-    def prefix_ast(self):
-        """ namespace with the colon to make it simple to allow
-            namespaces that are substrings of other namespaces """
-        if self.namespace is not None:
-            return self.namespace + ':'
-        else:
-            return self.namespace
 
     def ontLookup(self, value, rank=('CHEBI', 'GO', 'UBERON', 'ilxtr', 'PATO')):
 
@@ -396,7 +413,7 @@ class Hybrid(HypothesisHelper):
         # you think everything is ok, but no, some error has been caught
         # inadvertently, raising a builtin python error should be and uncatchable
         # python error so that these kinds of mistakes and never happen >_<
-        tout = sorted(set(self._translate_tags(out + add_tags)))
+        tout = set(self._translate_tags(out + add_tags))
         return tout
 
     @property
@@ -777,7 +794,7 @@ class AstGeneric(Hybrid):
         if self.isAstNode:
             tags = self.tags  # compute once since tags is a property
             for suffix in self._order:
-                tag = 'protc:' + suffix
+                tag = self.prefix_ast + suffix
                 if tag in tags:
                     if (suffix in ('input', 'implied-input') and
                         not self.hasAstParent and
@@ -787,7 +804,7 @@ class AstGeneric(Hybrid):
                     else:
                         return tag
             if len(tags) == 1:
-                return tags[0]
+                return next(iter(tags))
             elif len(list(self._cleaned_tags)) == 1:
                 return next(iter(self._cleaned_tags))
             elif 'TODO' in tags and len(tags) == 2:  # FIXME remove hardcoding
@@ -970,7 +987,7 @@ class protc(AstGeneric):
 
     @property
     def tags(self):
-        return super().tags + list(self.mapped_tags)
+        return super().tags | set(self.mapped_tags)
 
     @property
     def mapped_tags(self):
@@ -1169,7 +1186,6 @@ class NamespaceValueTranslator:
 
     target_type = None
     classn  = HypothesisHelper.classn
-    prefix_ast = Hybrid.prefix_ast
     _value_escape = AstGeneric._value_escape
     _dispatch = AstGeneric._dispatch
     astValue = AstGeneric.astValue
@@ -1179,6 +1195,8 @@ class NamespaceValueTranslator:
     additional_namespaces = tuple()  # intentionally not a dict because dont want this
 
     def __init__(self, target_instance):
+        if not hasattr(self, 'prefix_ast'):
+            self.prefix_ast = None if self.namespace is None else self.namespace + ':'
         self.target_instance = target_instance
         if not isinstance(self.target_instance, self.target_type):
             raise self.TargetNamespaceMismatchError('{type(self.target_instance)} is not a {self.targt_type}')
@@ -1194,7 +1212,7 @@ class NamespaceValueTranslator:
 
     @property
     def tags(self):
-        return [t for t in self.target_instance.tags if t.startswith(self.prefix_ast)]
+        return set(t for t in self.target_instance.tags if t.startswith(self.prefix_ast))
 
     @property
     def astType(self):
@@ -1238,6 +1256,7 @@ class protc_generic(NamespaceValueTranslator, metaclass=RegNVT):
     """ tags without namespaces """
     target_type = protc
     namespace = None
+    prefix_ast = ''  # hack to fool dispatch, these are NO namespace, not empty namespace
     _order = 'TODO',
     #target_type.additional_namespaces[namespace] = protc_generic  # FIXME
 
@@ -1246,13 +1265,8 @@ class protc_generic(NamespaceValueTranslator, metaclass=RegNVT):
         super().__init__(generic_instance)
 
     @property
-    def prefix_ast(self):
-        # hack to fool dispatch, these are NO namespace, not empty namespace
-        return ''
-
-    @property
     def tags(self):
-        return [t for t in self.target_instance.tags if ':' not in t]
+        return set(t for t in self.target_instance.tags if ':' not in t)
 
     @property
     def astType(self):
@@ -1950,8 +1964,8 @@ def main():
     #sparc_mapping()
     OntTerm, ghq = oqsetup()
     SparcMI.graph = ghq.graph
-    smi = [SparcMI(a, annos) for a in annos
-           if any(t.startswith('sparc:') for t in a.tags)]
+    smi = [SparcMI(a, annos) for a in annos]
+           #if any(t.startswith('sparc:') for t in a.tags)]
     s = smi[0]
     embed()
     exit_loop()
