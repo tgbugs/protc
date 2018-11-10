@@ -586,12 +586,15 @@ class Hybrid(HypothesisHelper):
     def needsParent(self):
         return self.isAstNode and not self.hasAstParent and self.astType in self._needParent
 
-    def __repr__(self, depth=0, cycle=tuple(), html=False, number='*', ind=4):
+    _repr_join = '\n'
+
+    def __repr__(self, depth=0, nparens=0, cycle=tuple(), html=False, number='*', ind=4):
         #SPACE = '&nbsp;' if html else ' '
         SPACE = '\xA0' if html else ' '
+        NL = '<br>\n' if html else '\n'
         if self in cycle:
             print(tc.red('CYCLE DETECTED'), self.shareLink, self._repr)
-            return f'\n{SPACE * ind * (depth + 1)}* {cycle[0].id} has a circular reference with this node {self.id}'
+            return f'{NL}{SPACE * ind * (depth + 1)}* {cycle[0].id} has a circular reference with this node {self.id}'
             return ''  # prevent loops
         else:
             cycle += self,
@@ -613,7 +616,7 @@ class Hybrid(HypothesisHelper):
         _replies = [r for r in self.replies if r not in children]
         lenchilds = len(children) + len(_replies)
         more = f' {lenchilds} ...' if lenchilds else ' ...'
-        childs = ''.join(c.__repr__(depth + 1, cycle=cycle, html=html) for c in children)
+        childs = ''.join(c.__repr__(depth + 1, nparens=nparens, cycle=cycle, html=html) for c in children)
                          #if not print(c.id))
         #if childs: childs += '\n'
         prefixes = {f'{self.classn}:':True,
@@ -630,13 +633,13 @@ class Hybrid(HypothesisHelper):
         spacing = max(len(p) for p, test in prefixes.items() if test) + 1
         align = (ind + len(start)) * depth + spacing  # TODO max(len(things)) instead of 14 hardcoded
         def align_prefix(prefix):
-            return '\n' + t + prefix + SPACE * (spacing - len(prefix))
-        #parent_id =  (f"\n{t}parent_id:{SPACE * (spacing - len('parent_id:'))}"
+            return NL + t + prefix + SPACE * (spacing - len(prefix))
+        #parent_id =  (f"{NL}{t}parent_id:{SPACE * (spacing - len('parent_id:'))}"
         def row(prefix, rest):
             # if thunking this works for deferring if it will be a miracle
             return (align_prefix(prefix) + rest()) if prefixes[prefix] else ''
 
-        startn = '\n' if not isinstance(number, int) or number > 1 else ''
+        startn = NL if not isinstance(number, int) or number > 1 else ''
 
         details = '<details>' if html else ''
         _details = '</details>' if html else ''
@@ -644,7 +647,9 @@ class Hybrid(HypothesisHelper):
         summary = '<summary>' if html else ''
         _summary = f'</summary>' if html else '\n'  # </summary> has an implicit <br> for reasons know only to w3c
 
-        value_text = row('value:', lambda:linewrap(self.value, align, space=SPACE, depth=depth, ind=ind))
+        value_text = row('value:', lambda:linewrap(self.value, align,
+                                                   space=SPACE, nl=NL,
+                                                   depth=depth, ind=ind))
 
         parent_id = row('parent:',
                         lambda:f"{'' if html else self.parent.id + SPACE}{self.parent._repr}")
@@ -676,10 +681,15 @@ class Hybrid(HypothesisHelper):
 
         childs_text = row('children:', lambda:childs)
 
-        endbar = f'\n{t:_<80}\n'
+        endbar = f'\n{t:_<80}{NL}'
 
         def rm_n(*args):
-            return ''.join(args).strip('\n')
+            """ because </summary> is evil """
+            out = ''.join(args)
+            if html:
+                return out[len(NL):]
+            else:
+                return out.strip('\n')
 
         return ''.join((details, summary,
                         startbar,
@@ -695,8 +705,8 @@ class Hybrid(HypothesisHelper):
                              tagcor,
                              replies_text,
                              childs_text,
-                             endbar,
-                             _details)))
+                             _details),
+                        endbar))
 
 
 class AstGeneric(Hybrid):
@@ -842,8 +852,11 @@ class AstGeneric(Hybrid):
         #else:
             #return False
 
+    _repr_join = ''
+
     def __repr__(self, depth=1, nparens=1, plast=True, top=True, cycle=tuple(), html=False, number='*'):
         out = ''
+        NL = '<br>\n' if html else '\n'
         if self.astType is None:
             if self in cycle:
                 cyc = ' '.join(c.id for c in cycle)
@@ -852,7 +865,10 @@ class AstGeneric(Hybrid):
                 return out
             else:
                 printD(tc.red('WARNING:'), f'unhandled type for {self._repr} {self.tags}')
-                return super().__repr__(html=html, number=number)
+                out = super().__repr__(html=html, number=number, depth=depth, nparens=0)
+                close = ')' * nparens
+                mnl = '\n' if depth == 1 else ''
+                return out if html else mnl + '#;(' + out.rstrip() + close
 
         self.linePreLen = self.indentDepth * (depth - 1) + len('(') + len(str(self.astType)) +  len(' ')
         value = self.astValue
@@ -861,12 +877,12 @@ class AstGeneric(Hybrid):
         if html: link = atag(link, link)
         #SPACE = '&nbsp;' if html else ' '
         SPACE = '\xA0' if html else ' '
-        comment = f'{SPACE}{SPACE}; {link}'
+        comment = f'{SPACE}{SPACE};{SPACE}{link}'
 
         children = sorted(self.children)  # better to run the generator once up here
         if children:
             indent = SPACE * self.indentDepth * depth
-            linestart = '\n' + indent
+            linestart = NL + indent
             nsibs = len(children)
             cs = []
             for i, c in enumerate(children):
@@ -886,9 +902,9 @@ class AstGeneric(Hybrid):
                                        html=html)
                     else:
                         #print('Circular link in', self.shareLink)
-                        cyc = ' '.join(c.id for c in cycle)
+                        cyc = '{SPACE}'.join(c.id for c in cycle)
                         print('Circular link in', self._repr, 'cycle', cyc)
-                        s = f"'(circular-link no-type (cycle {cyc}))" + ')' * nparens
+                        s = f"'(circular-link{SPACE}no-type{SPACE}(cycle{SPACE}{cyc}))" + ')' * nparens
                         #s = f"'(circular-link {cycle[0].id})" + ')' * nparens
                 except TypeError as e:
                     # do not remove or bypass this error, it means that one of your
@@ -901,12 +917,12 @@ class AstGeneric(Hybrid):
         else:
             childs = ')' * nparens + comment
 
-        start = '\n(' if top else '('  # ))
+        start = f'{NL}(' if top else '('  # ))
         #print('|'.join(''.join(str(_) for _ in range(1,10)) for i in range(12)))
 
-        prov = f"(hyp: '{self.id})"
+        prov = f"(hyp:{SPACE}'{self.id})"
 
-        return f'{start}{self.astType} {value} {prov}{childs}'
+        return f'{start}{self.astType}{SPACE}{value}{SPACE}{prov}{childs}'
 
 
 class protc(AstGeneric):
@@ -1083,7 +1099,7 @@ class protc(AstGeneric):
         if '(ont' in value:
             before, ont_after = value.split('(ont', 1)
             ont, after = ont_after.rsplit(')', 1)  # FIXME bad parsing
-            ont = ' #:ont (ont' + ont
+            ont = ' #:ont (ont' + ont + ')'
             value = before + after
             #print(ont)
 
@@ -1291,12 +1307,12 @@ class protc_ilxtr(NamespaceValueTranslator, metaclass=RegNVT):
         # techniques lacking sections are converted to impls
         # since they are likely to involve many steps and impl
         # is the correct place holder for things with just words
-        return '(protc:impl {self.value})'
+        return f'(protc:impl {json.dumps(self.value)})'
 
     @od
     def participant(self):
         # FIXME ambiguous
-        return '(protc:input {self.value})'
+        return f'(protc:input {json.dumps(self.value)})'
 
 
 class RegTT(type):
@@ -1474,8 +1490,6 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
     # classes can define a class method for
     # add, update, and delete that will fire additional actions
 
-    __repr__ = Hybrid.__repr__
-
     def __init__(self, *args, **kwargs):
         self._subject = None
         self.extra_triples = tuple()
@@ -1544,6 +1558,10 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
                                        OntId(s).prefix == cls.namespace and
                                        o == owl.Class)
             return cls._all_classes
+
+    @classmethod
+    def all_tags(cls):
+        return cls.all_classes() | cls.all_properties()
 
     @classmethod
     def _docs(cls):
@@ -1686,7 +1704,9 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         # TODO add and remove triples on websocket update
         return graph.serialize(format=format)
 
-    def __repr__(self, html=False, number=0):
+    _repr_join = '\n\n'
+
+    def __repr__(self, html=False, number=''):
         """ turtle repr of class leaving prefixes implicit """
         # when its empty all you get is the anno > nice
         if html:

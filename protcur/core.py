@@ -20,7 +20,7 @@ def annoSync(memoization_file='/tmp/protc-annotations.pickle', helpers=tuple(), 
     yield stream_thread
     yield exit_loop
 
-def linewrap(text, start, end=80, sep='|', space=' ', ind=4, depth=0):
+def linewrap(text, start, end=80, sep='|', space=' ', nl='\n', ind=4, depth=0):
     text = text.replace('\n', ' ')
     if depth:
         pre = ''.join((space * ind) + sep for _ in range(depth))
@@ -31,7 +31,7 @@ def linewrap(text, start, end=80, sep='|', space=' ', ind=4, depth=0):
     clen = start - 1
     output = []
     cline = []
-    for token in text.split(' '):
+    for token in text.split():
         lt = len(token)
         if clen + lt >= end:
             cline.append(token)
@@ -45,5 +45,5 @@ def linewrap(text, start, end=80, sep='|', space=' ', ind=4, depth=0):
     if cline:
         output.append(space.join(cline))
 
-    out = f'\n{t}'.join(output)
+    out = f'{nl}{t}'.join(output)
     return out
