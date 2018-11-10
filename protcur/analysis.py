@@ -857,6 +857,7 @@ class AstGeneric(Hybrid):
     def __repr__(self, depth=1, nparens=1, plast=True, top=True, cycle=tuple(), html=False, number='*'):
         out = ''
         NL = '<br>\n' if html else '\n'
+        SPACE = '\xA0' if html else ' '
         if self.astType is None:
             if self in cycle:
                 cyc = ' '.join(c.id for c in cycle)
@@ -866,17 +867,22 @@ class AstGeneric(Hybrid):
             else:
                 printD(tc.red('WARNING:'), f'unhandled type for {self._repr} {self.tags}')
                 out = super().__repr__(html=html, number=number, depth=depth, nparens=0)
-                close = ')' * nparens
+                close = ')' * (nparens - 1)
                 mnl = '\n' if depth == 1 else ''
-                return out if html else mnl + '#;(' + out.rstrip() + close
+                here_string_marker = '----'
+                return out if html else (mnl +
+                                         f'#<<{here_string_marker}' +
+                                         out.rstrip() +
+                                         f'\n{here_string_marker}\n' +
+                                         close)
 
         self.linePreLen = self.indentDepth * (depth - 1) + len('(') + len(str(self.astType)) +  len(' ')
-        value = self.astValue
+        value = (self.astValue.replace(' ', SPACE).replace('\n', NL)
+                 if html else
+                 self.astValue) # astValue depends on linePreLen
         self.linePreLen += self.indentDepth  # doing the children now we bump back up
         link = self.shareLink
-        if html: link = atag(link, link)
-        #SPACE = '&nbsp;' if html else ' '
-        SPACE = '\xA0' if html else ' '
+        if html: link = atag(link, link, new_tab=True)
         comment = f'{SPACE}{SPACE};{SPACE}{link}'
 
         children = sorted(self.children)  # better to run the generator once up here
@@ -912,8 +918,9 @@ class AstGeneric(Hybrid):
                     # and is actually probably being inherited from that class
                     # you should give this class its own dictionary for that
                     raise TypeError(f'{c} is not an {self.classn}') from e  # XXX
-                cs.append(s)
-            childs = comment + linestart + linestart.join(cs)
+                linejoin = NL if c.astType is None else linestart
+                cs.append(linejoin + s)
+            childs = comment + ''.join(cs)
         else:
             childs = ')' * nparens + comment
 
