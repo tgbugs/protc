@@ -327,6 +327,7 @@ def make_sparc(app=Flask('sparc curation services')):
             )) + '</html>'
 
     @app.route('/sparc/tags', methods=['GET'])
+    @app.route('/sparc/tags/', methods=['GET'])
     def sparc_tags():
         ptags = {t:len([p for p in v if p.isAstNode]) for t, v in SparcMI._tagIndex.items()}
         def rendersparct(tag, acount):
