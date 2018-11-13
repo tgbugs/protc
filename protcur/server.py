@@ -7,7 +7,7 @@ from datetime import date
 from markdown import markdown
 from hyputils.hypothesis import HypothesisUtils, makeSimpleLogger
 from pyontutils.htmlfun import htmldoc, atag, deltag, titletag, render_table, zerotag
-from pyontutils.htmlfun import monospace_body_style, table_style, details_style
+from pyontutils.htmlfun import monospace_body_style, table_style, details_style, ttl_html_style
 from protcur.analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid
 from protcur.analysis import citation_tree, papers, statistics, ast_statistics
 from protcur.analysis import readTagDocs, justTags, addDocLinks, Hybrid, protc, SparcMI
@@ -401,10 +401,9 @@ def make_sparc(app=Flask('sparc curation services')):
 
         if extension == 'html':
             body = SparcMI.html()
-            style = 'body { font-family: monospace }\na:link { text-decoration: none; }'
             return htmldoc(body,
                         title='all-annotations',
-                        styles=(table_style, style))
+                        styles=(table_style, ttl_html_style))
         else:  # TODO more
             return SparcMI.ttl(), 200, {'Content-Type':'text/plain; charset=utf-8'}
 
