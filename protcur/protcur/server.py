@@ -452,9 +452,9 @@ def make_sparc(app=Flask('sparc curation services')):
     return app
 
 
-def make_server_app():
+def make_server_app(memfile='/tmp/protcur-service-annos.pickle'):
     from protcur.core import annoSync
-    get_annos, annos, stream_thread, exit_loop = annoSync('/tmp/protcur-server-annos.pickle',
+    get_annos, annos, stream_thread, exit_loop = annoSync(memfile,
                                                           helpers=(Hybrid, protc, SparcMI))
     stream_thread.start()
     #[HypothesisHelper(a, annos) for a in annos]
@@ -469,7 +469,7 @@ def make_server_app():
 
 
 def main():
-    app = make_server_app()
+    app = make_server_app('/tmp/protcur-server-annos.pickle')
     Hybrid.byTags('protc:output')  # FIXME trigger index creation
     protc.byTags('protc:output')  # FIXME trigger index creation
 
