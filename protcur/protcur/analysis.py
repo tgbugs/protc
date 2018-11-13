@@ -111,9 +111,9 @@ class TagDoc:
 
 
 def readTagDocs():
-    with open(f'{__script_folder__}/../protc-tags.rkt', 'rt') as f:
+    with open(f'{__script_folder__}/../../protc-tags.rkt', 'rt') as f:
         text = f.read()
-    with open(f'{__script_folder__}/../anno-tags.rkt', 'rt') as f:
+    with open(f'{__script_folder__}/../../anno-tags.rkt', 'rt') as f:
         text += f.read()
     success, docs, rest = parsing.tag_docs(text)
     if rest:

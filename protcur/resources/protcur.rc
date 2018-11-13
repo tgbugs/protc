@@ -1,0 +1,70 @@
+#!/sbin/openrc-run
+# Copyright 1999-2018 Gentoo Foundation
+# Distributed under the terms of the GNU General Public License v2
+
+: ${LOG_LEVEL:=info}
+: ${GROUP:=servers}
+: ${USER:=servers}
+: ${LOG_LOC:="/var/log/protcur"}
+
+run_dir=${run_dir:-/run}
+LOG="${LOG_LOC}/sysout.log"
+
+socket="unix:/run/protcur/socket"
+pidfile="${run_dir}/${SVCNAME}/pid"
+command="/usr/bin/gunicorn"
+command_args="--bind ${socket}
+--daemon
+--pid ${pidfile}
+--name protcur
+--workers 4
+--worker-class gevent
+--timeout 30
+--group ${GROUP}
+--user ${USER}
+--log-level ${LOG_LEVEL}
+--log-file ${LOG}
+protcur.app:app"
+retry='TERM/30/KILL/5'
+start_stop_daemon_args="--group ${GROUP} --user ${USER}"
+
+command_owner="${USER}:${GROUP}"
+
+depend() {
+    after net
+}
+
+start_pre() {
+    OOPS=0
+    if [ -z "${HYP_GROUP}" ]; then
+        eend 1 "HYP_GROUP not set in /etc/conf.d/${SVCNAME}"
+        OOPS=1
+    fi
+    if [ -z "${HYP_USERNAME}" ]; then
+        eend 1 "HYP_USERNAME not set in /etc/conf.d/${SVCNAME}"
+        OOPS=1
+    fi
+    if [ -z "${HYP_API_TOKEN}" ]; then
+        eend 1 "HYP_API_TOKEN not set in /etc/conf.d/${SVCNAME}"
+        OOPS=1
+    fi
+    if [ ${OOPS} -ne 0 ]; then
+        return 1
+    fi
+    checkpath --directory --owner ${command_owner} --mode 0775 "/run/${SVCNAME}"
+    checkpath --directory --owner ${command_owner} --mode 0775 "${LOG_LOC}"
+}
+
+start() {
+    ebegin "Starting protcur"
+	start-stop-daemon --start --pidfile ${pidfile} \
+		--group ${GROUP} --user ${USER} \
+		--wait 1000 \
+		--env HYP_USERNAME=${HYP_USERNAME} \
+		--env HYP_GROUP=${HYP_GROUP} \
+		--env HYP_API_TOKEN=${HYP_API_TOKEN} \
+		--env LOG_LOC=${LOG_LOC} \
+		--env PYTHONPATH=${PYTHONPATH} \
+		--exec ${command} -- ${command_args}
+    eend $? "Failed to start protcur"
+}

@@ -1,0 +1,13 @@
+# configuration file for the protcur web server
+# permissions on this file should be set to 0600
+
+# gunicorn log level
+LOG_LEVEL=
+# hypothes.is configuration
+HYP_GROUP=
+HYP_USERNAME=
+HYP_API_TOKEN=
+# log location
+LOG_LOC=/var/log/protcur
+# development settings
+PYTHONPATH=

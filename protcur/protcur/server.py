@@ -291,7 +291,7 @@ def make_app(annos):
 
 
 def make_sparc(app=Flask('sparc curation services')):
-    from analysis import oqsetup
+    from protcur.analysis import oqsetup
     from scibot.papers import KeyAccessor  # TODO
     OntTerm, ghq = oqsetup()
     SparcMI.graph = ghq.graph
@@ -452,8 +452,8 @@ def make_sparc(app=Flask('sparc curation services')):
     return app
 
 
-def main():
-    from core import annoSync
+def make_server_app():
+    from protcur.core import annoSync
     get_annos, annos, stream_thread, exit_loop = annoSync('/tmp/protcur-server-annos.pickle',
                                                           helpers=(Hybrid, protc, SparcMI))
     stream_thread.start()
@@ -465,11 +465,16 @@ def main():
 
     app = make_app(annos)
     make_sparc(app)
+    return app
 
+
+def main():
+    app = make_server_app()
     Hybrid.byTags('protc:output')  # FIXME trigger index creation
     protc.byTags('protc:output')  # FIXME trigger index creation
 
     app.debug = False
+
     app.run(host='localhost', port=7000, threaded=True)  # nginxwoo
     exit_loop()
     stream_thread.join()
@@ -490,6 +495,7 @@ def sparc_main():
     app.run(host='localhost', port=7001, threaded=True)  # nginxwoo
     exit_loop()
     stream_thread.join()
+
 
 if __name__ == '__main__':
 
