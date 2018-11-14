@@ -1,0 +1,24 @@
+* protcur
+  A dashboard for web annotation workflows for protocol curation.
+* Setup
+** Python
+   Coming!
+** SBCL
+   In addition to the usual python setup protcur also depends on
+   Steel Bank Common Lisp and quicklisp to run the ast colorizer.
+   1. Install =sbcl= for your distribution.
+   2. As the user that will be running the daemon run the following
+      as documented at https://www.quicklisp.org/beta/.
+      #+BEGIN_SRC bash
+        curl -O https://beta.quicklisp.org/quicklisp.lisp
+        curl -O https://beta.quicklisp.org/quicklisp.lisp.asc
+        gpg --verify quicklisp.lisp.asc quicklisp.lisp
+      #+END_SRC
+      Run =sbcl= and run each command one at a time or execute this block.
+      #+BEGIN_SRC lisp
+        (load "quicklisp.lisp")
+        (quicklisp-quickstart:install)
+        (ql:add-to-init-file)
+        (ql:quickload "colorize")
+        (quit)
+      #+END_SRC
