@@ -1,9 +1,6 @@
 #!/usr/bin/sbcl --script
 ;(write-line "HELP IM TRAPPED IN A REPL")
-(let ((quicklisp-init (merge-pathnames "code/lisp/quicklisp/setup.lisp"
-                                       (user-homedir-pathname))))
-  (when (probe-file quicklisp-init)
-    (load quicklisp-init)))
+(load "~/.sbclrc")  ; assuming that quicklisp-init is pulled in ...
 ;(pprint (list-all-packages))
 ;(write-line "")
 (require "colorize")
