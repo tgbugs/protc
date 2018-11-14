@@ -121,7 +121,7 @@ def render_ast():
             f.write(new_raw)
 
     if not ast_html_file.exists() or old_raw != new_raw:
-        subprocess.check_output([colorizer_command, ast_file.as_posix()])
+        subprocess.check_output([colorizer_command.as_posix(), ast_file.as_posix()])
 
         with open(ast_html_file.as_posix(), 'rt') as f:
             html_uncorrected = f.read()
