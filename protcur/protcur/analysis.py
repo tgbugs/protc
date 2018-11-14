@@ -30,7 +30,7 @@ from pyontutils.namespaces import ilxtr, TEMP, definition
 from pyontutils.hierarchies import creatTree
 from pyontutils.scigraph_client import Vocabulary
 from pyontutils.closed_namespaces import rdf, rdfs, owl
-from pysercomb import parsing
+from pysercomb.parsers import racket, units
 #from pysercomb import parsing_parsec
 from hyputils.hypothesis import HypothesisAnnotation, HypothesisHelper, idFromShareLink, shareLinkFromId, iterclass
 from protcur.core import linewrap
@@ -115,7 +115,7 @@ def readTagDocs():
         text = f.read()
     with open(f'{__script_folder__}/../../anno-tags.rkt', 'rt') as f:
         text += f.read()
-    success, docs, rest = parsing.tag_docs(text)
+    success, docs, rest = racket.tag_docs(text)
     if rest:
         raise SyntaxError(f'tag docs did not parse everything!\n{rest}')
     tag_lookup = {tag:TagDoc(doc, parent) for _, tag, parent, doc in docs}
@@ -1084,7 +1084,7 @@ class protc(AstGeneric):
             success = False
             front = ''
             while cleaned and not success:
-                _, v, rest = parsing.parameter_expression(cleaned)
+                _, v, rest = units.parameter_expression(cleaned)
                 success = v[0] != 'param:parse-failure'
                 if not success:
                     cleaned = cleaned[1:]
