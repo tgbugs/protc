@@ -50,7 +50,8 @@ except ImportError:
 sgv = Vocabulary(cache=True)
 RFU = 'protc:references-for-use'
 __script_folder__ = os.path.dirname(os.path.realpath(__file__))
-
+parameter_expression, *_ = units.make_unit_parser(Path(__script_folder__,
+                                                       '../../protc-lib/protc/units'))
 error_output = []
 
 # utility
@@ -305,7 +306,10 @@ class Hybrid(HypothesisHelper):
             data = data[0]  # TODO could check other rules I have used in the past
 
         id = data['curie'] if 'curie' in data else data['iri']
-        label = data['labels'][0]
+        if data['labels']:
+            label = data['labels'][0]
+        else:
+            label = f'WARNING NO LABEL FOR {id} FIXME'
 
         return id, label
 
@@ -1084,7 +1088,7 @@ class protc(AstGeneric):
             success = False
             front = ''
             while cleaned and not success:
-                _, v, rest = units.parameter_expression(cleaned)
+                _, v, rest = parameter_expression(cleaned)
                 success = v[0] != 'param:parse-failure'
                 if not success:
                     cleaned = cleaned[1:]
