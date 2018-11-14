@@ -462,6 +462,8 @@ def make_server_app(memfile='/tmp/protcur-service-annos.pickle'):
     [Hybrid(a, annos) for a in annos]
     [protc(a, annos) for a in annos]
     SparcMI.byTags('sparc:lastName')
+    Hybrid.byTags('protc:output')  # FIXME trigger index creation
+    protc.byTags('protc:output')  # FIXME trigger index creation
 
     app = make_app(annos)
     make_sparc(app)
@@ -470,8 +472,6 @@ def make_server_app(memfile='/tmp/protcur-service-annos.pickle'):
 
 def main():
     app = make_server_app('/tmp/protcur-server-annos.pickle')
-    Hybrid.byTags('protc:output')  # FIXME trigger index creation
-    protc.byTags('protc:output')  # FIXME trigger index creation
 
     app.debug = False
 
