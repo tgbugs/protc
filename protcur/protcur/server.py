@@ -104,7 +104,7 @@ def correct_colorized(html):
     html5 = match_quote.sub(quote_fix, html4)
     return html5
 
-colorizer_command = THIS_FILE.parent / 'colorizer.lisp'
+colorizer_command = THIS_FILE.parent.parent / 'bin/colorizer.lisp'
 ast_file = Path(f'/tmp/{UID}-protc-ast-render.rkt')
 ast_html_file = Path(f'/tmp/{UID}-protc-ast-render.html')
 if ast_html_file.exists(): os.remove(ast_html_file.as_posix())  # cleanup at startup
