@@ -358,7 +358,8 @@ def make_sparc(app=Flask('sparc curation services')):
         _tags = [[atag(uriconv(t), rendertagname(t, d)),
                   atag(hutils.search_url(tag=t), d),
                   rendersparct(t, d),
-                  ' '.join(tag_docs[t].types) if t in tag_docs else '']
+                  ' '.join(tag_docs[t].types) if t in tag_docs else '',
+                  tag_docs[t].editorNote if t in tag_docs else '']
                 for t, d in atags.items()
                 if all(p not in t for p in skip)]
         tags = sorted(_tags, key=lambda t:t[3])  # sort by type
@@ -371,7 +372,8 @@ def make_sparc(app=Flask('sparc curation services')):
                                     #f'Count n={sum(int(v.split(">",1)[1].split("<")[0]) for _, v in tags)}'
                                     f'Count n={total}',
                                     f'Count n={ptotal}',
-                                    'Types'),
+                                    'Types',
+                                    'Comment'),
                        title='Tags',
                        styles=(table_style,))
 

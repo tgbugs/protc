@@ -26,7 +26,7 @@ from pyontutils.utils import async_getter, noneMembers, allMembers, anyMembers, 
 from pyontutils.config import devconfig
 from pyontutils.htmlfun import atag
 from pyontutils.annotation import AnnotationMixin
-from pyontutils.namespaces import ilxtr, TEMP, definition
+from pyontutils.namespaces import ilxtr, TEMP, definition, editorNote
 from pyontutils.hierarchies import creatTree
 from pyontutils.scigraph_client import Vocabulary
 from pyontutils.closed_namespaces import rdf, rdfs, owl
@@ -100,8 +100,9 @@ def url_pmid(pmid):
 
 class TagDoc:
     _depflags = 'ilxtr:deprecatedTag', 'typo'
-    def __init__(self, doc, parents, types=tuple()):
+    def __init__(self, doc, parents, types=tuple(), editorNote=None):
         self.types = types
+        self.editorNote = editorNote
         self.parents = parents if isinstance(parents, tuple) else (parents,)
         if anyMembers(self.parents, *self._depflags):
             self.doc = '**DEPRECATED** ' + doc
@@ -1576,25 +1577,33 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
 
     @classmethod
     def _docs(cls):
+        local_version = Path(devconfig.ontology_local_repo, 'ttl/sparc-methods.ttl')  # FIXME hardcoded
+        if local_version.exists():  # on the fly updates from local
+            graph = rdflib.Graph().parse(local_version.as_posix(), format='turtle')
+        else:
+            graph = cls.graph
+
         for tag in sorted(cls.all_classes() | cls.all_properties()):
             uri = OntId(tag).u  # FIXME inefficient
-            types = sorted(OntId(_type).curie for _type in cls.graph[uri:rdf.type])
+            types = sorted(OntId(_type).curie for _type in graph[uri:rdf.type])
             subThingOf = rdfs.subPropertyOf if any('Property' in t for t in types) else rdfs.subClassOf
-            parents = [OntId(p).curie for p in cls.graph[uri:subThingOf]]
+            parents = [OntId(p).curie for p in graph[uri:subThingOf]]
+            edNote = '\n'.join([o for p in graph[uri:editorNote]])
 
             try:
-                _def = ' ' + next(cls.graph[uri:definition])
+                _def = ' ' + next(graph[uri:definition])
             except StopIteration:
                 _def = ' No definition.'
 
             doc = f'**{" ".join(types) if types else ""}**{_def}'
-            yield types, tag, parents, doc
+            yield types, tag, parents, doc, edNote
 
     @classmethod
     def makeTagDocs(cls):
         if cls._done_loading:
             if not hasattr(cls, '_tag_lookup') or not cls._tag_lookup:
-                cls._tag_lookup = {tag:TagDoc(doc, parents, types) for types, tag, parents, doc in cls._docs()}
+                cls._tag_lookup = {tag:TagDoc(doc, parents, types, editorNote=edNote)
+                                   for types, tag, parents, doc, edNote in cls._docs()}
 
             return cls._tag_lookup
 
@@ -1619,6 +1628,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
     @property
     def value(self):
         v = super().value
+        # FIXME TODO
         if 'hyp.is' in v:
             a, b = v.split('https://hyp.is', 1)  # hyp.is comes second
             v = a
@@ -1733,12 +1743,12 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
 def oqsetup():
     import ontquery as oq
     from pyontutils.namespaces import PREFIXES
+    paths = ('ttl/sparc-methods.ttl',  # by convention the first path is expected to define all the tags
+             'ttl/methods-helper.ttl',
+             'ttl/methods-core.ttl',
+             'ttl/methods.ttl')
     ghq = oq.plugin.get('GitHub')('SciCrunch', 'NIF-Ontology',
-                                  'ttl/methods-helper.ttl',
-                                  'ttl/sparc-methods.ttl',
-                                  'ttl/methods-core.ttl',
-                                  'ttl/methods.ttl',
-                                  branch='sparc')
+                                  *paths, branch='sparc')
     SparcMI.graph = ghq.graph
     query = oq.OntQuery(ghq)
     oq.OntCuries(ghq.curies)
