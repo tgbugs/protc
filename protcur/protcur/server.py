@@ -364,11 +364,14 @@ def make_sparc(app=Flask('sparc curation services')):
                 if all(p not in t for p in skip)]
         tags = sorted(_tags, key=lambda t:t[3])  # sort by type
 
+        sparc_any = len([t for t, d  in atags.items() if 'sparc:' in t and d > 0])
+        sparc_total = len([t for t in atags if 'sparc:' in t])
+
         total = sum([c for t, c in atags.items() if all(p not in t for p in skip)])
         ptotal = sum([c for t, c in ptags.items() if all(p not in t for p in skip)])
 
         return htmldoc(render_table(tags,
-                                    f'Tags n={len(tags)}',
+                                    f'Tags n={len(tags)} sparc any/total={sparc_any}/{sparc_total}',
                                     #f'Count n={sum(int(v.split(">",1)[1].split("<")[0]) for _, v in tags)}'
                                     f'Count n={total}',
                                     f'Count n={ptotal}',
