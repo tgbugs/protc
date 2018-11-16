@@ -1588,7 +1588,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
             types = sorted(OntId(_type).curie for _type in graph[uri:rdf.type])
             subThingOf = rdfs.subPropertyOf if any('Property' in t for t in types) else rdfs.subClassOf
             parents = [OntId(p).curie for p in graph[uri:subThingOf]]
-            edNote = '\n'.join([o for p in graph[uri:editorNote]])
+            edNote = '\n'.join([o for o in graph[uri:editorNote]])
 
             try:
                 _def = ' ' + next(graph[uri:definition])
