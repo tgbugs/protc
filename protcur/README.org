@@ -22,3 +22,17 @@
         (ql:quickload "colorize")
         (quit)
       #+END_SRC
+** Manual installation as openrc service
+   Until a =protcur= ebuild is ready you can install the init script and config
+   manually. As root run the following.
+   #+BEGIN_SRC bash
+     groupadd servers -g 950
+     useradd servers -m -d /var/lib/servers -u 950 -g 950
+     cp resources/protcur.rc /etc/init.d/protcur
+     cp resources/protcur.confd /etc/conf.d/protcur
+     chmod 0600 /etc/conf.d/protcur
+     # set environment variables in the config
+     vim /etc/conf.d/protcur
+     rc-config add protcur default
+     /etc/init.d/protcur start
+   #+END_SRC
