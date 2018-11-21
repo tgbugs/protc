@@ -303,6 +303,8 @@ def make_sparc(app=Flask('sparc curation services')):
     @app.route('/sparc/documents/', methods=['GET'])
     def sparc_documents():
         hls = set(get_hypothesis_local(uri) for uri in SparcMI.uris)
+        hls |= set(uri for uri in SparcMI.uris if 'dropbox' in uri)
+        print(hls)
         p = {k:v for k, v in papers(SparcMI._annos_list).items() if k in hls}
         s = {k:v for k, v in statistics(SparcMI._annos_list).items() if k in hls}
         ast = {k:v for k, v in ast_statistics(SparcMI).items() if k in hls}
@@ -461,7 +463,7 @@ def make_server_app(memfile='/tmp/protcur-service-annos.pickle'):
     from protcur.core import annoSync
     get_annos, annos, stream_thread, exit_loop = annoSync(memfile,
                                                           helpers=(Hybrid, protc, SparcMI))
-    stream_thread.start()
+    #stream_thread.start()  # this is broken at the moment
     #[HypothesisHelper(a, annos) for a in annos]
     [SparcMI(a, annos) for a in annos]
     [Hybrid(a, annos) for a in annos]
@@ -472,17 +474,21 @@ def make_server_app(memfile='/tmp/protcur-service-annos.pickle'):
 
     app = make_app(annos)
     make_sparc(app)
+
+    @app.before_request
+    def api_sync():
+        # FIXME DANGERZONE on race conditions
+        get_annos.update_annos_from_api(annos, helpers=(SparcMI, Hybrid, protc))
+
+    app.exit_loop = exit_loop
     return app
 
 
 def main():
     app = make_server_app('/tmp/protcur-server-annos.pickle')
-
     app.debug = False
-
     app.run(host='localhost', port=7000, threaded=True)  # nginxwoo
-    exit_loop()
-    stream_thread.join()
+    app.exit_loop()
 
 
 def sparc_main():
@@ -490,7 +496,7 @@ def sparc_main():
     get_annos, annos, stream_thread, exit_loop = annoSync('/tmp/sparc-server-annos.pickle',
                                                           #tags=('sparc:',),
                                                           helpers=(SparcMI,))
-    stream_thread.start()
+    #stream_thread.start()
     [protc(a, annos) for a in annos]
     [SparcMI(a, annos) for a in annos
      if any(t.startswith('sparc:') for t in a.tags)]
@@ -498,10 +504,7 @@ def sparc_main():
     app = make_sparc()
     app.debug = False
     app.run(host='localhost', port=7001, threaded=True)  # nginxwoo
-    exit_loop()
-    stream_thread.join()
 
 
 if __name__ == '__main__':
-
     main()

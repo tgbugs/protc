@@ -2039,6 +2039,7 @@ def _more_main():
         def chebis(j):
             return set((c['@id'], c['prefLabel'] if 'prefLabel' in c else tuple(c['synonym']))
                        for c in j['collection'] if 'CHEBI' in c['@id'])
+
         cs = [(t, chebis(j)) for t, j in jsons]
         cs = set((t, r) for t, a in cs for r in a if a)
         cs = sorted(((t, (c.rsplit('/',1)[-1].replace('_',':'), m)) for t, (c, m) in cs), key=lambda v:v[0])
