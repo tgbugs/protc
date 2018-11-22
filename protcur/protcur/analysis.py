@@ -17,7 +17,7 @@ from io import StringIO
 from pathlib import PurePath, Path
 from datetime import datetime
 from itertools import chain
-from collections import Counter
+from collections import Counter, defaultdict
 import rdflib
 import ontquery as oq
 from pyontutils import combinators as cmb
@@ -26,7 +26,7 @@ from pyontutils.utils import async_getter, noneMembers, allMembers, anyMembers, 
 from pyontutils.config import devconfig
 from pyontutils.htmlfun import atag
 from pyontutils.annotation import AnnotationMixin
-from pyontutils.namespaces import ilxtr, TEMP, definition, editorNote
+from pyontutils.namespaces import ilxtr, TEMP, definition, editorNote, OntCuries
 from pyontutils.hierarchies import creatTree
 from pyontutils.scigraph_client import Vocabulary
 from pyontutils.closed_namespaces import rdf, rdfs, owl
@@ -100,10 +100,12 @@ def url_pmid(pmid):
 
 class TagDoc:
     _depflags = 'ilxtr:deprecatedTag', 'typo'
-    def __init__(self, doc, parents, types=tuple(), editorNote=None):
+    def __init__(self, doc, parents, types=tuple(), **kwargs):
         self.types = types
-        self.editorNote = editorNote
         self.parents = parents if isinstance(parents, tuple) else (parents,)
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
         if anyMembers(self.parents, *self._depflags):
             self.doc = '**DEPRECATED** ' + doc
             self.deprecated = True
@@ -1480,6 +1482,157 @@ class GraphOutputClass(iterclass):
         return graph.serialize(format=format)
 
 
+def _make_sparc_domain_mapping():
+    # property by domain
+    OntCuries({'sparc':'http://uri.interlex.org/tgbugs/uris/readable/sparc/'})
+    mapping = {
+        'ephys':{
+            OntId('sparc:ExperimentOnLiveOrganism'),
+            OntId('sparc:BioelectronicNerveBlockingModulation'),
+            OntId('sparc:ElectricalAcquisition'),
+            OntId('sparc:ElectricalModulation'),
+            OntId('sparc:ChemicalAcquisition'),
+            OntId('sparc:MechanicalAcquisition'),
+            OntId('sparc:IREnergyModulation'),
+            OntId('sparc:Modulation'),
+            OntId('sparc:ThermalEnergyModulation'),
+        },
+        'microscopy':{
+            OntId('sparc:MicroscopyAcquisition'),
+            OntId('sparc:TissuePreparationForMicroscopy'),
+            OntId('sparc:EnvironmentForTissueDerivatives'),
+            OntId('sparc:ExperimentOnTissueDerivatives'),
+        },
+        'radiology':{
+            OntId('sparc:RadiologcalAcquistion'),
+            OntId('sparc:RadiologicalImagingProtocol'),
+            OntId('sparc:FunctionalMRIFeatures'),
+            OntId('sparc:GeneralMRISequence'),
+        },
+        'transcriptomics':{
+            OntId('sparc:RNASeqSpecimen'),
+            OntId('sparc:TranscriptomicsAcquisition'),
+            OntId('sparc:TranscriptomicsExperiment'),
+            OntId('sparc:BulkRNASeqSpecimen'),
+            OntId('sparc:SingleCellRNASeqSpecimen'),
+        },
+        'optical':{
+            OntId('sparc:OpticalAcquisition'),  # FIXME vs Microscopy?
+        },
+
+        # feeders that are not required but might be relevant if one of these was used upstream
+        'various':{
+            OntId('sparc:CellCulture'),
+            OntId('sparc:EngineeredTissue'),
+            OntId('sparc:Extraction'),
+            OntId('sparc:ExperimentOnTissueDerivatives'),
+            OntId('sparc:StemCells'),
+            OntId('sparc:Specimen'),
+            OntId('sparc:CellCultureExperiment'),
+            OntId('sparc:EnvironmentForLiveOrganism'),
+            OntId('sparc:StemCellExperiment')
+        },
+        'histology':{
+            OntId('sparc:IDISCO'),
+            OntId('sparc:Histochemistry'),
+            OntId('sparc:TissuePreservation'),
+            OntId('sparc:TissuePreparationSteps'),
+            OntId('sparc:TissueSample'),
+            OntId('sparc:Embedding'),
+            OntId('sparc:CounterStaining'),
+            OntId('sparc:FreezingVsChemicalFixation'),
+            OntId('sparc:Immunohistochemistry'),
+            OntId('sparc:MountVsSections'),
+            OntId('sparc:TissueExperiment'),
+            OntId('sparc:SectionThickness'),  # FIXME really a data property not a class?
+            OntId('sparc:Staining'),
+            OntId('sparc:EndogenousReporters'),
+            OntId('sparc:Sectioning'),
+            OntId('sparc:TissueMounting'),
+            OntId('sparc:TissueClearing'),
+            OntId('sparc:TissueClearance'),
+            OntId('sparc:SlidesVsGrid'),
+            OntId('sparc:EmbeddingMedia'),
+            OntId('sparc:SectioningDevice'),
+        },
+        'all':{
+            OntId('sparc:Environment'),
+            OntId('sparc:RRIDs'),
+            OntId('sparc:Analysis'),
+            OntId('sparc:AnatomicalLocation'),
+            OntId('sparc:OrganismSubject'),
+            OntId('sparc:Experiment'),
+            OntId('sparc:Acquisition'),
+            OntId('sparc:Anesthesia'),
+            OntId('sparc:ChemicalInSolution'),
+            OntId('sparc:Procedure'),
+            OntId('sparc:Protocol'),
+            OntId('sparc:Measurement'),
+            OntId('sparc:Resource'),
+            OntId('sparc:Organization'),
+            OntId('sparc:Researcher'),
+            OntId('sparc:Sedation'),
+            OntId('sparc:AnimalExperiment'),
+            OntId('sparc:AnimalSubject'),
+            OntId('sparc:HumanSubject'),
+            OntId('sparc:ClinicalExperiment'),
+        },
+    }
+    return {v:k for k, vs in mapping.items() for v in vs}
+
+
+def _make_sparc_range_mapping():
+    OntCuries({'xsd':str(rdflib.XSD)})
+    mapping = {
+        'ephys':{
+            OntId('sparc:Modulation'),
+        },
+        'microscopy':{
+            OntId('sparc:TissuePreparationForMicroscopy'),
+            OntId('sparc:TissuePreparationSteps'),
+            OntId('sparc:MicroscopyAcquisition'),
+        },
+        'radiology':{
+            OntId('sparc:RadiologicalImagingProtocol'),
+            OntId('sparc:GeneralMRISequence'),
+            OntId('sparc:FunctionalMRIFeatures'),
+        },
+        'transcriptomics':{
+        },
+        'optical':{
+        },
+        'various':{
+            OntId('sparc:Specimen'),
+            OntId('sparc:CellCulture'),
+            OntId('sparc:StemCells'),
+            OntId('sparc:TissueSample'),
+            OntId('sparc:Extraction'),
+        },
+        'all':{
+            OntId('sparc:Analysis'),
+            OntId('sparc:Anesthesia'),
+            OntId('sparc:Procedure'),
+            OntId('sparc:Protocol'),
+            OntId('sparc:Sedation'),
+            OntId('sparc:Acquisition'),
+            OntId('sparc:Environment'),
+            OntId('sparc:Organization'),
+            OntId('sparc:Experiment'),
+            OntId('sparc:Researcher'),
+            OntId('sparc:Resource'),
+            OntId('sparc:AnatomicalLocation'),
+            OntId('sparc:ChemicalInSolution'),
+            OntId('sparc:Measurement'),
+        },
+        None:{
+            OntId('xsd:string'),
+            OntId('owl:real')
+        },
+    }
+    return {v:k for k, vs in mapping.items() for v in vs}
+
+
+
 class SparcMI(AstGeneric, metaclass=GraphOutputClass):
     """ Class for transforming Hypothes.is annotations
         into sparc datamodel rdf"""
@@ -1496,6 +1649,8 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
     _astParentIndex = {}
 
     graph = None  # TODO set at
+    domain_mapping = _make_sparc_domain_mapping()
+    range_mapping = _make_sparc_range_mapping()
 
     # TODO trigger add to graph off websocket
     # to do this modify HypothesisHelper so that
@@ -1514,10 +1669,124 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
     def _instance_n(self):
         return self.__class__.n
 
+    @classmethod
+    def all_domains(cls):
+        return {p:set(cls.domain_mapping[OntId(d)]
+                      for d in cls._domain(cls.graph, p))
+                for p in cls.all_properties()}
+
+    @classmethod
+    def all_ranges(cls):
+        out = {}
+        for p in cls.all_properties():
+            ranges = cls._range(cls.graph, p)
+            for range in ranges:
+                if range is not None:
+                    out[p] = cls.range_mapping[OntId(range)]
+                else:
+                    out[p] = 'Parent Property'
+
+        return dict(out)
+
+    @classmethod
+    def all_modalities(cls):
+        out = {}
+        for p in cls.all_properties():
+            domains = set(cls._domain(cls.graph, p))
+            ranges = set(cls._range(cls.graph, p))
+            if not ranges:
+                ranges.add(None)
+
+            modality = cls._modality(p, domains, ranges)
+            out[p] = modality
+
+        for o in cls.all_classes():
+            modality = cls._modality(o, {o}, {o})
+            out[o] = modality
+
+        return dict(out)
+
+
+    @classmethod
+    def domain_properties(cls):
+        out = defaultdict(set)
+        for predicate, domains in cls.all_domains().items():
+            for domain in domains:
+                out[domain].add(predicate)
+
+        return dict(out)
+
+    @classmethod
+    def modality_tags(cls):
+        out = defaultdict(set)
+        for predicate, modality in cls.all_modalities().items():
+            out[modality].add(predicate)
+
+        return dict(out)
+
+    @property
+    def modality(self):
+        return self._modality(self.astType, self.domain, self.range)
+
+    @classmethod
+    def _modality(cls, tag, domains, ranges):
+        domain = next(iter(domains))  # FIXME
+        range = next(iter(ranges))  # FIXME better logic
+        if domain is None:
+            if OntId(tag) in cls.all_properties():
+                print(f'WARNING: no domain for {cls.astType}')
+            return None
+
+        dmodality = cls.domain_mapping[OntId(domain)]
+
+        if range is None:
+            return dmodality
+
+        try:
+            rmodality = cls.range_mapping[OntId(range)]
+        except KeyError:
+            print('WARNING: mapping for range', tag, range)
+            return dmodality
+
+        if rmodality is None:
+            return dmodality
+        elif OntId(range) == OntId('sparc:Measurement'):
+            return dmodality
+        elif dmodality in ('all', 'various'):
+            return rmodality
+        elif rmodality in ('all', 'various'):
+            return dmodality
+        elif rmodality != dmodality:
+            print(f'WARNING: Modality mismatch! {dmodality} {rmodality} {domain} {range} {tag}')
+            return rmodality  # assume that the range gives more specifcity
+        else:
+            return dmodality
+
     @property
     def domain(self):
-        # TODO read predicate domains
-        return set()
+        d = set(self._domain(self.graph, self.astType))
+        if not d:
+            d.add(None)
+
+        return d
+
+    @staticmethod
+    def _domain(graph, property):
+        yield from graph[OntId(property).u:rdfs.domain]
+
+    @property
+    def range(self):
+        r = set(self._range(self.graph, self.astType))
+        print('aaaaaaaaaaaa', r)
+        if not r:
+            r.add(None)
+
+        return r
+
+    @staticmethod
+    def _range(graph, property):
+        # TODO byPredicate? I swear I did this already ...
+        yield from graph[OntId(property).u:rdfs.range]
 
     @property
     def only_tag(self):
@@ -1583,12 +1852,21 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         else:
             graph = cls.graph
 
+        mods = cls.all_modalities()
+        ad = defaultdict(set)
+        for s, o in graph[:rdfs.domain:]:
+            ad[OntId(s).curie].add(OntId(o).curie)
+        ar = defaultdict(set)
+        for s, o in graph[:rdfs.range:]:
+            ar[OntId(s).curie].add(OntId(o).curie)
+
         for tag in sorted(cls.all_classes() | cls.all_properties()):
             uri = OntId(tag).u  # FIXME inefficient
             types = sorted(OntId(_type).curie for _type in graph[uri:rdf.type])
             subThingOf = rdfs.subPropertyOf if any('Property' in t for t in types) else rdfs.subClassOf
             parents = [OntId(p).curie for p in graph[uri:subThingOf]]
             edNote = '\n'.join([o for o in graph[uri:editorNote]])
+            mod = mods[tag]  # if tag in mods else ''
 
             try:
                 _def = ' ' + next(graph[uri:definition])
@@ -1596,14 +1874,18 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
                 _def = ' No definition.'
 
             doc = f'**{" ".join(types) if types else ""}**{_def}'
-            yield types, tag, parents, doc, edNote
+            kwargs = {'editorNote':edNote,
+                      'domain':ad[tag] if tag in ad and ad[tag] else {''},
+                      'range':ar[tag] if tag in ar and ar[tag] else {''},
+                      'modality':mod,}
+            yield types, tag, parents, doc, kwargs
 
     @classmethod
     def makeTagDocs(cls):
         if cls._done_loading:
             if not hasattr(cls, '_tag_lookup') or not cls._tag_lookup:
-                cls._tag_lookup = {tag:TagDoc(doc, parents, types, editorNote=edNote)
-                                   for types, tag, parents, doc, edNote in cls._docs()}
+                cls._tag_lookup = {tag:TagDoc(doc, parents, types, **kwargs)
+                                   for types, tag, parents, doc, kwargs in cls._docs()}
 
             return cls._tag_lookup
 

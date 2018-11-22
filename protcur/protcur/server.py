@@ -290,7 +290,8 @@ def make_app(annos):
     return app
 
 
-def make_sparc(app=Flask('sparc curation services')):
+def make_sparc(app=Flask('sparc curation services'), debug=False):
+    import ontquery as oq
     from protcur.analysis import oqsetup
     from scibot.papers import KeyAccessor  # TODO
     OntTerm, ghq = oqsetup()
@@ -298,6 +299,13 @@ def make_sparc(app=Flask('sparc curation services')):
     sparc_ents = OntTerm.search(None, prefix='sparc')
     all_tags = set(t.curie for t in sparc_ents)
     tags = '\n'.join(sorted(t.curie for t in sparc_ents))
+
+    if debug:
+        from pyontutils.core import OntId
+        from pyontutils.closed_namespaces import rdf, rdfs, owl
+        embed()
+        import sys
+        sys.exit()
 
     @app.route('/sparc/documents', methods=['GET'])
     @app.route('/sparc/documents/', methods=['GET'])
@@ -361,6 +369,7 @@ def make_sparc(app=Flask('sparc curation services')):
                   atag(hutils.search_url(tag=t), d),
                   rendersparct(t, d),
                   ' '.join(tag_docs[t].types) if t in tag_docs else '',
+                  tag_docs[t].modality if t in tag_docs else '',
                   tag_docs[t].editorNote if t in tag_docs else '']
                 for t, d in atags.items()
                 if all(p not in t for p in skip)]
@@ -378,6 +387,7 @@ def make_sparc(app=Flask('sparc curation services')):
                                     f'Count n={total}',
                                     f'Count n={ptotal}',
                                     'Types',
+                                    'Modality',
                                     'Comment'),
                        title='Tags',
                        styles=(table_style,))
@@ -386,8 +396,14 @@ def make_sparc(app=Flask('sparc curation services')):
     def sparc_tags_star(tagname):
         try:
             tag_docs = SparcMI.makeTagDocs()
+            td = tag_docs[tagname]
+            domains = '` `'.join(td.domain)
+            ranges = '` `'.join(td.range)
+            doc = td.doc + (f'  \ndomain: `{domains}`'
+                            if domains else '') + (f'  \nrange: `{ranges}`'
+                                                   if ranges else '')
             return markdown(addDocLinks(request.base_url.rsplit('/',1)[0],
-                                        tag_docs[tagname].doc))
+                                        doc))
         except KeyError:
             return abort(404)
 
@@ -448,6 +464,15 @@ def make_sparc(app=Flask('sparc curation services')):
         }
         ```"""
         return tags, 200, {'Content-Type':'text/plain; charset=utf-8'}
+
+    @app.route('/sparc/tabulations')
+    def sparc_tabulations():
+        return 'TODO'
+
+    @app.route('/sparc/tabulations/<experiment>')
+    def sparc_tabulations_document(experiment):
+        """ TODO not quite document level, more experiment level """
+        return 'TODO'
 
     @app.before_first_request
     def sparc_runonce():
