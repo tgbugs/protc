@@ -373,7 +373,7 @@ def make_sparc(app=Flask('sparc curation services'), debug=False):
                   tag_docs[t].editorNote if t in tag_docs else '']
                 for t, d in atags.items()
                 if all(p not in t for p in skip)]
-        tags = sorted(_tags, key=lambda t:(t[3], t[4]))  # sort by type
+        tags = sorted(_tags, key=lambda t:(t[4], t[3]))  # sort by type
 
         sparc_any = len([t for t, d  in atags.items() if 'sparc:' in t and d > 0])
         sparc_total = len([t for t in atags if 'sparc:' in t])
