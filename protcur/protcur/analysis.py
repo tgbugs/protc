@@ -266,6 +266,8 @@ class Hybrid(HypothesisHelper):
         cls.prefix_ast = None
         if cls.namespace is not None:
             cls.prefix_ast = cls.namespace + ':'
+            if hasattr(cls, 'skip_lu'):
+                cls.nolu = set(OntId(c).u for c in cls.skip_lu)
 
         return HypothesisHelper.__new__(cls, anno, annos)
 
@@ -282,7 +284,15 @@ class Hybrid(HypothesisHelper):
 
         # TODO OntTerm
         # extend input to include black_box_component, aspect, etc
-        data = sgv.findByTerm(value, searchSynonyms=True, searchAbbreviations=True)  # TODO could try the annotate endpoint? FIXME _extremely_ slow so skipping
+        if self.predicate not in self.nolu:
+            data = sgv.findByTerm(value, searchSynonyms=False, searchAbbreviations=False)  # TODO could try the annotate endpoint? FIXME _extremely_ slow so skipping
+            if not data:
+                data = sgv.findByTerm(value, searchSynonyms=True, searchAbbreviations=False)
+            if len(value) > 1 and not data:  # skip raw numbers
+                data = sgv.findByTerm(value, searchSynonyms=True, searchAbbreviations=True)
+        else:
+            data = None
+
         #data = list(OntTerm.query(value))  # can be quite slow if hitting interlex
         #data = None
         if not data:
@@ -1651,6 +1661,10 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
     graph = None  # TODO set at
     domain_mapping = _make_sparc_domain_mapping()
     range_mapping = _make_sparc_range_mapping()
+    skip_lu = ('sparc:isOfFileType',
+               'sparc:isOfAge',
+               'sparc:firstName',
+               'sparc:lastName')
 
     # TODO trigger add to graph off websocket
     # to do this modify HypothesisHelper so that
@@ -1772,7 +1786,8 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
 
     @staticmethod
     def _domain(graph, property):
-        yield from graph[OntId(property).u:rdfs.domain]
+        for object in graph[OntId(property).u:rdfs.domain]:
+            yield from graph.transitive_subjects(rdfs.subClassOf, object)
 
     @property
     def range(self):
@@ -1796,6 +1811,18 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         except StopIteration:
             return None
 
+    @property
+    def complex_tags(self):
+        tags = set(t for t in self.tags if self.prefix_ast in t)
+        if len(tags) == 2:
+            return tags
+        else:
+            return None
+            # NOTE as implemented at the moment if there is more than 2 sparc tags
+            # then only the first will be selected
+            # TODO warn on > 2 tags?
+            return self.only_tag
+
     #@property
     #def isAstNode(self):
         #bool([t for t in self.tags if self.prefix_ast in t])
@@ -1806,12 +1833,20 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
 
     @property
     def isClass(self):
-        """ the tag used is a class implies the start of a named individual """
-        return self.only_tag in self.all_classes()
+        """ the tag used is a class and implies the start of a named individual """
+        classes = self.all_classes()
+        complex = self.complex_tags
+        if complex is not None:
+            return any(t in classes for t in complex)
+        return self.only_tag in classes
 
     @property
     def isProperty(self):
-        return self.only_tag in self.all_properties()
+        properties = self.all_properties()
+        complex = self.complex_tags
+        if complex is not None:
+            return any(t in properties for t in complex)
+        return self.only_tag in properties
 
     @classmethod
     def all_properties(cls):
@@ -1898,6 +1933,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         substrings = (
             'Weight',
             'temperature',
+            'Age',
         )
         if cls.graph is not None:
             if not hasattr(cls, '_um'):
@@ -1922,6 +1958,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         # ie just paste the hypothesis link to the subject in!
         # we know what parent object to attach this to
         isClass = self.isClass  # has to be called before _subject
+        domain = self.domain
         if self._subject is None:
             if isClass:
                 self._subject = TEMP[f'sparc/instances/{self.n()}']
@@ -1929,10 +1966,15 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
                 self.extra_triples += (t,)
                 return self._subject
             for child in self.children:
-                if not self.domain or self.domain and child.subject in self.domain:
+                if child == self:  # cases where we want to anchor a named individual and a predicate
+                    return self._subject
+                elif not domain or domain and child.type_object in domain:
                     if child.isClass:
                         self._subject = child.subject
                         return self._subject
+                else:
+                    print('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', domain, child.type_object, self.tags, self.value)
+                    #embed()
 
             self._subject = rdflib.BNode()
 
@@ -1940,7 +1982,14 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
 
     @property
     def predicate(self):
-        if self.isClass:
+        # FIXME yield to allow multiple branches
+        if self.isClass and self.isProperty:
+            complex = self.complex_tags
+            self.extra_triples += ((self.subject, rdf.type, owl.NamedIndividual),
+                                   (self.subject, rdf.type, self.type_object))
+            p = next(t for t in self.tags if t in self.all_properties())
+            return OntId(p).u
+        elif self.isClass:
             return rdf.type
         elif self.isProperty:
             p = next(t for t in self.tags if t in self.all_properties())  # FIXME for now are going with 1 tag
@@ -1949,8 +1998,17 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
             return ilxtr.WHAT
 
     @property
-    def object(self):
+    def type_object(self):
         if self.isClass:
+            if self.isProperty:
+                c = next(t for t in self.tags if t in self.all_classes())
+                return OntId(c).u
+
+            return OntId(self.astType).u
+
+    @property
+    def object(self):
+        if self.isClass and not self.isProperty:
             return owl.NamedIndividual
         else:
             if self.astType in self.um():
