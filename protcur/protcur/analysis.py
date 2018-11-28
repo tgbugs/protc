@@ -252,6 +252,7 @@ class Hybrid(HypothesisHelper):
     prefix_skip_tags = tuple()  # pattern for tags that should not be exported to the ast
     text_tags = tuple()  # tags controlling how the text of the current affects the parent's text
     children_tags = tuple()  # tags controlling how links in the text of the parent annotation are affected
+    CURATOR_NOTE_TAG = 'ilxtr:curatorNote'  # FIXME
     namespace = None  # the tag prefix for this ast, ONE PREFIX PER CLASS, use NamespaceTranslators for multiple
     tag_translators = {}
     additional_namespaces = {}
@@ -284,7 +285,7 @@ class Hybrid(HypothesisHelper):
 
         # TODO OntTerm
         # extend input to include black_box_component, aspect, etc
-        if self.predicate not in self.nolu:
+        if self.classn == 'protc' or self.predicate not in self.nolu:  # FIXME
             data = sgv.findByTerm(value, searchSynonyms=False, searchAbbreviations=False)  # TODO could try the annotate endpoint? FIXME _extremely_ slow so skipping
             if not data:
                 data = sgv.findByTerm(value, searchSynonyms=True, searchAbbreviations=False)
@@ -380,8 +381,19 @@ class Hybrid(HypothesisHelper):
 
         if self._text.startswith('SKIP'):
             return ''
+        elif self._text.startswith(self.CURATOR_NOTE_TAG):
+            return self._text.split(self.CURATOR_NOTE_TAG, 1)[0]  # NOTE curation notes come last
 
         return self._text
+
+    @property
+    def curatorNotes(self):
+        if self.CURATOR_NOTE_TAG in self._text:
+            yield from (n.strip()
+                        for n in
+                        self._text.split(self.CURATOR_NOTE_TAG)[1:])
+        if self._text.startswith('SKIP'):  # FIXME legacy
+            yield self._text[len('SKIP '):]
 
     @property
     def value(self):
@@ -1023,6 +1035,7 @@ class protc(AstGeneric):
         'oil':('protc:fuzzy-quantity', '"oil"', '"immersion-type"'),
 
         'several thousand':('protc:fuzzy-quantity', '"several thousand"', '"ammount"'),  # FIXME vs count
+        'unk':('protc:fuzzy-quantity', '"unknown"', '"unknown"'),
     }
 
     @property
@@ -1647,7 +1660,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
     """ Class for transforming Hypothes.is annotations
         into sparc datamodel rdf"""
     namespace = 'sparc'
-    prefix_skip_tags = 'protc:', 'PROTCUR:', 'annotation-'
+    prefix_skip_tags = 'PROTCUR:', 'annotation-'
 
     generic_tags = tuple()
     tag_translators = {}
@@ -1664,6 +1677,9 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
     skip_lu = ('sparc:isOfFileType',
                'sparc:isOfAge',
                'sparc:firstName',
+               'sparc:rnaSeqSpecimenHasSampleNumber',
+               'sparc:rnaSeqSpecimenHasTotalCellNumber',
+               'sparc:softwareEnvironmentForAcquisition',
                'sparc:lastName')
 
     # TODO trigger add to graph off websocket
@@ -1759,7 +1775,8 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         try:
             rmodality = cls.range_mapping[OntId(range)]
         except KeyError:
-            print('WARNING: mapping for range', tag, range)
+            if tag != range:
+                print('WARNING: mapping for range', tag, range)
             return dmodality
 
         if rmodality is None:
@@ -1880,13 +1897,18 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         return cls.all_classes() | cls.all_properties()
 
     @classmethod
-    def _docs(cls):
+    def _graph(self):
         local_version = Path(devconfig.ontology_local_repo, 'ttl/sparc-methods.ttl')  # FIXME hardcoded
         if local_version.exists():  # on the fly updates from local
             graph = rdflib.Graph().parse(local_version.as_posix(), format='turtle')
         else:
             graph = cls.graph
+        return graph
 
+    @classmethod
+    def _docs(cls, graph=None):
+        if graph is None:
+            graph = cls._graph()
         mods = cls.all_modalities()
         ad = defaultdict(set)
         for s, o in graph[:rdfs.domain:]:
@@ -1918,11 +1940,16 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
     @classmethod
     def makeTagDocs(cls):
         if cls._done_loading:
-            if not hasattr(cls, '_tag_lookup') or not cls._tag_lookup:
+            graph = cls._graph()
+            if (not hasattr(cls, '_tag_lookup') or
+                not cls._tag_lookup or
+                cls.graph != graph):
                 cls._tag_lookup = {tag:TagDoc(doc, parents, types, **kwargs)
-                                   for types, tag, parents, doc, kwargs in cls._docs()}
+                                   for types, tag, parents, doc, kwargs in cls._docs(graph)}
 
             return cls._tag_lookup
+        else:
+            raise BaseException('why are you erroring here?')
 
     @property
     def protc_unit_mapping(self):
@@ -1934,6 +1961,11 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
             'Weight',
             'temperature',
             'Age',
+            'concentration',
+            'Dose',
+            'Frequency',
+            'Rate',
+            'CStim',   # FIXME may not work in long run
         )
         if cls.graph is not None:
             if not hasattr(cls, '_um'):
@@ -2033,9 +2065,12 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
     def triples(self):
         t = self.subject, self.predicate, self.object
         po = ilxtr.literatureReference, rdflib.URIRef(self.shareLink)
+        av = ((ilxtr.annotationValue, rdflib.Literal(self.value)),
+              if self.value != self.object else tuple())
+        notes = [(OntId(self.CURATOR_NOTE_TAG), rdflib.Literal(n)) for n in self.curatorNotes]
         yield t
         yield from self.extra_triples
-        yield from cmb.annotation(t, po)()
+        yield from cmb.annotation(t, po, *av, *notes)()
         # TODO any additional stuff
 
     def _instance_ttl(self):
