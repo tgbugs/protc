@@ -1659,7 +1659,6 @@ def _make_sparc_range_mapping():
     return {v:k for k, vs in mapping.items() for v in vs}
 
 
-
 class SparcMI(AstGeneric, metaclass=GraphOutputClass):
     """ Class for transforming Hypothes.is annotations
         into sparc datamodel rdf"""
@@ -1764,8 +1763,8 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
 
     @classmethod
     def _modality(cls, tag, domains, ranges):
-        domain = next(iter(domains))  # FIXME
-        range = next(iter(ranges))  # FIXME better logic
+        domain = sorted(domains)[0]  # FIXME all first by accident
+        range = sorted(ranges)[0]  # FIXME better logic
         if domain is None:
             if OntId(tag) in cls.all_properties():
                 print(f'WARNING: no domain for {cls.astType}')
@@ -2057,7 +2056,11 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
             if id is None:
                 return rdflib.Literal(self.value)
             else:
-                o = OntId(id).u
+                oid = OntId(id)
+                if oid.prefix:
+                    if self.graph.namespace_manager.store.prefix(oid.prefix) is None:
+                        self.graph.bind(oid.prefix, oid.namespace)
+                o = oid.u
                 if label:
                     #et = self.extra_triples
                     t = o, rdfs.label, rdflib.Literal(label)

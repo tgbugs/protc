@@ -363,7 +363,16 @@ def make_sparc(app=Flask('sparc curation services'), debug=False):
         ptotal = sum([c for t, c in ptags.items() if all(p not in t for p in skip) and
                       (modality is None or t in tag_docs and tag_docs[t].modality == modality)])
 
-        return (f'Tags n={len(tags)} sparc any/total={sparc_any}/{sparc_total}',
+        ntags = len([t for t in atags if modality is None or
+                     t in tag_docs and tag_docs[t].modality == modality])
+        dta = len([t for t, d in tag_docs.items()
+                   if (modality is None or d.modality == modality) and
+                   'owl:DatatypeProperty' in d.types and
+                   atags[t] > 0])
+        dtt = len([t for t, d in tag_docs.items()
+                   if (modality is None or d.modality == modality) and
+                   'owl:DatatypeProperty' in d.types])
+        return (f'sparc any/total={sparc_any}/{sparc_total} DTProps {dta}/{dtt}',
                 #f'Count n={sum(int(v.split(">",1)[1].split("<")[0]) for _, v in tags)}'
                 f'Count n={total}',
                 f'Converted n={ptotal}',
@@ -460,8 +469,8 @@ def make_sparc(app=Flask('sparc curation services'), debug=False):
         if extension == 'html':
             body = SparcMI.html()
             return htmldoc(body,
-                        title='all-annotations',
-                        styles=(table_style, ttl_html_style))
+                           title='all-annotations',
+                           styles=(table_style, ttl_html_style))
         else:  # TODO more
             return SparcMI.ttl(), 200, {'Content-Type':'text/plain; charset=utf-8'}
 
