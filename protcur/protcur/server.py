@@ -6,7 +6,7 @@ from pathlib import Path
 from datetime import date
 from markdown import markdown
 from hyputils.hypothesis import HypothesisUtils, makeSimpleLogger
-from pyontutils.htmlfun import htmldoc, atag, deltag, titletag, render_table, zerotag
+from pyontutils.htmlfun import htmldoc, atag, deltag, titletag, render_table, zerotag, zeronotetag, h1tag
 from pyontutils.htmlfun import monospace_body_style, table_style, details_style, ttl_html_style
 from protcur.analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid
 from protcur.analysis import citation_tree, papers, statistics, ast_statistics
@@ -299,6 +299,7 @@ def make_sparc(app=Flask('sparc curation services'), debug=False):
     sparc_ents = OntTerm.search(None, prefix='sparc')
     all_tags = set(t.curie for t in sparc_ents)
     tags = '\n'.join(sorted(t.curie for t in sparc_ents))
+    skip = ('protc:', 'RRID:', 'NIFORG:', 'CHEBI:', 'SO:', 'PROCUR:', 'mo:', 'annotation-', 'RRIDCUR:')
 
     if debug:
         from pyontutils.core import OntId
@@ -306,6 +307,69 @@ def make_sparc(app=Flask('sparc curation services'), debug=False):
         embed()
         import sys
         sys.exit()
+
+    def makelink(value):
+        return uriconv(value).replace('tabulation', 'tags')  # FIXME ick
+
+    def make_tags():
+        ptags = {t:len([p for p in v if p.isAstNode]) for t, v in SparcMI._tagIndex.items()}
+        def rendersparct(tag, acount):
+            count = ptags.get(tag, 0)
+            sc = str(count)
+            link = atag(makelink(tag + '/annotations'), sc) + '\u00A0' * (5 - len(sc))  # will fail with > 9999 annos (heh)
+            if count > acount:
+                return link + '+'
+            elif count == acount:
+                return link
+            elif not count:
+                return ''
+            else:
+                return link + '-'
+
+        tag_docs = SparcMI.makeTagDocs()
+        def rendertagname(tag, acount):
+            if tag in tag_docs and tag_docs[tag].deprecated:
+                return deltag(tag)
+            elif acount == 0:
+                if tag_docs[tag].editorNote:
+                    return zeronotetag(tag)
+                else:
+                    return zerotag(tag)
+            else:
+                return tag
+
+        atags = {t:0 for t in tag_docs}
+        atags.update({t:len(v) for t, v in Hybrid._tagIndex.items()})
+        _tags = [[atag(makelink(t), rendertagname(t, d)),
+                  atag(hutils.search_url(tag=t), d),
+                  rendersparct(t, d),
+                  ' '.join(tag_docs[t].types) if t in tag_docs else '',
+                  tag_docs[t].modality if t in tag_docs else '',
+                  tag_docs[t].editorNote if t in tag_docs else '']
+                for t, d in atags.items()
+                if all(p not in t for p in skip)]
+        tags = sorted(_tags, key=lambda t:(t[4], t[3]))  # sort by type
+
+        return tags, atags, ptags, tag_docs
+
+    def make_tags_header(tags, atags, ptags, tag_docs, modality=None):
+        sparc_any = len([t for t, d  in atags.items()
+                         if 'sparc:' in t and d > 0 and
+                         (modality is None or tag_docs[t].modality == modality)])
+        sparc_total = len([t for t in atags if 'sparc:' in t and
+                           (modality is None or tag_docs[t].modality == modality)])
+        total = sum([c for t, c in atags.items() if all(p not in t for p in skip) and
+                     (modality is None or t in tag_docs and tag_docs[t].modality == modality)])
+        ptotal = sum([c for t, c in ptags.items() if all(p not in t for p in skip) and
+                      (modality is None or t in tag_docs and tag_docs[t].modality == modality)])
+
+        return (f'Tags n={len(tags)} sparc any/total={sparc_any}/{sparc_total}',
+                #f'Count n={sum(int(v.split(">",1)[1].split("<")[0]) for _, v in tags)}'
+                f'Count n={total}',
+                f'Converted n={ptotal}',
+                'Types',
+                'Modality',
+                'Comment')
 
     @app.route('/sparc/documents', methods=['GET'])
     @app.route('/sparc/documents/', methods=['GET'])
@@ -336,59 +400,30 @@ def make_sparc(app=Flask('sparc curation services'), debug=False):
             SparcMI.byId(id).__repr__(html=True, number='').replace('\n', '<br>\n'),
             )) + '</html>'
 
+    @app.route('/sparc/tabulation', methods=['GET'])
+    @app.route('/sparc/tabulation/', methods=['GET'])
+    def sparc_tabulation():
+        """ data type properties by modality """
+        tags, atags, ptags, tag_docs = make_tags()
+        pairs = [(h1tag(modality), render_table([[t.replace(' ', '\xA0') if i == 4 else t
+                                                  for i, t in enumerate(row)]
+                                                 for row in tags if row[4] == modality],
+                                                *make_tags_header(tags, atags, ptags, tag_docs, modality)))
+                 for modality in ('all', 'cell culture', 'ephys', 'histology',
+                                  'microscopy', 'optical', 'radiology',
+                                  'transcriptomics', 'various')]
+        return htmldoc(*(thing for ab in pairs for thing in ab),
+                       title='tabulations',
+                       styles=(table_style,))
+
     @app.route('/sparc/tags', methods=['GET'])
     @app.route('/sparc/tags/', methods=['GET'])
     def sparc_tags():
-        ptags = {t:len([p for p in v if p.isAstNode]) for t, v in SparcMI._tagIndex.items()}
-        def rendersparct(tag, acount):
-            count = ptags.get(tag, 0)
-            sc = str(count)
-            link = atag(uriconv(tag + '/annotations'), sc) + '\u00A0' * (5 - len(sc))  # will fail with > 9999 annos (heh)
-            if count > acount:
-                return link + '+'
-            elif count == acount:
-                return link
-            elif not count:
-                return ''
-            else:
-                return link + '-'
+        tags, atags, ptags, tag_docs = make_tags()
 
-        tag_docs = SparcMI.makeTagDocs()
-        def rendertagname(tag, acount):
-            if tag in tag_docs and tag_docs[tag].deprecated:
-                return deltag(tag)
-            elif acount == 0:
-                return zerotag(tag)
-            else:
-                return tag
-
-        skip = ('protc:', 'RRID:', 'NIFORG:', 'CHEBI:', 'SO:', 'PROCUR:', 'mo:', 'annotation-')
-        atags = {t:0 for t in tag_docs}
-        atags.update({t:len(v) for t, v in Hybrid._tagIndex.items()})
-        _tags = [[atag(uriconv(t), rendertagname(t, d)),
-                  atag(hutils.search_url(tag=t), d),
-                  rendersparct(t, d),
-                  ' '.join(tag_docs[t].types) if t in tag_docs else '',
-                  tag_docs[t].modality if t in tag_docs else '',
-                  tag_docs[t].editorNote if t in tag_docs else '']
-                for t, d in atags.items()
-                if all(p not in t for p in skip)]
-        tags = sorted(_tags, key=lambda t:(t[4], t[3]))  # sort by type
-
-        sparc_any = len([t for t, d  in atags.items() if 'sparc:' in t and d > 0])
-        sparc_total = len([t for t in atags if 'sparc:' in t])
-
-        total = sum([c for t, c in atags.items() if all(p not in t for p in skip)])
-        ptotal = sum([c for t, c in ptags.items() if all(p not in t for p in skip)])
-
+        tags_header = make_tags_header(tags, atags, ptags, tag_docs)
         return htmldoc(render_table(tags,
-                                    f'Tags n={len(tags)} sparc any/total={sparc_any}/{sparc_total}',
-                                    #f'Count n={sum(int(v.split(">",1)[1].split("<")[0]) for _, v in tags)}'
-                                    f'Count n={total}',
-                                    f'Count n={ptotal}',
-                                    'Types',
-                                    'Modality',
-                                    'Comment'),
+                                    *tags_header),
                        title='Tags',
                        styles=(table_style,))
 

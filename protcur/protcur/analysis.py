@@ -1545,15 +1545,17 @@ def _make_sparc_domain_mapping():
 
         # feeders that are not required but might be relevant if one of these was used upstream
         'various':{
-            OntId('sparc:CellCulture'),
             OntId('sparc:EngineeredTissue'),
             OntId('sparc:Extraction'),
             OntId('sparc:ExperimentOnTissueDerivatives'),
-            OntId('sparc:StemCells'),
             OntId('sparc:Specimen'),
-            OntId('sparc:CellCultureExperiment'),
             OntId('sparc:EnvironmentForLiveOrganism'),
-            OntId('sparc:StemCellExperiment')
+        },
+        'cell culture':{
+            OntId('sparc:CellCulture'),
+            OntId('sparc:StemCells'),
+            OntId('sparc:StemCellExperiment'),
+            OntId('sparc:CellCultureExperiment'),
         },
         'histology':{
             OntId('sparc:IDISCO'),
@@ -1626,10 +1628,12 @@ def _make_sparc_range_mapping():
         },
         'various':{
             OntId('sparc:Specimen'),
-            OntId('sparc:CellCulture'),
-            OntId('sparc:StemCells'),
             OntId('sparc:TissueSample'),
             OntId('sparc:Extraction'),
+        },
+        'cell culture':{
+            OntId('sparc:CellCulture'),
+            OntId('sparc:StemCells'),
         },
         'all':{
             OntId('sparc:Analysis'),
@@ -2065,7 +2069,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
     def triples(self):
         t = self.subject, self.predicate, self.object
         po = ilxtr.literatureReference, rdflib.URIRef(self.shareLink)
-        av = ((ilxtr.annotationValue, rdflib.Literal(self.value)),
+        av = (((ilxtr.annotationValue, rdflib.Literal(self.value)),)
               if self.value != self.object else tuple())
         notes = [(OntId(self.CURATOR_NOTE_TAG), rdflib.Literal(n)) for n in self.curatorNotes]
         yield t
