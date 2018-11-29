@@ -1501,12 +1501,17 @@ class GraphOutputClass(iterclass):
                 for t in obj.triples:
                     graph.add(t)
 
+        obj = next(iter(self.objects.values()))
+        [graph.bind(p, n) for p, n in obj.graph.namespaces()]  # FIXME not quite right?
+
+        if hasattr(self, 'queries'):
+            for t in self.queries(graph):
+                graph.add(t)
+
         return graph 
 
     def serialize(self, format='nifttl'):
         graph = self.populate_graph()
-        obj = next(iter(self.objects.values()))
-        [graph.bind(p, n) for p, n in obj.graph.namespaces()]  # FIXME not quite right?
         # TODO add and remove triples on websocket update
         return graph.serialize(format=format)
 
@@ -1731,7 +1736,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
 
     @classmethod
     def registry(cls):
-        uris = set(a.uri for a in SparcMI)
+        uris = set(a.uri for a in SparcMI if 'rcont' not in a.uri)  # rcont remove temp iris w/ bad annos
 
         data, notes_index = get_sheet_values(cls.dfr, 'Data', False)
         ml = max(len(r) for r in data)
@@ -1744,7 +1749,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         p = byCol(pnorm, to_index=('Protocol_Identifier',))
         bidsf = set(d.BIDs_file_name)
 
-        for fn in bidsf:
+        for fn in sorted(bidsf):
             subject = cls._new_bids_id()
             yield subject, rdf.type, owl.NamedIndividual
             yield subject, rdf.type, ilxtr.BIDSFile
@@ -1770,6 +1775,58 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
                     yield fileiri, ilxtr.fileType, rdflib.Literal(r.file_type)
                     if annosubstr and annosubstr != fileiri:
                         yield fileiri, ilxtr.hasAnnotationSubstrate, annosubstr
+    @classmethod
+    def queries(cls, graph):
+        """ queries that should be run to expand the graph """
+        # TODO chaining could be achieved by having queries return functions
+        # that are generators that are called consecutively here or
+        # consecutively via the metaclass
+
+        # protocols
+        q = graph.query('''
+               select distinct ?file ?inst where {
+               ?file rdf:type ilxtr:BIDSFile .
+               ?file ilxtr:hasProtocol ?prot .
+               ?prot ilxtr:hasAnnotationSubstrate ?substr .
+               ?substr ilxtr:hasAnnotation ?anno .
+               ?blank rdf:type owl:Axiom .
+               ?blank owl:annotatedSource ?inst .
+               ?blank ilxtr:literatureReference ?anno .
+               }''')
+        for result in q.bindings:
+            file = result['file']
+            inst = result['inst']
+            if isinstance(inst, rdflib.URIRef):
+                yield file, ilxtr.metaFromProtocol, inst  # FIXME naming
+                o = next(o for o in graph[inst:rdf.type]
+                         if o != owl.NamedIndividual)
+                yield file, ilxtr.metaFromProtocolTypes, o
+            elif isinstance(inst, rdflib.BNode):
+                for p, o in graph[inst]:
+                    yield file, ilxtr.rawTextTODO, o
+                    #yield file, p, o
+
+        # experiment logs
+        q = graph.query('''
+               select distinct ?file ?meta where {
+               ?file rdf:type ilxtr:BIDSFile .
+               ?file ilxtr:hasFile ?meta .
+               ?meta ilxtr:hasAnnotationSubstrate ?substr .
+               ?substr ilxtr:hasAnnotation ?anno .
+               ?blank rdf:type owl:Axiom .
+               ?blank owl:annotatedSource ?meta .
+               ?blank ilxtr:literatureReference ?anno .
+               }''')
+        for result in q.bindings:
+            file = result['file']
+            inst = result['inst']
+            if isinstance(inst, rdflib.URIRef):
+                yield file, ilxtr.metaFromProv, inst  # FIXME naming
+            elif isinstance(inst, rdflib.BNode):
+                for p, o in graph[inst]:
+                    yield file, ilxtr.rawTextTODO, o
+                    #yield file, p, o
+
 
     @classmethod
     def all_domains(cls):

@@ -385,7 +385,8 @@ def make_sparc(app=Flask('sparc curation services'), debug=False):
     def sparc_documents():
         hls = set(get_hypothesis_local(uri) for uri in SparcMI.uris)
         hls |= set(uri for uri in SparcMI.uris if 'dropbox' in uri)
-        print(hls)
+        # doesn't work due to temp iris in iframe
+        #print(hls)
         p = {k:v for k, v in papers(SparcMI._annos_list).items() if k in hls}
         s = {k:v for k, v in statistics(SparcMI._annos_list).items() if k in hls}
         ast = {k:v for k, v in ast_statistics(SparcMI).items() if k in hls}
@@ -487,7 +488,7 @@ def make_sparc(app=Flask('sparc curation services'), debug=False):
     @app.route('/sparc/', methods=['GET'])
     def sparc_curation():
         body = []
-        for route in 'documents', 'tags', 'ast', 'coverage':
+        for route in 'documents', 'tags', 'ast', 'coverage', 'tabulation':
             url = request.base_url + route
             body.append(atag(url, route, new_tab=True) + '<br>\n')
         return htmldoc(*body,
