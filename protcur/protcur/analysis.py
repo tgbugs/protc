@@ -1488,6 +1488,7 @@ class GraphOutputClass(iterclass):
         return strio.getvalue()
 
     def populate_graph(self):
+        self._n = -1
         graph = rdflib.Graph()
         for t in self.metadata:
             graph.add(t)
@@ -1698,7 +1699,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
                'sparc:lastName')
 
     dfr = 'sparc-data-file-registry'
-    _bids_id = 0
+    _bids_id = -1
     # TODO trigger add to graph off websocket
     # to do this modify HypothesisHelper so that
     # classes can define a class method for
@@ -1722,15 +1723,14 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
 
     @classmethod
     def _new_bids_id(cls):
-        out = TEMP[f'sparc/bids/{cls._bids_id}']  # FIXME (obvs)
         cls._bids_id += 1
-        return out
+        return TEMP[f'sparc/bids/{cls._bids_id}']  # FIXME (obvs)
 
     @classmethod
     def class_extra_triples(cls):
         """ GraphOutputClass check this function for class level extra triples """
         for t in cls.registry():
-            print(t)
+            #printD(t)
             yield t
         return
         yield from cls.registry()
@@ -1750,6 +1750,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         p = byCol(pnorm, to_index=('Protocol_Identifier',))
         bidsf = set(d.BIDs_file_name)
 
+        cls._bids_id = -1
         for fn in sorted(bidsf):
             subject = cls._new_bids_id()
             yield subject, rdf.type, owl.NamedIndividual
@@ -1787,10 +1788,13 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
             # protocols
             q = graph.query('''
                 select distinct ?file ?inst where {
+
                 ?file rdf:type ilxtr:BIDSFile .
                 ?file ilxtr:hasProtocol ?prot .
+
                 ?prot ilxtr:hasAnnotationSubstrate ?substr .
                 ?substr ilxtr:hasAnnotation ?anno .
+
                 ?blank rdf:type owl:Axiom .
                 ?blank owl:annotatedSource ?inst .
                 ?blank ilxtr:literatureReference ?anno .
@@ -1801,7 +1805,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
 
                 linker = rdflib.BNode()
                 yield file, ilxtr.metaLocal, linker
-                #yield linker, rdf.type, ilxtr.instLocalView  # FIXME not quite correct
+                #yield linker, rdf.type, ilxtr.fromProt  # FIXME not quite correct
                 for p, o in graph[inst]:
                     yield linker, p, o
 
@@ -1818,25 +1822,43 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
 
         def explogs():
             # experiment logs
+
             q = graph.query('''
-                select distinct ?file ?meta where {
+                select distinct ?file ?inst where {
+
                 ?file rdf:type ilxtr:BIDSFile .
-                ?file ilxtr:hasFile ?meta .
-                ?meta ilxtr:hasAnnotationSubstrate ?substr .
-                ?substr ilxtr:hasAnnotation ?anno .
+                ?file ilxtr:hasFile ?flat .
+
+                { ?flat ilxtr:hasAnnotation ?anno . }
+                UNION
+                { ?flat ilxtr:hasAnnotationSubstrate ?substr .
+                  ?substr ilxtr:hasAnnotation ?anno . }
+
                 ?blank rdf:type owl:Axiom .
-                ?blank owl:annotatedSource ?meta .
+                ?blank owl:annotatedSource ?inst .
                 ?blank ilxtr:literatureReference ?anno .
-                }''')
+            }''')
+
+            done = set()
             for result in q.bindings:
                 file = result['file']
                 inst = result['inst']
 
+                # because we are flattening we only need one occurance, even if
+                # the there are distinct annotations that copies were sourced from
+                # the full list of instances is retained under metaFromProv
                 linker = rdflib.BNode()
-                yield file, ilxtr.metaLocal, linker
-                yield linker, rdf.type, ilxtr.instLocalView  # FIXME not quite correct
+                new = False
                 for p, o in graph[inst]:
-                    yield linker, p, o
+                    if o not in done or p == rdf.type:
+                        yield linker, p, o
+                        done.add(o)
+                        new = True
+
+                if new:
+                    yield file, ilxtr.metaLocal, linker
+                    #yield linker, rdf.type, ilxtr.fromLogs
+                    #yield linker, ilxtr.instIri, inst
 
                 if isinstance(inst, rdflib.URIRef):
                     yield file, ilxtr.metaFromProv, inst  # FIXME naming
