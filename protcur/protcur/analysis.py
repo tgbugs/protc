@@ -1505,8 +1505,9 @@ class GraphOutputClass(iterclass):
         [graph.bind(p, n) for p, n in obj.graph.namespaces()]  # FIXME not quite right?
 
         if hasattr(self, 'queries'):
-            for t in self.queries(graph):
-                graph.add(t)
+            for query in self.queries(graph):
+                for t in query():
+                    graph.add(t)
 
         return graph 
 
@@ -1782,51 +1783,66 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         # that are generators that are called consecutively here or
         # consecutively via the metaclass
 
-        # protocols
-        q = graph.query('''
-               select distinct ?file ?inst where {
-               ?file rdf:type ilxtr:BIDSFile .
-               ?file ilxtr:hasProtocol ?prot .
-               ?prot ilxtr:hasAnnotationSubstrate ?substr .
-               ?substr ilxtr:hasAnnotation ?anno .
-               ?blank rdf:type owl:Axiom .
-               ?blank owl:annotatedSource ?inst .
-               ?blank ilxtr:literatureReference ?anno .
-               }''')
-        for result in q.bindings:
-            file = result['file']
-            inst = result['inst']
-            if isinstance(inst, rdflib.URIRef):
-                yield file, ilxtr.metaFromProtocol, inst  # FIXME naming
-                o = next(o for o in graph[inst:rdf.type]
-                         if o != owl.NamedIndividual)
-                yield file, ilxtr.metaFromProtocolTypes, o
-            elif isinstance(inst, rdflib.BNode):
-                for p, o in graph[inst]:
-                    yield file, ilxtr.rawTextTODO, o
-                    #yield file, p, o
+        def protocols():
+            # protocols
+            q = graph.query('''
+                select distinct ?file ?inst where {
+                ?file rdf:type ilxtr:BIDSFile .
+                ?file ilxtr:hasProtocol ?prot .
+                ?prot ilxtr:hasAnnotationSubstrate ?substr .
+                ?substr ilxtr:hasAnnotation ?anno .
+                ?blank rdf:type owl:Axiom .
+                ?blank owl:annotatedSource ?inst .
+                ?blank ilxtr:literatureReference ?anno .
+                }''')
+            for result in q.bindings:
+                file = result['file']
+                inst = result['inst']
+                if isinstance(inst, rdflib.URIRef):
+                    yield file, ilxtr.metaFromProtocol, inst  # FIXME naming
+                    o = next(o for o in graph[inst:rdf.type]
+                            if o != owl.NamedIndividual)
+                    yield file, ilxtr.metaFromProtocolTypes, o
 
-        # experiment logs
-        q = graph.query('''
-               select distinct ?file ?meta where {
-               ?file rdf:type ilxtr:BIDSFile .
-               ?file ilxtr:hasFile ?meta .
-               ?meta ilxtr:hasAnnotationSubstrate ?substr .
-               ?substr ilxtr:hasAnnotation ?anno .
-               ?blank rdf:type owl:Axiom .
-               ?blank owl:annotatedSource ?meta .
-               ?blank ilxtr:literatureReference ?anno .
-               }''')
-        for result in q.bindings:
-            file = result['file']
-            inst = result['inst']
-            if isinstance(inst, rdflib.URIRef):
-                yield file, ilxtr.metaFromProv, inst  # FIXME naming
-            elif isinstance(inst, rdflib.BNode):
-                for p, o in graph[inst]:
-                    yield file, ilxtr.rawTextTODO, o
-                    #yield file, p, o
+                    linker = rdflib.BNode()
+                    yield file, ilxtr.metaLocal, linker
+                    yield linker, rdf.type, ilxtr.instLocalView  # FIXME not quite correct
+                    for p, o in graph[inst]:
+                        yield linker, p, o
+                elif isinstance(inst, rdflib.BNode):
+                    for p, o in graph[inst]:
+                        yield file, ilxtr.rawTextTODO, o
+                        #yield file, p, o
 
+        def explogs():
+            # experiment logs
+            q = graph.query('''
+                select distinct ?file ?meta where {
+                ?file rdf:type ilxtr:BIDSFile .
+                ?file ilxtr:hasFile ?meta .
+                ?meta ilxtr:hasAnnotationSubstrate ?substr .
+                ?substr ilxtr:hasAnnotation ?anno .
+                ?blank rdf:type owl:Axiom .
+                ?blank owl:annotatedSource ?meta .
+                ?blank ilxtr:literatureReference ?anno .
+                }''')
+            for result in q.bindings:
+                file = result['file']
+                inst = result['inst']
+                if isinstance(inst, rdflib.URIRef):
+                    yield file, ilxtr.metaFromProv, inst  # FIXME naming
+
+                    linker = rdflib.BNode()
+                    yield file, ilxtr.metaLocal, linker
+                    yield linker, rdf.type, ilxtr.instLocalView  # FIXME not quite correct
+                    for p, o in graph[inst]:
+                        yield linker, p, o
+                elif isinstance(inst, rdflib.BNode):
+                    for p, o in graph[inst]:
+                        yield file, ilxtr.rawTextTODO, o
+                        #yield file, p, o
+
+        return protocols, explogs
 
     @classmethod
     def all_domains(cls):
