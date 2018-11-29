@@ -22,8 +22,10 @@ import rdflib
 import ontquery as oq
 from pyontutils import combinators as cmb
 from pyontutils.core import makeGraph, makePrefixes, OntId, simpleOnt
-from pyontutils.utils import async_getter, noneMembers, allMembers, anyMembers, TermColors as tc
+from pyontutils.utils import async_getter, noneMembers, allMembers, anyMembers
+from pyontutils.utils import TermColors as tc, byCol
 from pyontutils.config import devconfig
+from pyontutils.sheets import get_sheet_values
 from pyontutils.htmlfun import atag
 from pyontutils.annotation import AnnotationMixin
 from pyontutils.namespaces import ilxtr, TEMP, definition, editorNote, OntCuries
@@ -1490,6 +1492,10 @@ class GraphOutputClass(iterclass):
         for t in self.metadata:
             graph.add(t)
 
+        if hasattr(self, 'class_extra_triples'):
+            for t in self.class_extra_triples():
+                graph.add(t)
+
         for obj in self.objects.values():
             if obj.isAstNode:
                 for t in obj.triples:
@@ -1685,6 +1691,8 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
                'sparc:softwareEnvironmentForAcquisition',
                'sparc:lastName')
 
+    dfr = 'sparc-data-file-registry'
+    _bids_id = 0
     # TODO trigger add to graph off websocket
     # to do this modify HypothesisHelper so that
     # classes can define a class method for
@@ -1699,8 +1707,69 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         self.serialize = self._instance_serialize
         self.n = self._instance_n
 
-    def _instance_n(self):
+    def _instance_n(self):  # FIXME not clear why we need this
         return self.__class__.n
+
+    @classmethod
+    def _new_inst_id(cls):  # FIXME (obvs)
+        return TEMP[f'sparc/instances/{cls.n}']
+
+    @classmethod
+    def _new_bids_id(cls):
+        out = TEMP[f'sparc/bids/{cls._bids_id}']  # FIXME (obvs)
+        cls._bids_id += 1
+        return out
+
+    @classmethod
+    def class_extra_triples(cls):
+        """ GraphOutputClass check this function for class level extra triples """
+        for t in cls.registry():
+            print(t)
+            yield t
+        return
+        yield from cls.registry()
+
+    @classmethod
+    def registry(cls):
+        uris = set(a.uri for a in SparcMI)
+
+        data, notes_index = get_sheet_values(cls.dfr, 'Data', False)
+        ml = max(len(r) for r in data)
+        normalized = [r + ([''] * (ml - len(r))) for r in data]
+        prot, pnotes_index = get_sheet_values(cls.dfr, 'Protocols', False)
+        pml = max(len(r) for r in prot)
+        pnorm = [r + ([''] * (pml - len(r))) for r in prot]
+
+        d = byCol(normalized)
+        p = byCol(pnorm, to_index=('Protocol_Identifier',))
+        bidsf = set(d.BIDs_file_name)
+
+        for fn in bidsf:
+            subject = cls._new_bids_id()
+            yield subject, rdf.type, owl.NamedIndividual
+            yield subject, rdf.type, ilxtr.BIDSFile
+            yield subject, rdfs.label, rdflib.Literal(fn)
+            for r in d:
+                if r.BIDs_file_name == fn:
+                    if r.Protocol and r.Protocol != 'None':
+                        # FIXME hasProtocol not entirely correct
+                        # data produced from process partially documented by ...
+                        pr = p.searchIndex('Protocol_Identifier', r.Protocol)
+                        piri = rdflib.URIRef(r.Protocol)
+                        asl = rdflib.URIRef(pr.Annotation_Substrate_Link)
+                        yield subject, ilxtr.hasProtocol, piri
+                        yield piri, rdf.type, owl.NamedIndividual
+                        yield piri, rdf.type, ilxtr.protocolArtifact
+                        yield piri, ilxtr.hasAnnotationSubstrate, asl  # NOTE this is our link to uris
+                    annosubstr = rdflib.URIRef(r.annotation_substrate) if r.annotation_substrate else None
+                    fileiri = rdflib.URIRef(r.file_id) if r.file_id else annosubstr
+                    yield subject, ilxtr.hasFile, fileiri # XXX NOTE this flattens everything
+                    yield fileiri, rdf.type, owl.NamedIndividual
+                    yield fileiri, rdf.type, ilxtr.FlatFile
+                    yield fileiri, rdfs.label, rdflib.Literal(r.file_name)
+                    yield fileiri, ilxtr.fileType, rdflib.Literal(r.file_type)
+                    if annosubstr and annosubstr != fileiri:
+                        yield fileiri, ilxtr.hasAnnotationSubstrate, annosubstr
 
     @classmethod
     def all_domains(cls):
@@ -1996,7 +2065,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         domain = self.domain
         if self._subject is None:
             if isClass:
-                self._subject = TEMP[f'sparc/instances/{self.n()}']
+                self._subject = self._new_inst_id()
                 t = self._subject, rdf.type, OntId(self.astType).u
                 self.extra_triples += (t,)
                 return self._subject
@@ -2071,13 +2140,15 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
     @property
     def triples(self):
         t = self.subject, self.predicate, self.object
-        po = ilxtr.literatureReference, rdflib.URIRef(self.shareLink)
+        sl = rdflib.URIRef(self.shareLink)
+        po = ilxtr.literatureReference, sl
         av = (((ilxtr.annotationValue, rdflib.Literal(self.value)),)
               if self.value != self.object else tuple())
         notes = [(OntId(self.CURATOR_NOTE_TAG), rdflib.Literal(n)) for n in self.curatorNotes]
         yield t
         yield from self.extra_triples
         yield from cmb.annotation(t, po, *av, *notes)()
+        yield rdflib.URIRef(self.uri), ilxtr.hasAnnotation, sl  # FIXME normalize self.uri
         # TODO any additional stuff
 
     def _instance_ttl(self):
@@ -2132,6 +2203,16 @@ def oqsetup():
     ghq = oq.plugin.get('GitHub')('SciCrunch', 'NIF-Ontology',
                                   *paths, branch='sparc')
     SparcMI.graph = ghq.graph
+    pns = (
+        # FIXME decl in class
+        ('hyp', 'https://hyp.is/'),
+        ('hlf', 'https://hypothesis-local.olympiangods.org/'),  # hlfull since extension is preserved
+        ('prots-sparc', 'http://uri.interlex.org/tgbugs/uris/protocols/sparc/'),
+        ('inst', 'http://uri.interlex.org/temp/uris/sparc/instances/'),
+        ('bidsf', 'http://uri.interlex.org/temp/uris/sparc/bids/'),
+        ('bf-sun', 'https://app.blackfynn.io/N:organization:4827d4ca-6f51-4a4e-b9c5-80c7bf8e5730/datasets/'),
+        ('bf-mvp', 'https://app.blackfynn.io/N:organization:89dfbdad-a451-4941-ad97-4b8479ed3de4/datasets/'))
+    [SparcMI.graph.bind(p, n) for p, n in pns]
     query = oq.OntQuery(ghq)
     oq.OntCuries(ghq.curies)
     oq.OntCuries(PREFIXES)
