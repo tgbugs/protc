@@ -1798,20 +1798,22 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
             for result in q.bindings:
                 file = result['file']
                 inst = result['inst']
+
+                linker = rdflib.BNode()
+                yield file, ilxtr.metaLocal, linker
+                #yield linker, rdf.type, ilxtr.instLocalView  # FIXME not quite correct
+                for p, o in graph[inst]:
+                    yield linker, p, o
+
                 if isinstance(inst, rdflib.URIRef):
                     yield file, ilxtr.metaFromProtocol, inst  # FIXME naming
                     o = next(o for o in graph[inst:rdf.type]
                             if o != owl.NamedIndividual)
-                    yield file, ilxtr.metaFromProtocolTypes, o
-
-                    linker = rdflib.BNode()
-                    yield file, ilxtr.metaLocal, linker
-                    yield linker, rdf.type, ilxtr.instLocalView  # FIXME not quite correct
-                    for p, o in graph[inst]:
-                        yield linker, p, o
-                elif isinstance(inst, rdflib.BNode):
-                    for p, o in graph[inst]:
-                        yield file, ilxtr.rawTextTODO, o
+                    continue
+                    #yield file, ilxtr.metaFromProtocolTypes, o
+                #elif isinstance(inst, rdflib.BNode):
+                    #for p, o in graph[inst]:
+                        #yield file, ilxtr.rawTextTODO, o
                         #yield file, p, o
 
         def explogs():
@@ -1829,17 +1831,19 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
             for result in q.bindings:
                 file = result['file']
                 inst = result['inst']
+
+                linker = rdflib.BNode()
+                yield file, ilxtr.metaLocal, linker
+                yield linker, rdf.type, ilxtr.instLocalView  # FIXME not quite correct
+                for p, o in graph[inst]:
+                    yield linker, p, o
+
                 if isinstance(inst, rdflib.URIRef):
                     yield file, ilxtr.metaFromProv, inst  # FIXME naming
-
-                    linker = rdflib.BNode()
-                    yield file, ilxtr.metaLocal, linker
-                    yield linker, rdf.type, ilxtr.instLocalView  # FIXME not quite correct
-                    for p, o in graph[inst]:
-                        yield linker, p, o
-                elif isinstance(inst, rdflib.BNode):
-                    for p, o in graph[inst]:
-                        yield file, ilxtr.rawTextTODO, o
+                    #continue
+                #elif isinstance(inst, rdflib.BNode):
+                    #for p, o in graph[inst]:
+                        #yield file, ilxtr.rawTextTODO, o
                         #yield file, p, o
 
         return protocols, explogs
