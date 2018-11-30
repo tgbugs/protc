@@ -529,11 +529,13 @@ def make_sparc(app=Flask('sparc curation services'), debug=False):
     return app
 
 
-def make_server_app(memfile='/tmp/protcur-service-annos.pickle'):
+#def make_server_app(memfile='/tmp/protcur-service-annos.pickle'):
+def make_server_app(memfile='/tmp/protcur-server-annos.pickle'):
+    import atexit
     from protcur.core import annoSync
     get_annos, annos, stream_thread, exit_loop = annoSync(memfile,
                                                           helpers=(Hybrid, protc, SparcMI))
-    #stream_thread.start()  # this is broken at the moment
+    stream_thread.start()
     #[HypothesisHelper(a, annos) for a in annos]
     [SparcMI(a, annos) for a in annos]
     [Hybrid(a, annos) for a in annos]
@@ -545,11 +547,7 @@ def make_server_app(memfile='/tmp/protcur-service-annos.pickle'):
     app = make_app(annos)
     make_sparc(app)
 
-    @app.before_request
-    def api_sync():
-        # FIXME DANGERZONE on race conditions
-        get_annos.update_annos_from_api(annos, helpers=(SparcMI, Hybrid, protc))
-
+    atexit.register(exit_loop)
     app.exit_loop = exit_loop
     return app
 
@@ -566,7 +564,7 @@ def sparc_main():
     get_annos, annos, stream_thread, exit_loop = annoSync('/tmp/sparc-server-annos.pickle',
                                                           #tags=('sparc:',),
                                                           helpers=(SparcMI,))
-    #stream_thread.start()
+    stream_thread.start()
     [protc(a, annos) for a in annos]
     [SparcMI(a, annos) for a in annos
      if any(t.startswith('sparc:') for t in a.tags)]

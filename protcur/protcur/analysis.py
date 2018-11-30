@@ -939,7 +939,7 @@ class AstGeneric(Hybrid):
                                        html=html)
                     else:
                         #print('Circular link in', self.shareLink)
-                        cyc = '{SPACE}'.join(c.id for c in cycle)
+                        cyc = f'{SPACE}'.join(c.id for c in cycle)
                         print('Circular link in', self._repr, 'cycle', cyc)
                         s = f"'(circular-link{SPACE}no-type{SPACE}(cycle{SPACE}{cyc}))" + ')' * nparens
                         #s = f"'(circular-link {cycle[0].id})" + ')' * nparens
