@@ -557,6 +557,11 @@ class Hybrid(HypothesisHelper):
 
     @property
     def _children_ids(self):
+        # running this masks a number of orphaned replies
+        # because getObjectById is never called
+        #if 'annotation-children:delete' in self._tags:
+            #return
+
         skip = set(self._children_delete)
         if skip:
             for id_ in self._get_children_ids(self._children_text):
@@ -579,7 +584,8 @@ class Hybrid(HypothesisHelper):
         for id_ in self._children_ids:
             child = self.getObjectById(id_)
             if child is None:
-                print(f"WARNING: child of {self._repr} {id_} does not exist!")
+                if 'annotation-children:delete' not in self._tags:
+                    print(f"WARNING: child of {self._repr} {id_} does not exist!")
                 continue
             for reply in child.replies:  # because we cannot reference replies directly in the client >_<
                 if 'protc:implied-aspect' in reply.tags:
@@ -2176,7 +2182,11 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
                         self._subject = child.subject
                         return self._subject
                 else:
-                    print('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', domain, child.type_object, self.tags, self.value)
+                    printD([OntId(d).curie for d in domain],
+                           child.type_object,
+                           list(self.tags),
+                           self.value,
+                           self._repr)
                     #embed()
 
             self._subject = rdflib.BNode()
