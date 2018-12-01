@@ -18,6 +18,7 @@ from pathlib import PurePath, Path
 from datetime import datetime
 from itertools import chain
 from collections import Counter, defaultdict
+from urllib.parse import quote
 import rdflib
 import ontquery as oq
 from pyontutils import combinators as cmb
@@ -1783,6 +1784,14 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
                     yield fileiri, ilxtr.fileType, rdflib.Literal(r.file_type)
                     if annosubstr and annosubstr != fileiri:
                         yield fileiri, ilxtr.hasAnnotationSubstrate, annosubstr
+    @staticmethod
+    def format_data_query(object):
+        query_prefix = 'https://neuinfo.org/data/search?q='
+        if isinstance(object, rdflib.URIRef):
+            return rdflib.URIRef(query_prefix + OntId(object).curie)  # FIXME TODO
+        elif isinstance(object, rdflib.Literal):
+            return rdflib.URIRef(query_prefix + quote(object))
+
     @classmethod
     def queries(cls, graph):
         """ queries that should be run to expand the graph """
@@ -1814,6 +1823,10 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
                 #yield linker, rdf.type, ilxtr.fromProt  # FIXME not quite correct
                 for p, o in graph[inst]:
                     yield linker, p, o
+                    if p != rdf.type:
+                        if isinstance(o, rdflib.Literal) and o.datatype == TEMP['protc:unit']:
+                            continue
+                        yield linker, ilxtr.dataQuery, cls.format_data_query(o)
 
                 if isinstance(inst, rdflib.URIRef):
                     yield file, ilxtr.metaFromProtocol, inst  # FIXME naming
@@ -1858,6 +1871,10 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
                 for p, o in graph[inst]:
                     if o not in done or p == rdf.type:
                         yield linker, p, o
+                        if p != rdf.type:
+                            if isinstance(o, rdflib.Literal) and o.datatype == TEMP['protc:unit']:
+                                continue
+                            yield linker, ilxtr.dataQuery, cls.format_data_query(o)
                         done.add(o)
                         new = True
 
