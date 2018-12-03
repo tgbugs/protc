@@ -415,7 +415,7 @@ def make_sparc(app=Flask('sparc curation services'), debug=False):
     def sparc_tabulation():
         """ data type properties by modality """
         tags, atags, ptags, tag_docs = make_tags()
-        pairs = [(h1tag(modality), render_table([[t.replace(' ', '\xA0') if i == 4 else t
+        pairs = [(h1tag(modality, id=modality), render_table([[t.replace(' ', '\xA0') if i == 4 else t
                                                   for i, t in enumerate(row)]
                                                  for row in tags if row[4] == modality],
                                                 *make_tags_header(tags, atags, ptags, tag_docs, modality)))
