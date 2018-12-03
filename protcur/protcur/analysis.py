@@ -1799,6 +1799,13 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         # that are generators that are called consecutively here or
         # consecutively via the metaclass
 
+        def dodataquery(p, o):
+            return (p != rdf.type
+                    and (not (isinstance(o, rdflib.Literal) and
+                              (o.datatype == TEMP['protc:unit'] or
+                               o.isdigit()))
+                         or isinstance(o, rdflib.URIRef)))
+
         def protocols():
             # protocols
             q = graph.query('''
@@ -1823,10 +1830,12 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
                 #yield linker, rdf.type, ilxtr.fromProt  # FIXME not quite correct
                 for p, o in graph[inst]:
                     yield linker, p, o
-                    if p != rdf.type:
-                        if isinstance(o, rdflib.Literal) and o.datatype == TEMP['protc:unit']:
-                            continue
-                        yield linker, ilxtr.dataQuery, cls.format_data_query(o)
+                    if dodataquery(p, o):
+                        no = cls.format_data_query(o)
+                        #yield linker, ilxtr.dataQuery, no
+                        yield file, ilxtr.dataQuery, no
+                        if isinstance(o, rdflib.URIRef):
+                            yield no, rdfs.label, next(graph[o:rdfs.label])
 
                 if isinstance(inst, rdflib.URIRef):
                     yield file, ilxtr.metaFromProtocol, inst  # FIXME naming
@@ -1871,12 +1880,14 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
                 for p, o in graph[inst]:
                     if o not in done or p == rdf.type:
                         yield linker, p, o
-                        if p != rdf.type:
-                            if isinstance(o, rdflib.Literal) and o.datatype == TEMP['protc:unit']:
-                                continue
-                            yield linker, ilxtr.dataQuery, cls.format_data_query(o)
                         done.add(o)
                         new = True
+                        if dodataquery(p, o):
+                            no = cls.format_data_query(o)
+                            #yield linker, ilxtr.dataQuery, no
+                            yield file, ilxtr.dataQuery, no
+                            if isinstance(o, rdflib.URIRef):
+                                yield no, rdfs.label, next(graph[o:rdfs.label])
 
                 if new:
                     yield file, ilxtr.metaLocal, linker
