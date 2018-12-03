@@ -893,6 +893,7 @@ class AstGeneric(Hybrid):
     _repr_join = ''
 
     def __repr__(self, depth=1, nparens=1, plast=True, top=True, cycle=tuple(), html=False, number='*'):
+        debug = f'  ; {depth}'
         out = ''
         NL = '<br>\n' if html else '\n'
         SPACE = '\xA0' if html else ' '
@@ -900,7 +901,7 @@ class AstGeneric(Hybrid):
             if self in cycle:
                 cyc = ' '.join(c.id for c in cycle)
                 print('Circular link in', self._repr, 'cycle', cyc)
-                out = f"'(circular-link no-type (cycle {cyc}))" + ')' * nparens
+                out = f"'(circular-link no-type (cycle {cyc}))" + ')' * nparens + debug
                 return out
             else:
                 printD(tc.red('WARNING:'), f'unhandled type for {self._repr} {self.tags}')
@@ -929,6 +930,7 @@ class AstGeneric(Hybrid):
             linestart = NL + indent
             nsibs = len(children)
             cs = []
+            _cycles = []  # FIXME this is a hack solution, figure out why there is more than one
             for i, c in enumerate(children):
                 new_plast = i + 1 == nsibs
                 # if we are at the end of multiple children the child node needs to add one more paren
@@ -944,12 +946,16 @@ class AstGeneric(Hybrid):
                                        top=False,
                                        cycle=cycle + (self,),
                                        html=html)
-                    else:
+                    elif cycle not in _cycles:
+                        _cycles.append(cycle)
                         #print('Circular link in', self.shareLink)
                         cyc = f'{SPACE}'.join(c.id for c in cycle)
                         print('Circular link in', self._repr, 'cycle', cyc)
-                        s = f"'(circular-link{SPACE}no-type{SPACE}(cycle{SPACE}{cyc}))" + ')' * nparens
+                        s = f"'(circular-link{SPACE}no-type{SPACE}(cycle{SPACE}{cyc}))" + ')' * nparens + debug + f'  {i} lol'
                         #s = f"'(circular-link {cycle[0].id})" + ')' * nparens
+                    else:
+                        printD(tc.red('WARNING:'), f'duplicate cycles in {self._repr}')
+                        continue
                 except TypeError as e:
                     # do not remove or bypass this error, it means that one of your
                     # dicts like _replies or objects has members of some other class
