@@ -1,11 +1,19 @@
 #!/usr/bin/env python3.6
+"""protcur development server
+Usage:
+    protcur-server [options]
+
+Options:
+    -p --port=PORT   tcp port for server [default: 7000]
+    -s --sync        sync
+"""
 import os
 import re
 import subprocess
 from pathlib import Path
 from datetime import date
 from markdown import markdown
-from hyputils.hypothesis import HypothesisUtils, makeSimpleLogger
+from hyputils.hypothesis import HypothesisUtils, makeSimpleLogger, UID
 from pyontutils.htmlfun import htmldoc, atag, deltag, titletag, render_table, zerotag, zeronotetag, h1tag
 from pyontutils.htmlfun import monospace_body_style, table_style, details_style, ttl_html_style
 from protcur.analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid
@@ -16,7 +24,6 @@ from flask import Flask, url_for, redirect, request, render_template, render_tem
 
 log = makeSimpleLogger('protcur.server')
 PID = os.getpid()
-UID = os.getuid()
 THIS_FILE = Path(__file__).absolute()
 
 hutils = HypothesisUtils(username='')
@@ -529,20 +536,18 @@ def make_sparc(app=Flask('sparc curation services'), debug=False):
     return app
 
 
-#def make_server_app(memfile='/tmp/protcur-service-annos.pickle'):
-def make_server_app(memfile='/tmp/protcur-server-annos.pickle'):
+def make_server_app(memfile=None):
     import atexit
     from protcur.core import annoSync
+    helpers = Hybrid, protc, SparcMI
     get_annos, annos, stream_thread, exit_loop = annoSync(memfile,
-                                                          helpers=(Hybrid, protc, SparcMI))
+                                                          helpers=helpers)
     stream_thread.start()
-    #[HypothesisHelper(a, annos) for a in annos]
-    [SparcMI(a, annos) for a in annos]
-    [Hybrid(a, annos) for a in annos]
-    [protc(a, annos) for a in annos]
-    SparcMI.byTags('sparc:lastName')
-    Hybrid.byTags('protc:output')  # FIXME trigger index creation
-    protc.byTags('protc:output')  # FIXME trigger index creation
+
+    for h in helpers:
+        h._annos_list = annos
+        [h(a, h._annos_list) for a in h._annos_list]  # TODO stepping stone to passing annos as a dict
+        [o.populateTags() for o in h]
 
     app = make_app(annos)
     make_sparc(app)
@@ -553,9 +558,15 @@ def make_server_app(memfile='/tmp/protcur-server-annos.pickle'):
 
 
 def main():
-    app = make_server_app('/tmp/protcur-server-annos.pickle')
+    from docopt import docopt
+    from hyputils.hypothesis import group_to_memfile, group
+    args = docopt(__doc__)
+    port = args['--port']
+    _, ghash = group_to_memfile(group).rsplit('-', 1)
+    ghashshort = ghash[:10]
+    app = make_server_app(f'/tmp/protcur-{UID}-{port}-{ghashshort}-server-annos.pickle')
     app.debug = False
-    app.run(host='localhost', port=7000, threaded=True)  # nginxwoo
+    app.run(host='localhost', port=port, threaded=True)
     app.exit_loop()
 
 
