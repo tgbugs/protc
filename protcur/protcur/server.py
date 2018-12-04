@@ -426,7 +426,7 @@ def make_sparc(app=Flask('sparc curation services'), debug=False):
                                                   for i, t in enumerate(row)]
                                                  for row in tags if row[4] == modality],
                                                 *make_tags_header(tags, atags, ptags, tag_docs, modality)))
-                 for modality in ('all', 'cell culture', 'ephys', 'histology',
+                 for modality in ('general', 'cell culture', 'ephys', 'histology',
                                   'microscopy', 'optical', 'radiology',
                                   'transcriptomics', 'various')]
         return htmldoc(*(thing for ab in pairs for thing in ab),

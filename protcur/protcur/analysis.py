@@ -1606,7 +1606,7 @@ def _make_sparc_domain_mapping():
             OntId('sparc:EmbeddingMedia'),
             OntId('sparc:SectioningDevice'),
         },
-        'all':{
+        'general':{
             OntId('sparc:Environment'),
             OntId('sparc:RRIDs'),
             OntId('sparc:Analysis'),
@@ -1661,7 +1661,7 @@ def _make_sparc_range_mapping():
             OntId('sparc:CellCulture'),
             OntId('sparc:StemCells'),
         },
-        'all':{
+        'general':{
             OntId('sparc:Analysis'),
             OntId('sparc:Anesthesia'),
             OntId('sparc:Procedure'),
@@ -1994,9 +1994,9 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
             return dmodality
         elif OntId(range) == OntId('sparc:Measurement'):
             return dmodality
-        elif dmodality in ('all', 'various'):
+        elif dmodality in ('general', 'various'):
             return rmodality
-        elif rmodality in ('all', 'various'):
+        elif rmodality in ('general', 'various'):
             return dmodality
         elif rmodality != dmodality:
             print(f'WARNING: Modality mismatch! {dmodality} {rmodality} {domain} {range} {tag}')
