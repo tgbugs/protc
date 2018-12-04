@@ -1515,8 +1515,7 @@ class GraphOutputClass(iterclass):
                 for t in obj.triples:
                     graph.add(t)
 
-        obj = next(iter(self.objects.values()))
-        [graph.bind(p, n) for p, n in obj.graph.namespaces()]  # FIXME not quite right?
+        [graph.bind(p, n) for p, n in self.graph.namespaces()]
 
         if hasattr(self, 'queries'):
             for query in self.queries(graph):
@@ -2108,7 +2107,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         return cls.all_classes() | cls.all_properties()
 
     @classmethod
-    def _graph(self):
+    def _graph(cls):
         local_version = Path(devconfig.ontology_local_repo, 'ttl/sparc-methods.ttl')  # FIXME hardcoded
         if local_version.exists():  # on the fly updates from local
             graph = rdflib.Graph().parse(local_version.as_posix(), format='turtle')
@@ -2117,7 +2116,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         return graph
 
     @classmethod
-    def _docs(cls, graph=None):
+    def _docs(cls, graph=None, comments=True):
         if graph is None:
             graph = cls._graph()
         mods = cls.all_modalities()
@@ -2142,21 +2141,22 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
                 _def = ' No definition.'
 
             doc = f'**{" ".join(types) if types else ""}**{_def}'
-            kwargs = {'editorNote':edNote,
+            kwargs = {'editorNote':edNote if comments else '',
                       'domain':ad[tag] if tag in ad and ad[tag] else {''},
                       'range':ar[tag] if tag in ar and ar[tag] else {''},
                       'modality':mod,}
             yield types, tag, parents, doc, kwargs
 
     @classmethod
-    def makeTagDocs(cls):
+    def makeTagDocs(cls, comments=True):
         if cls._done_loading:
             graph = cls._graph()
             if (not hasattr(cls, '_tag_lookup') or
                 not cls._tag_lookup or
                 cls.graph != graph):
                 cls._tag_lookup = {tag:TagDoc(doc, parents, types, **kwargs)
-                                   for types, tag, parents, doc, kwargs in cls._docs(graph)}
+                                   for types, tag, parents, doc, kwargs in
+                                   cls._docs(graph, comments=comments)}
 
             return cls._tag_lookup
         else:

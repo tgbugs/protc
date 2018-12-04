@@ -5,6 +5,7 @@ Usage:
 
 Options:
     -p --port=PORT   tcp port for server [default: 7000]
+    -n --no-comment   do not render comments
     -s --sync        sync
 """
 import os
@@ -247,7 +248,7 @@ def make_app(annos):
             else:
                 return tag
 
-        skip = ('RRID:', 'NIFORG:', 'CHEBI:', 'SO:', 'sparc:')
+        skip = ('RRID:', 'NIFORG:', 'CHEBI:', 'SO:', 'sparc:', 'DEADBEEF')
         atags = {t:len(v) for t, v in Hybrid._tagIndex.items()}
         tags = [[atag(uriconv(t), rendertagname(t)),
                  atag(hutils.search_url(tag=t), d),
@@ -297,7 +298,7 @@ def make_app(annos):
     return app
 
 
-def make_sparc(app=Flask('sparc curation services'), debug=False):
+def make_sparc(app=Flask('sparc curation services'), debug=False, comments=True):
     import ontquery as oq
     from protcur.analysis import oqsetup
     from scibot.papers import KeyAccessor  # TODO
@@ -306,7 +307,8 @@ def make_sparc(app=Flask('sparc curation services'), debug=False):
     sparc_ents = OntTerm.search(None, prefix='sparc')
     all_tags = set(t.curie for t in sparc_ents)
     tags = '\n'.join(sorted(t.curie for t in sparc_ents))
-    skip = ('protc:', 'RRID:', 'NIFORG:', 'CHEBI:', 'SO:', 'PROCUR:', 'mo:', 'annotation-', 'RRIDCUR:')
+    skip = ('protc:', 'RRID:', 'NIFORG:', 'CHEBI:', 'SO:',
+            'PROCUR:', 'mo:', 'annotation-', 'RRIDCUR:', 'DEADBEEF')
 
     if debug:
         from pyontutils.core import OntId
@@ -333,12 +335,12 @@ def make_sparc(app=Flask('sparc curation services'), debug=False):
             else:
                 return link + '-'
 
-        tag_docs = SparcMI.makeTagDocs()
+        tag_docs = SparcMI.makeTagDocs(comments=comments)
         def rendertagname(tag, acount):
             if tag in tag_docs and tag_docs[tag].deprecated:
                 return deltag(tag)
             elif acount == 0:
-                if tag_docs[tag].editorNote:
+                if tag in tag_docs and tag_docs[tag].editorNote:
                     return zeronotetag(tag)
                 else:
                     return zerotag(tag)
@@ -536,7 +538,7 @@ def make_sparc(app=Flask('sparc curation services'), debug=False):
     return app
 
 
-def make_server_app(memfile=None):
+def make_server_app(memfile=None, comments=True):
     import atexit
     from protcur.core import annoSync
     helpers = Hybrid, protc, SparcMI
@@ -546,11 +548,14 @@ def make_server_app(memfile=None):
 
     for h in helpers:
         h._annos_list = annos
+        if not h._annos_list:
+            h._done_loading = True  # FIXME hack
+            h._tagIndex['DEADBEEF'] = set()  # HACK for empty case so annos will add
         [h(a, h._annos_list) for a in h._annos_list]  # TODO stepping stone to passing annos as a dict
         [o.populateTags() for o in h]
 
     app = make_app(annos)
-    make_sparc(app)
+    make_sparc(app, comments=comments)
 
     atexit.register(exit_loop)
     app.exit_loop = exit_loop
@@ -562,9 +567,10 @@ def main():
     from hyputils.hypothesis import group_to_memfile, group
     args = docopt(__doc__)
     port = args['--port']
+    comments = not args['--no-comment']
     _, ghash = group_to_memfile(group).rsplit('-', 1)
     ghashshort = ghash[:10]
-    app = make_server_app(f'/tmp/protcur-{UID}-{port}-{ghashshort}-server-annos.pickle')
+    app = make_server_app(f'/tmp/protcur-{UID}-{port}-{ghashshort}-server-annos.pickle', comments)
     app.debug = False
     app.run(host='localhost', port=port, threaded=True)
     app.exit_loop()
