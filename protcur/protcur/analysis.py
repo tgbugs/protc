@@ -897,16 +897,26 @@ class AstGeneric(Hybrid):
         out = ''
         NL = '<br>\n' if html else '\n'
         SPACE = '\xA0' if html else ' '
+        CLOSE = '</span>)</span>' if html else ')'
+        if html:
+            def OPEN(from_here=0, *args, d=depth):
+                total = from_here + d
+                cls_ = f'paren{total}'
+                return f'<span class={cls_!r}>(<span class="default">'
+        else:
+            def OPEN(asdf=None, *args, d=depth):
+                return '('
+
         if self.astType is None:
             if self in cycle:
                 cyc = ' '.join(c.id for c in cycle)
                 print('Circular link in', self._repr, 'cycle', cyc)
-                out = f"'(circular-link no-type (cycle {cyc}))" + ')' * nparens + debug
+                out = f"'{OPEN()}circular-link no-type {OPEN(1)}cycle {cyc}{CLOSE}{CLOSE}" + CLOSE * nparens + debug
                 return out
             else:
                 printD(tc.red('WARNING:'), f'unhandled type for {self._repr} {self.tags}')
                 out = super().__repr__(html=html, number=number, depth=depth, nparens=0)
-                close = ')' * (nparens - 1)
+                close = CLOSE * (nparens - 1)
                 mnl = '\n' if depth == 1 else ''
                 here_string_marker = '----'
                 return out if html else (mnl +
@@ -919,6 +929,10 @@ class AstGeneric(Hybrid):
         value = (self.astValue.replace(' ', SPACE).replace('\n', NL)
                  if html else
                  self.astValue) # astValue depends on linePreLen
+        if html and self.astType in ('protc:parameter*', 'protc:invariant'):
+            # FIXME HACK this WILL break inside strings
+            value = value.replace(')', CLOSE)
+            value = ''.join(OPEN(i + 1) + v if i else v for i, v in enumerate(value.split('(')))
         self.linePreLen += self.indentDepth  # doing the children now we bump back up
         link = self.shareLink
         if html: link = atag(link, link, new_tab=True)
@@ -951,7 +965,7 @@ class AstGeneric(Hybrid):
                         #print('Circular link in', self.shareLink)
                         cyc = f'{SPACE}'.join(c.id for c in cycle)
                         print('Circular link in', self._repr, 'cycle', cyc)
-                        s = f"'(circular-link{SPACE}no-type{SPACE}(cycle{SPACE}{cyc}))" + ')' * nparens + debug + f'  {i} lol'
+                        s = f"'{OPEN()}circular-link{SPACE}no-type{SPACE}{OPEN(1)}cycle{SPACE}{cyc}{CLOSE}{CLOSE}" + CLOSE * nparens + debug + f'  {i} lol'
                         #s = f"'(circular-link {cycle[0].id})" + ')' * nparens
                     else:
                         printD(tc.red('WARNING:'), f'duplicate cycles in {self._repr}')
@@ -966,12 +980,12 @@ class AstGeneric(Hybrid):
                 cs.append(linejoin + s)
             childs = comment + ''.join(cs)
         else:
-            childs = ')' * nparens + comment
+            childs = CLOSE * nparens + comment
 
-        start = f'{NL}(' if top else '('  # ))
+        start = f'{NL}{OPEN()}' if top else OPEN()  # ))
         #print('|'.join(''.join(str(_) for _ in range(1,10)) for i in range(12)))
 
-        prov = f"(hyp:{SPACE}'{self.id})"
+        prov = f"{OPEN(1)}hyp:{SPACE}'{self.id}{CLOSE}"
 
         return f'{start}{self.astType}{SPACE}{value}{SPACE}{prov}{childs}'
 
@@ -2323,17 +2337,21 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
 
     _repr_join = '\n\n'
 
-    def __repr__(self, html=False, number=''):
+    def __repr__(self, html=False, number='*'):
         """ turtle repr of class leaving prefixes implicit """
         # when its empty all you get is the anno > nice
         if html:
             text = self.html()
             sep = b'<br>\n<br>\n'
+            start, rest = number.split('>', 1)
+            head = start + '>### ' + rest + sep.decode()
         else:
             text = self.ttl()
             sep = b'\n\n'
+            head = f'### {number}{sep.decode()}'
 
-        return sep.join([s for s in text.split(sep) if s.endswith(b'.')][1:]).decode()
+        return head + sep.join([s for s in text.split(sep)
+                                if s.endswith(b'.')][1:]).decode()
 
 
 def oqsetup():
