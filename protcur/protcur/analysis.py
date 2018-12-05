@@ -98,6 +98,74 @@ def url_doi(doi):
 def url_pmid(pmid):
     return 'https://www.ncbi.nlm.nih.gov/pubmed/' + pmid.split(':')[-1]
 
+def color_pda(string, OPEN, CLOSE,
+              space=' ',
+              STRING='<span class="string">',
+              QUOTE='<span class="quote">',
+              NUMBER='<span class="number">',
+              KEYWORD='<span class="keyword">',
+              count=0):
+    """ state machine for adding spans to code """
+    STOP = ' ()'  # always keep ' ' around for insurance
+    if space not in STOP: STOP += space
+    lsm1 = len(string) - 1
+    STATE = None
+    for i, char in enumerate(string):
+        if char == '"':  # TODO escape
+            if STATE == 'STRING':
+                yield char + '</span>'
+                STATE = None
+            elif STATE == 'STRING-ESCAPE':
+                yield char  # FIXME TODO multiple escapes
+                STATE = 'STRING'
+            else:
+                yield STRING + char
+                STATE = 'STRING'
+        elif STATE == 'STRING':
+            if char == '\\':
+                STATE = 'STRING-ESCAPE'
+            yield char
+        elif char == "'":
+            yield QUOTE
+            STATE = 'QUOTE'
+            yield char
+        elif char == "#":
+            # have to use lookahead here since we are yielding
+            if string[i + 1] == ':':
+                yield KEYWORD
+                STATE = 'KEYWORD'
+            yield char
+        else:
+            if STATE == 'STRING-ESCAPE':
+                STATE = 'STRING'
+
+            if char in STOP:
+                if STATE in ('QUOTE', 'KEYWORD', 'NUMBER'):
+                    yield '</span>'
+                    STATE = None
+                # lookahead
+                if i < lsm1:
+                    nchar = string[i + 1]
+                    if nchar in '0123456789':
+                        yield char
+                        STATE = 'NUMBER'
+                        yield NUMBER
+                        continue
+
+            if char == '(':
+                yield OPEN(count)
+                count += 1
+            elif char == ')':
+                yield CLOSE
+                count -= 1
+            else:
+                yield char
+
+    if STATE is not None:
+        # we get to the end and the state is not None
+        # terminate the current state because nothing else can
+        yield '</span>'
+
 #
 # docs
 
@@ -596,6 +664,8 @@ class Hybrid(HypothesisHelper):
                     break
 
             if child is not None: # sanity
+                # FIXME FIXME FIXME XXX do not call this on in sparc cases
+                # everything runs backwards there (oops) can fix it in the data
                 child.hasAstParent = True  # FIXME called every time :/
                 yield child  # buildAst will have a much eaiser time operating on these single depth childs
 
@@ -901,12 +971,17 @@ class AstGeneric(Hybrid):
         if html:
             def OPEN(from_here=0, *args, d=depth):
                 total = from_here + d
+                if total > 9:
+                    total = total % 9
                 cls_ = f'paren{total}'
                 return f'<span class={cls_!r}>(<span class="default">'
         else:
             def OPEN(asdf=None, *args, d=depth):
                 return '('
 
+        def color(string, o=OPEN, c=CLOSE, s=SPACE, count=0):
+            return ''.join(color_pda(string, o, c, s, count=count))
+            
         if self.astType is None:
             if self in cycle:
                 cyc = ' '.join(c.id for c in cycle)
@@ -915,8 +990,8 @@ class AstGeneric(Hybrid):
                 return out
             else:
                 printD(tc.red('WARNING:'), f'unhandled type for {self._repr} {self.tags}')
-                out = super().__repr__(html=html, number=number, depth=depth, nparens=0)
                 close = CLOSE * (nparens - 1)
+                out = super().__repr__(html=html, number=number, depth=depth, nparens=0) + close
                 mnl = '\n' if depth == 1 else ''
                 here_string_marker = '----'
                 return out if html else (mnl +
@@ -929,14 +1004,15 @@ class AstGeneric(Hybrid):
         value = (self.astValue.replace(' ', SPACE).replace('\n', NL)
                  if html else
                  self.astValue) # astValue depends on linePreLen
-        if html and self.astType in ('protc:parameter*', 'protc:invariant'):
-            # FIXME HACK this WILL break inside strings
-            value = value.replace(')', CLOSE)
-            value = ''.join(OPEN(i + 1) + v if i else v for i, v in enumerate(value.split('(')))
+        if html:
+            value = color(value, count=1)
         self.linePreLen += self.indentDepth  # doing the children now we bump back up
         link = self.shareLink
         if html: link = atag(link, link, new_tab=True)
-        comment = f'{SPACE}{SPACE};{SPACE}{link}'
+
+        csuf = f';{SPACE}{link}'
+        if html: csuf = f'<span class="comment">{csuf}</span>'
+        comment = f'{SPACE}{SPACE}' + csuf
 
         children = sorted(self.children)  # better to run the generator once up here
         if children:
@@ -965,7 +1041,9 @@ class AstGeneric(Hybrid):
                         #print('Circular link in', self.shareLink)
                         cyc = f'{SPACE}'.join(c.id for c in cycle)
                         print('Circular link in', self._repr, 'cycle', cyc)
-                        s = f"'{OPEN()}circular-link{SPACE}no-type{SPACE}{OPEN(1)}cycle{SPACE}{cyc}{CLOSE}{CLOSE}" + CLOSE * nparens + debug + f'  {i} lol'
+                        s = ((f"'{OPEN(1)}circular-link{SPACE}"
+                              f"no-type{SPACE}{OPEN(2)}cycle{SPACE}"
+                              f"{cyc}{CLOSE}{CLOSE}") + CLOSE * nparens + debug + f'  {i} lol')
                         #s = f"'(circular-link {cycle[0].id})" + ')' * nparens
                     else:
                         printD(tc.red('WARNING:'), f'duplicate cycles in {self._repr}')
@@ -985,7 +1063,9 @@ class AstGeneric(Hybrid):
         start = f'{NL}{OPEN()}' if top else OPEN()  # ))
         #print('|'.join(''.join(str(_) for _ in range(1,10)) for i in range(12)))
 
-        prov = f"{OPEN(1)}hyp:{SPACE}'{self.id}{CLOSE}"
+        id_ = f"'{self.id}"
+        if html: id_ = color(id_)
+        prov = f"{OPEN(1)}hyp:{SPACE}{id_}{CLOSE}"
 
         return f'{start}{self.astType}{SPACE}{value}{SPACE}{prov}{childs}'
 

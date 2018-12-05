@@ -16,7 +16,7 @@ from datetime import date
 from markdown import markdown
 from hyputils.hypothesis import HypothesisUtils, makeSimpleLogger, UID
 from pyontutils.htmlfun import htmldoc, atag, deltag, titletag, render_table, zerotag, zeronotetag, h1tag
-from pyontutils.htmlfun import monospace_body_style, table_style, details_style, ttl_html_style
+from pyontutils.htmlfun import monospace_body_style, table_style, details_style, ttl_html_style, emacs_style
 from protcur.analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid
 from protcur.analysis import citation_tree, papers, statistics, ast_statistics
 from protcur.analysis import readTagDocs, justTags, addDocLinks, Hybrid, protc, SparcMI
@@ -144,68 +144,6 @@ def star_annos(ast, funcname, search_by):
     simple_ifunc = getattr(Hybrid, funcname)
     HYB = request.url + '#Hybrids'
     SPC = request.url + f'#{ast.namespace}'
-    lol = '''
-<style type="text/css">.symbol { color : #770055; background-color : transparent; border: 0px; margin: 0px;}
-a.symbol:link { color : #229955; background-color : transparent; text-decoration: none; border: 0px; margin: 0px; }
-a.symbol:active { color : #229955; background-color : transparent; text-decoration: none; border: 0px; margin: 0px; }
-a.symbol:visited { color : #229955; background-color : transparent; text-decoration: none; border: 0px; margin: 0px; }
-a.symbol:hover { color : #229955; background-color : transparent; text-decoration: none; border: 0px; margin: 0px; }
-.special { color : #FF5000; background-color : inherit; }
-.keyword { color : #770000; background-color : inherit; }
-.comment { color : #007777; background-color : inherit; }
-.string { color : #777777; background-color : inherit; }
-.atom { color : #314F4F; background-color : inherit; }
-.macro { color : #FF5000; background-color : inherit; }
-.variable { color : #36648B; background-color : inherit; }
-.function { color : #8B4789; background-color : inherit; }
-.attribute { color : #FF5000; background-color : inherit; }
-.character { color : #0055AA; background-color : inherit; }
-.syntaxerror { color : #FF0000; background-color : inherit; }
-.diff-deleted { color : #5F2121; background-color : inherit; }
-.diff-added { color : #215F21; background-color : inherit; }
-
-span.paren1 { color: #006400 ;
-    font-weight: bold;
-}
-
-span.paren2 { color: #0000ff ;
-    font-weight: bold;
-}
-
-span.paren3 { color: #a020f0 ;
-    font-weight: bold;
-}
-
-span.paren4 { color: #4682b4 ;
-    font-weight: bold;
-}
-
-span.paren5 { color: #ffa500 ;
-    font-weight: bold;
-}
-
-span.paren6 { color: #8b008b ;
-    font-weight: bold;
-}
-
-span.paren7 { color: #556b2f ;
-    font-weight: bold;
-}
-
-span.paren8 { color: #008b8b ;
-    font-weight: bold;
-}
-
-span.paren9 { color: #4d4d4d ;
-    font-weight: bold;
-}
-
-.default { color: black ;
-    font-weight: normal;
-    background-color: none;
-    }
-.default:hover { background-color: none; color: black; }
-</style>'''
     try:
         join = ast._repr_join.replace('\n', '<br>\n').join
         return htmldoc(''.join(
@@ -225,7 +163,7 @@ span.paren9 { color: #4d4d4d ;
                                            key=lambda p: p.ast_updated, reverse=True))]),
                        title=f'{search_by} annotations',
                        styles=(table_style, monospace_body_style, details_style,
-                               ttl_html_style, lol,
+                               ttl_html_style, emacs_style,  # paren style: just in case
                                (f'.{ast.namespace} '
                                 'a:link { text-decoration: none; } '
                                 'body { white-space: nowrap; }')))
@@ -250,7 +188,18 @@ def make_app(annos):
     @app.route('/curation/ast', methods=['GET'])
     def route_ast():
         #return '<pre>' + protc.parentless() + '</pre>'
-        return render_ast()
+        ast = protc
+        join = ast._repr_join.replace('\n', '<br>\n').join
+        everything = (o for o in ast if o is not None and o.isAstNode and not o.hasAstParent)
+        return htmldoc(join(
+            [a.__repr__(html=True, number=n + 1)
+             for n, a in enumerate(sorted(everything))]),
+                       title=f'EVERYTHING',
+                       styles=(table_style, monospace_body_style, details_style,
+                               ttl_html_style, emacs_style,
+                               (f'.{ast.namespace} '
+                                'a:link { text-decoration: none; } '
+                                'body { white-space: nowrap; }')))
 
     @app.route('/curation/papers', methods=['GET'])
     @app.route('/curation/papers/', methods=['GET'])
