@@ -284,7 +284,7 @@ class Hybrid(HypothesisHelper):
             [p._addAstParent() for p in self.objects.values() if tuple(p.children)]  # handles updates
             # TODO deletes still an issue as always
 
-    def ontLookup(self, value, rank=('CHEBI', 'GO', 'UBERON', 'ilxtr', 'PATO')):
+    def ontLookup(self, value, rank=('NCBITaxon', 'CHEBI', 'GO', 'UBERON', 'ilxtr', 'PATO')):
 
         # TODO OntTerm
         # extend input to include black_box_component, aspect, etc

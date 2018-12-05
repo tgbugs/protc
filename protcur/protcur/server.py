@@ -159,6 +159,7 @@ def star_annos(ast, funcname, search_by):
                                            key=lambda p: p.ast_updated, reverse=True))]),
                        title=f'{search_by} annotations',
                        styles=(table_style, monospace_body_style, details_style,
+                               ttl_html_style,
                                (f'.{ast.namespace} '
                                 'a:link { text-decoration: none; } '
                                 'body { white-space: nowrap; }')))
