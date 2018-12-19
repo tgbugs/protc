@@ -244,7 +244,9 @@ def make_app(annos):
     @app.route('/curation/tags', methods=['GET'])
     @app.route('/curation/tags/', methods=['GET'])
     def route_tags():
-        ptags = {t:len([p for p in v if p.isAstNode]) for t, v in protc._tagIndex.items()}
+        ptags = {t:len([p for p in v if p.isAstNode])
+                 for t, v in protc._tagIndex.items()}
+
         def renderprotct(tag, acount):
             count = ptags.get(tag, 0)
             sc = str(count)
@@ -561,6 +563,11 @@ def make_server_app(memfile=None, comments=True):
     get_annos, annos, stream_thread, exit_loop = annoSync(memfile,
                                                           helpers=helpers)
     stream_thread.start()
+
+    # FIXME put this on AstGeneric
+    for t in justTags():
+        protc._tagIndex[t] = set()
+        Hybrid._tagIndex[t] = set()
 
     for h in helpers:
         h._annos_list = annos
