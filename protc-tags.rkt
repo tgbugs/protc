@@ -92,7 +92,9 @@
 (tag-doc 'protc:implied-output 'ilxtr:participant
          "Use this tag only in a reply to an annotation where there is an implied `protc:output` that has no annotateable reference or anchor in the text.")
 (tag-doc 'protc:implied-section 'protc:section
-         "Use this tag only in a reply to an annotation where there is an implied `protc:section` that has not annotateable reference or anchor in the text.")
+         "Use this tag only in a reply to an annotation where there is an implied `protc:section` that has no annotateable reference or anchor in the text.")
+(tag-doc 'protc:implied-vary 'protc:control-flow
+         "Use this tag only in a reply to an annotation where there is an implied `protc:vary` that has no annotateable reference or anchor in the text.")
 (tag-doc 'protc:input 'ilxtr:participant
          "Equipment used in the lab, tools, chemical solutions, research subjects, anything that is an input to a step that you need to retrieve or refer to for any reason.")
 (tag-doc 'protc:input-instance '(ilxtr:participant)
@@ -177,5 +179,7 @@
          "")
 (tag-doc 'protc:unit '(ilxtr:unit)
          "The particular discretization or quantization for a given aspect.")
+(tag-doc 'protc:vary '(protc:control-flow)
+         "Indicates that multiple `protc:parameter*` or `protc:invariant` children should be treated as variables in different processes on the same enclosing `protc:input`. These values will be lifted and transformed into a spec that repeatedly calls an inner spec that uses the value of the text or exact from the annotation bearing the `protc:vary` tag as the name for the variable in question. In the absense of an explicit variable name the name of the enclosing aspect will be used (i.e. when `protc:implied-vary` is used in a reply to an aspect).")
 (tag-doc 'protc:version '(ilxtr:identifier)
          "The version of a piece of software or an edition of an atlas or a book.")
