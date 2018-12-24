@@ -553,6 +553,11 @@ All actualize sections should specify a variable name that will be used in inher
 
 ;;; curation syntax classes 
 
+(define-syntax-class sc-cur-hyp
+  #:datum-literals (hyp: quote)
+  ; add additional valid prov identifiers here
+  (pattern (hyp: (quote hypothesis-urlsafe-uuid))))
+
 (define-syntax (define-sc-aspect-lift stx)
   (syntax-parse stx
     ;#:datum-literals (aspect)
@@ -561,14 +566,14 @@ All actualize sections should specify a variable name that will be used in inher
      #'(define-syntax-class name
          #:literals (aspect-lifted)
          #:datum-literals (oper-name alt ...)
-         (pattern ((~or* oper-name alt ...) (~or* quantity:sc-quantity dil:sc-dilution) (~optional rest) prov)
+         (pattern ((~or* oper-name alt ...) (~or* quantity:sc-quantity dil:sc-dilution) (~optional rest) prov:sc-cur-hyp)
                   #:attr lifted ;(syntax/loc this-syntax
                   #'(aspect-lifted (-~? quantity.aspect
                                         (-~? dil.aspect 
                                              (raise-syntax-error
                                               'no-unit "quantity missing unit"
                                               this-syntax (~? quantity))))
-                                 prov
+                                 prov:sc-cur-hyp
                                  (oper-name 'lifted (-~? quantity.normalized dil.normalized)))))]))
 
 (define-sc-aspect-lift sc-cur-parameter* parameter* protc:parameter*)
@@ -580,10 +585,16 @@ All actualize sections should specify a variable name that will be used in inher
   (pattern ((~or black-box-component protc:black-box-component) body ...)) ; TODO
   )
 
+(define-syntax-class sc-cur-vary
+  #:datum-literals (vary protc:vary protc:implied-vary)
+  (pattern  ((~or* vary protc:vary protc:implied-vary)
+             prov:sc-cur-hyp (~seq (~or* inv:sc-cur-invariant
+                         par:sc-cur-parameter*) ...))))
+
 (define-syntax-class sc-cur-aspect
   #:datum-literals (aspect protc:aspect protc:implied-aspect)
   (pattern ((~or* aspect protc:aspect protc:implied-aspect)
-            name:str prov (~or* asp:sc-cur-aspect
+            name:str prov:sc-cur-hyp (~or* asp:sc-cur-aspect
                                 inv:sc-cur-invariant
                                 par:sc-cur-parameter*)))
   (pattern ((~or* aspect protc:aspect protc:implied-aspect)
@@ -591,7 +602,7 @@ All actualize sections should specify a variable name that will be used in inher
             ; the intention of the structure is clear, we just need to
             ; figure out what to do with it
             ; FIXME do not want?
-            name:str prov (~or* multi-asp:sc-cur-aspect
+            name:str prov:sc-cur-hyp (~or* multi-asp:sc-cur-aspect
                                 multi-inv:sc-cur-invariant
                                 multi-par:sc-cur-parameter*) ...))
   )
@@ -607,7 +618,7 @@ All actualize sections should specify a variable name that will be used in inher
 (define-syntax-class sc-cur-input
   #:datum-literals (input protc:input protc:implied-input)
   (pattern ((~or* input protc:input protc:implied-input)
-            name:str prov body:expr ...)))
+            name:str prov:sc-cur-hyp body:expr ...)))
 
 (module+ test
   ; FIXME this works for a datum but fails hard when syntax occurs

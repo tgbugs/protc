@@ -76,6 +76,25 @@
 
 (define (black-box-component name prov . aspects) #f)
 
+(define-syntax (vary stx)
+  ; when used inside an aspect this will be lifted and loop inverted
+  ; since it indicates that FOR THE SAME SUBJECT all of these values
+  ; are to be explored
+  (syntax-parse stx
+    #:datum-literals (hyp: quote)
+    [(_ (hyp: (quote id))
+        (~seq (~or* par:sc-cur-parameter*
+                    inv:sc-cur-invariant) ...))
+     #`(quote #,stx)]))
+(module+ test
+  (vary (hyp: '-1)
+        (parameter* (quantity 10) (hyp: '-10)))
+  (vary (hyp: '-2)
+        (invariant (quantity 20) (hyp: '-11)))
+  (vary (hyp: '-3)
+        (parameter* (quantity 10) (hyp: '-12))
+        (invariant (quantity 20) (hyp: '-13))))
+
 (define-syntax (aspect stx)
   (syntax-parse stx
     #:datum-literals (hyp: quote)
@@ -83,7 +102,8 @@
         (hyp: (quote id))
         (~optional
          (~or* par:sc-cur-parameter*
-               inv:sc-cur-invariant)))
+               inv:sc-cur-invariant
+               var:sc-cur-vary)))
      ; TODO check that the given unit matches
      #`(quote #,stx)]))
 (module+ test
@@ -94,7 +114,16 @@
            (quantity
             10
             (unit 'kelvin 'milli))
-           (hyp: '2))))
+           (hyp: '2)))
+  (aspect "holding potential"
+          (hyp: '3)
+          (vary (hyp: '3.5)
+           (parameter*
+            (quantity -70 (unit 'volts 'milli))
+            (hyp: '4))
+           (parameter*
+            (quantity -50 (unit 'volts 'milli))
+            (hyp: '5)))))
 
 (define-syntax (unit stx)
   (syntax-parse stx
