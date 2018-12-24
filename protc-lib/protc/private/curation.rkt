@@ -36,6 +36,7 @@
         (~alt ;inv/par:sc-cur-inv/par
          inv:sc-cur-invariant
          par:sc-cur-parameter*
+         ; TODO tighter restrictions needed here
          body:expr) ...)
      #:with black-box (if (attribute name)
                           (datum->syntax #'name (string->symbol (syntax-e #'name)))
@@ -94,9 +95,6 @@
   (syntax-parse stx
     #:datum-literals (hyp: quote)
     [(_ (~or* name:str term:sc-cur-term) (hyp: (quote id))
-        #; ; the old way to do this, not sure if they end up parsing identically or not
-        (~seq (~or* par:sc-cur-parameter*
-                    inv:sc-cur-invariant) ...)
         (~alt par:sc-cur-parameter*
               inv:sc-cur-invariant) ...)
      #`(quote #,stx)]))
@@ -115,8 +113,11 @@
     [(_ (~or* name:str term:sc-cur-term)
         (hyp: (quote id))
         (~optional
-         (~or* par:sc-cur-parameter*
+         (~or* asp:sc-cur-aspect  ; allow aspect chaining
+               par:sc-cur-parameter*
                inv:sc-cur-invariant
+               res:sc-cur-*measure
+               res:sc-cur-result
                var:sc-cur-vary)))
      ; TODO check that the given unit matches
      #`(quote #,stx)]))
@@ -151,11 +152,21 @@
      #`(quote #,stx)  ; TODO
      ]))
 
-(define (invariant aspect value prov) #f)
+;(define (invariant aspect value prov) #f)
 
 (define-syntax (parameter* stx)
   (syntax-parse stx
     [_:sc-cur-parameter*
+     #`(quote #,stx)]))
+
+(define-syntax (invariant stx)
+  (syntax-parse stx
+    [_:sc-cur-invariant
+     #`(quote #,stx)]))
+
+(define-syntax (result stx)
+  (syntax-parse stx
+    [_:sc-cur-result
      #`(quote #,stx)]))
 
 (module+ test
@@ -167,7 +178,7 @@
 
 (define (objective* text prov) #f)
 (define (telos text prov) #f)
-(define (result aspect value prov) #f)
+;(define (result aspect value prov) #f)
 
 (define (order) #f)
 (define (repeate) #f)
@@ -180,7 +191,9 @@
 ;;; TODO
 
 (define-syntax (*measure stx)
-  #''TODO)
+  (syntax-parse stx
+    [_:sc-cur-*measure
+     #`(quote #,stx)]))
 
 (define-syntax (symbolic-measure stx)
   #''TODO)

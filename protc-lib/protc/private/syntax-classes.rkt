@@ -584,6 +584,20 @@ All actualize sections should specify a variable name that will be used in inher
 
 (define-sc-aspect-lift sc-cur-invariant invariant protc:invariant)
 
+;(define-sc-aspect-lift sc-cur-*measure *measure protc:*measure)  ; TODO structure is different?
+; fun thing about this is that it is now very clear how to use *measure
+; to let people specify the structure of the result that is going to come
+; out at run time, it also fits very nicely as the mirror of parameter in this sense
+(define-syntax-class sc-cur-*measure
+  ; TODO way to provide more structure, but maybe not from this
+  #:datum-literals (*measure protc:*measure)
+  (pattern ((~or* *measure protc:*measure)
+            text:str prov:sc-cur-hyp body ...)) ; TODO 
+  )
+
+(define-sc-aspect-lift sc-cur-result result protc:result)
+; TODO lift results to *measure or symbolic-measure specs
+
 (define-syntax-class sc-cur-bbc
   #:datum-literals (black-box-component protc:black-box-component)
   (pattern ((~or black-box-component protc:black-box-component) body ...)) ; TODO
@@ -592,15 +606,16 @@ All actualize sections should specify a variable name that will be used in inher
 (define-syntax-class sc-cur-vary
   #:datum-literals (vary protc:vary protc:implied-vary)
   (pattern  ((~or* vary protc:vary protc:implied-vary)
-             name:str prov:sc-cur-hyp (~seq (~or* inv:sc-cur-invariant
-                         par:sc-cur-parameter*) ...))))
+             name:str prov:sc-cur-hyp (~alt inv:sc-cur-invariant
+                                            par:sc-cur-parameter*) ...)))
 
 (define-syntax-class sc-cur-aspect
   #:datum-literals (aspect protc:aspect protc:implied-aspect)
   (pattern ((~or* aspect protc:aspect protc:implied-aspect)
-            name:str prov:sc-cur-hyp (~or* asp:sc-cur-aspect
-                                inv:sc-cur-invariant
-                                par:sc-cur-parameter*)))
+            (~or* name:str term:sc-cur-term) prov:sc-cur-hyp
+            (~or* asp:sc-cur-aspect
+                  inv:sc-cur-invariant
+                  par:sc-cur-parameter*)))
   (pattern ((~or* aspect protc:aspect protc:implied-aspect)
             ; TODO figure out the right way to handle these
             ; the intention of the structure is clear, we just need to
