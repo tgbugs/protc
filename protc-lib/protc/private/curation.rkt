@@ -32,12 +32,17 @@
             input protc:input
             parameter* protc:parameter*
             invariant protc:invariant)
-    [(_ name:str (hyp: (quote id))
+    [(_ (~or* name:str term:sc-cur-term) (hyp: (quote id))
         (~alt ;inv/par:sc-cur-inv/par
          inv:sc-cur-invariant
          par:sc-cur-parameter*
          body:expr) ...)
-     #:with black-box (datum->syntax #'name (string->symbol (syntax-e #'name)))
+     #:with black-box (if (attribute name)
+                          (datum->syntax #'name (string->symbol (syntax-e #'name)))
+                          ; FIXME type vs token ...
+                          ; FIXME spaces!?
+                          (datum->syntax #'term (string->symbol (syntax-e #'term.label)))
+                          )
      #'(actualize black-box #:prov (hyp: 'id)
                   (~? inv.lifted) ...
                   (~? par.lifted) ...
@@ -49,15 +54,21 @@
   (syntax-parse stx
     #:datum-literals (hyp: quote spec make)
     #:literal-sets (protc-fields protc-ops)  ; whis this not working?
-    [(_ name:str (hyp: (quote id)) (~alt asp:sc-cur-aspect
-                                         par:sc-cur-parameter*
-                                         inv:sc-cur-invariant
-                                         bbc:sc-cur-bbc
-                                         input:expr) ...)
+    [(_ (~or* name:str term:sc-cur-term) (hyp: (quote id))
+        (~alt asp:sc-cur-aspect
+              par:sc-cur-parameter*
+              inv:sc-cur-invariant
+              bbc:sc-cur-bbc
+              input:expr) ...)
      #:with spec-name (if (number? (syntax-e #'id))
                           (fmtid "_~a" #'id)  ; recall that #'_id doesn't work because the type is not strictly known
                           #'id)
-     #:with black-box (datum->syntax #'name (string->symbol (syntax-e #'name)))
+     #:with black-box (if (attribute name)
+                          (datum->syntax #'name (string->symbol (syntax-e #'name)))
+                          ; FIXME type vs token ...
+                          ; FIXME spaces!?
+                          (datum->syntax #'term (string->symbol (syntax-e #'term.label)))
+                          )
      #'(define-make (spec-name black-box)
          "this is a docstring from curation!"
          #:prov (hyp: 'id)
@@ -82,23 +93,26 @@
   ; are to be explored
   (syntax-parse stx
     #:datum-literals (hyp: quote)
-    [(_ (hyp: (quote id))
+    [(_ (~or* name:str term:sc-cur-term) (hyp: (quote id))
+        #; ; the old way to do this, not sure if they end up parsing identically or not
         (~seq (~or* par:sc-cur-parameter*
-                    inv:sc-cur-invariant) ...))
+                    inv:sc-cur-invariant) ...)
+        (~alt par:sc-cur-parameter*
+              inv:sc-cur-invariant) ...)
      #`(quote #,stx)]))
 (module+ test
-  (vary (hyp: '-1)
+  (vary "variable-name" (hyp: '-1)
         (parameter* (quantity 10) (hyp: '-10)))
-  (vary (hyp: '-2)
+  (vary "variable-name" (hyp: '-2)
         (invariant (quantity 20) (hyp: '-11)))
-  (vary (hyp: '-3)
+  (vary "variable-name" (hyp: '-3)
         (parameter* (quantity 10) (hyp: '-12))
         (invariant (quantity 20) (hyp: '-13))))
 
 (define-syntax (aspect stx)
   (syntax-parse stx
     #:datum-literals (hyp: quote)
-    [(_ name:str
+    [(_ (~or* name:str term:sc-cur-term)
         (hyp: (quote id))
         (~optional
          (~or* par:sc-cur-parameter*
@@ -117,7 +131,7 @@
            (hyp: '2)))
   (aspect "holding potential"
           (hyp: '3)
-          (vary (hyp: '3.5)
+          (vary "holding-potential" (hyp: '3.5)
            (parameter*
             (quantity -70 (unit 'volts 'milli))
             (hyp: '4))

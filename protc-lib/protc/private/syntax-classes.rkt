@@ -553,6 +553,10 @@ All actualize sections should specify a variable name that will be used in inher
 
 ;;; curation syntax classes 
 
+(define-syntax-class sc-cur-term
+  #:datum-literals (term)
+  (pattern (term curie:identifier label:str #:original value:str)))
+
 (define-syntax-class sc-cur-hyp
   #:datum-literals (hyp: quote)
   ; add additional valid prov identifiers here
@@ -588,7 +592,7 @@ All actualize sections should specify a variable name that will be used in inher
 (define-syntax-class sc-cur-vary
   #:datum-literals (vary protc:vary protc:implied-vary)
   (pattern  ((~or* vary protc:vary protc:implied-vary)
-             prov:sc-cur-hyp (~seq (~or* inv:sc-cur-invariant
+             name:str prov:sc-cur-hyp (~seq (~or* inv:sc-cur-invariant
                          par:sc-cur-parameter*) ...))))
 
 (define-syntax-class sc-cur-aspect
