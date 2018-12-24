@@ -452,7 +452,7 @@ class Hybrid(HypothesisHelper):
 
         if self._text.startswith('SKIP'):
             return ''
-        elif self._text.startswith(self.CURATOR_NOTE_TAG):
+        elif self.CURATOR_NOTE_TAG in self._text:
             return self._text.split(self.CURATOR_NOTE_TAG, 1)[0]  # NOTE curation notes come last
 
         return self._text
@@ -473,7 +473,8 @@ class Hybrid(HypothesisHelper):
             if correction:
                 return correction
 
-        if anyMembers(self.tags, *('protc:implied-' + s for s in ('input', 'output', 'aspect', 'section'))):  # FIXME hardcoded fix
+        if anyMembers(self.tags, *('protc:implied-' + s
+                                   for s in ('input', 'output', 'aspect', 'section', 'vary'))):  # FIXME hardcoded fix
             value, children_text = self._fix_implied_input()
             if value:
                 return value
@@ -647,9 +648,28 @@ class Hybrid(HypothesisHelper):
             #if self.parent is None:
                 #embed()
                 #raise ValueError(f'protc:implied-* does not have a parrent? Did you mistag?')
-        if 'protc:implied-aspect' in self.tags:
+        if 'protc:aspect' in self.tags:
+            for reply in self.replies:
+                if 'protc:implied-vary' in reply.tags:
+                    reply.hasAstParent = True
+                    yield reply
+                    break
+            else:
+                yield from self.direct_children
+
+        elif 'protc:implied-vary' in self.tags:
+            # this is an example of how to inject a reply as a child
+            yield from self.parent.direct_children
+
+        elif 'protc:implied-aspect' in self.tags:
+            # this is an example of how to inject a reply as a parent
             yield self.parent
-            return
+
+        else:
+            yield from self.direct_children
+
+    @property
+    def direct_children(self):
         for id_ in self._children_ids:
             child = self.getObjectById(id_)
             if child is None:
@@ -836,15 +856,11 @@ class AstGeneric(Hybrid):
     #_topLevel = tuple()
     linePreLen = 0
 
-    @staticmethod
-    def _value_escape(value):
-        return json.dumps(value.strip())
-        #return '"' + value.strip().replace('"', '\\"') + '"'
-
-    def _default_astValue(self):
-        return self._value_escape(self.value)
-
     def _dispatch(self):
+        """START HERE
+        This is the code that dispatches by tag to functions that match the name of
+        the tag suffix."""
+
         type_ = self.astType
         if type_ is None:
             if isinstance(self, HypothesisHelper):
@@ -870,6 +886,14 @@ class AstGeneric(Hybrid):
                                 f'another namespace ({namespace}) ({self.tags}).')
         dispatch_on = dispatch_on.replace('*', '').replace('-', '_')
         return getattr(self, dispatch_on, self._default_astValue)()
+
+    @staticmethod
+    def _value_escape(value):
+        return json.dumps(value.strip())
+        #return '"' + value.strip().replace('"', '\\"') + '"'
+
+    def _default_astValue(self):
+        return self._value_escape(self.value)
 
     @classmethod
     def parsed(cls):
@@ -1088,6 +1112,7 @@ class protc(AstGeneric):
               'references-for-use',
               'references-for-data',
               'references-for-evidence',
+              'vary',  # TODO
               'aspect',
               'black-box-component',
               'has-part',  # FIXME these are not being incorporated properly when they have parents...
@@ -1097,6 +1122,7 @@ class protc(AstGeneric):
               'no-how-error',
               'order',
               'repeat',
+              'implied-vary',  # TODO
               'implied-aspect',
               'how',
               '*make*',  # FIXME output?? also yay higher order functions :/
@@ -1282,6 +1308,18 @@ class protc(AstGeneric):
 
     def implied_aspect(self):
         return self.input()
+
+    def vary(self):
+        # FIXME format value as racket identifier
+        return self.input()
+
+    def implied_vary(self):
+        # FIXME format value as racket identifier
+        if not self.value:
+            # treat the enclosing aspect annotation value as if it were a vary annotation
+            return self.parent.vary()
+        else:
+            return self.input()
 
     def black_box(self):
         return self.input()
