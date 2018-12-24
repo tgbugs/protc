@@ -1243,6 +1243,9 @@ class protc(AstGeneric):
             if value == '':  # breaks the parser :/
                 return ''
             cleaned = value.strip()
+            for child in self.children:  # TODO
+                if child.astType == 'protc:unit':
+                    cleaned += child.value
             cleaned_orig = cleaned
 
             # ignore gargabe at the start
@@ -1263,6 +1266,9 @@ class protc(AstGeneric):
         return repr(ParameterValue(success, v, rest, indent=self.linePreLen))  # TODO implement as part of processing the children?
 
     def invariant(self):
+        return self.parameter()
+
+    def result(self):
         return self.parameter()
 
     def input(self):  # TODO reinstate rank as an arg
