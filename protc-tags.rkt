@@ -132,7 +132,7 @@
 (tag-doc 'protc:output-spec '(ilxtr:deprecatedTag)
          "Description of the structure of the information to be saved (e.g. neurolucida in (x, y, z, d) out) [THIS IS CONFUSING BECAUSE IT IS FOR NUMBERS NOT PHYSICAL OBJECTS?] [3-16-18: replace with protc:aspect or protc:parameter or protc:result]")
 (tag-doc 'protc:parameter '(ilxtr:deprecatedTag)
-         "Use protc:symbolic-measure instead.")
+         "Use `protc:symbolic-input` instead.")
 (tag-doc 'protc:parameter* 'ilxtr:parameter
          "Numbers or specific measurements/locations used for lab settings, directly measureable. Often have units or are 'counts' of things")
 (tag-doc 'protc:parameterized-values '()
@@ -168,7 +168,7 @@
 (tag-doc 'protc:substitute-input 'protc:control-flow
          "What steps/materials should be replaced in order to conduct a slightly different procedure e.g. a control experiment, should refer back to the original *make* or *measure function")
 (tag-doc 'protc:symbolic-input 'ilxtr:informationArtifact
-         "The input to a `protc:symbolic-measure`. Should be a symbolic entity such as a data file, number, or other symbol. Not a physical input which should be annotated with `protc:input`. These are distinguished from `protc:parameter*` by the fact that they often exist without the intention or knowledge of how to bind them to a physical entite. In some abstract sense they are parameters but there is no intention to act on them, and often one cannot do so easily (e.g. changing the conversion efficiency of a particular GFP protein requires extensive engineering). There are cases in closed loop systems where these can be the symbolic inputs to a `protc:parameter*` which will then be actualized.")
+         "The input to a `protc:symbolic-measure`. Should be a symbolic entity such as a data file, number, or other symbol. Not a physical input which should be annotated with `protc:input`. These are distinguished from `protc:parameter*` by the fact that they often exist without the intention or knowledge of how to bind them to a physical entity. In some abstract sense they are parameters but there is no intention to act on them, and often one cannot do so easily (e.g. changing the conversion efficiency of a particular GFP protein requires extensive engineering). There are cases in closed loop systems where these can be the symbolic inputs to a `protc:parameter*` which will then be actualized.")
 (tag-doc 'protc:symbolic-measure 'ilxtr:symbolicFunction
          "A measurement that takes symbolic input, specifically `protc:symbolic-input` or `protc:symbolic-output` which correspond to their physical versions `protc:input` and `protc:output`")
 (tag-doc 'protc:symbolic-output 'ilxtr:informationArtifact
