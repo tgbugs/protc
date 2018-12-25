@@ -473,6 +473,15 @@ All actualize sections should specify a variable name that will be used in inher
                                                         (^ (unit seconds)))
                                        [expr:sc-unit-oper #'expr]))))
 
+(define-syntax-class sc-bool
+  #:datum-literals (param:bool bool)
+  (pattern ((~or* param:bool bool)
+            value:boolean)
+           #:attr normalized #'(bool value)
+           ))
+(module+ test
+  (check-true (syntax? (syntax-parse #'(bool #t) [bool:sc-bool #'bool.value]))))
+
 (define (simplify-unit expr)
   ; lots of work to do here ...
   ; convert to intermediate repr
@@ -526,7 +535,7 @@ All actualize sections should specify a variable name that will be used in inher
            #:attr unit #f  ; TODO
            #:attr unit-expr #f
            #:attr normalized #'(dimesions quant ...))
-  (pattern ((~or* expr param:expr) body ...)  ; TODO
+  (pattern ((~or* expr param:expr) body ...)  ; TODO ensure a check param:quantity prefixed by (
            #:attr aspect #f  ; TODO
            #:attr unit #f  ; TODO
            #:attr unit-expr #f
@@ -570,15 +579,22 @@ All actualize sections should specify a variable name that will be used in inher
      #'(define-syntax-class name
          #:literals (aspect-lifted)
          #:datum-literals (oper-name alt ...)
-         (pattern ((~or* oper-name alt ...) (~or* quantity:sc-quantity dil:sc-dilution) (~optional rest) prov:sc-cur-hyp)
+         (pattern ((~or* oper-name alt ...)
+                   (~or* quantity:sc-quantity dil:sc-dilution boo:sc-bool)
+                   (~optional rest)
+                   prov:sc-cur-hyp)
                   #:attr lifted ;(syntax/loc this-syntax
-                  #'(aspect-lifted (-~? quantity.aspect
-                                        (-~? dil.aspect 
-                                             (raise-syntax-error
-                                              'no-unit "quantity missing unit"
-                                              this-syntax (~? quantity))))
-                                 prov:sc-cur-hyp
-                                 (oper-name 'lifted (-~? quantity.normalized dil.normalized)))))]))
+                  #'(aspect-lifted (-~? boo.value  ; FIXME these have to be inside an aspect
+                                        (-~? dil.aspect
+                                             (-~? quantity.aspect
+                                                  (raise-syntax-error
+                                                   'no-unit "quantity missing unit"
+                                                   this-syntax (~? quantity)))))
+                                   prov
+                                   (oper-name 'lifted (-~? quantity.normalized
+                                                           (-~?
+                                                            dil.normalized
+                                                            boo.normalized))))))]))
 
 (define-sc-aspect-lift sc-cur-parameter* parameter* protc:parameter*)
 
@@ -622,15 +638,18 @@ All actualize sections should specify a variable name that will be used in inher
             ; figure out what to do with it
             ; FIXME do not want?
             name:str prov:sc-cur-hyp (~or* multi-asp:sc-cur-aspect
-                                multi-inv:sc-cur-invariant
-                                multi-par:sc-cur-parameter*) ...))
-  )
+                                           multi-inv:sc-cur-invariant
+                                           multi-par:sc-cur-parameter*) ...)))
 
 (module+ test
   (syntax-parse #'(aspect "length"
-                          'some-prov
-                          (parameter* (quantity 10 (unit 'meters 'milli)) 'p0)
-                          (parameter* (quantity 20 (unit 'meters 'milli)) 'p1))
+                          (hyp: 'some-prov)
+                          (parameter* (quantity 10 (unit 'meters 'milli)) (hyp: 'p0))
+                          (parameter* (quantity 20 (unit 'meters 'milli)) (hyp: 'p1)))
+    [thing:sc-cur-aspect #'thing])
+  (syntax-parse #'(aspect "predicate?"
+                          (hyp: 'some-other-prov)
+                          (parameter* (bool #t) (hyp: 'p2)))
     [thing:sc-cur-aspect #'thing])
   )
 
@@ -653,6 +672,10 @@ All actualize sections should specify a variable name that will be used in inher
   (check-equal? (syntax-parse #'(parameter* (quantity 10 (unit meters)) (hyp: '0))
                   [thing:sc-cur-parameter* (syntax->datum #'thing.lifted)])
                 '(aspect-lifted "length" (hyp: '0) (parameter* 'lifted (quantity 10 (unit meters)))))
+
+  (check-equal? (syntax-parse #'(parameter* (bool #t) (hyp: '0))
+                  [thing:sc-cur-parameter* (syntax->datum #'thing.lifted)])
+                '(aspect-lifted #t (hyp: '0) (parameter* 'lifted (bool #t))))
 
   (syntax-parse #'(parameter* (quantity 10
                                         (unit-expr (/ (unit meters)
