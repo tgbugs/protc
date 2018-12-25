@@ -459,6 +459,7 @@ class Hybrid(HypothesisHelper):
 
     @property
     def curatorNotes(self):
+        # TODO lift notes from replies as well if they are not ast nodes
         if self.CURATOR_NOTE_TAG in self._text:
             yield from (n.strip()
                         for n in
@@ -747,6 +748,7 @@ class Hybrid(HypothesisHelper):
         childs = ''.join(c.__repr__(depth + 1, nparens=nparens, cycle=cycle, html=html) for c in children)
                          #if not print(c.id))
         #if childs: childs += '\n'
+        notes = '\n\n'.join(self.curatorNotes)
         prefixes = {f'{self.classn}:':True,
                     'parent:':self.parent,
                     'value:':self.value,
@@ -757,7 +759,8 @@ class Hybrid(HypothesisHelper):
                     'cleaned tags:':(self.references and lct and lct != self.tags),
                     'tag_corrs:':self.tag_corrections,
                     'children:':childs,
-                    'replies:':_replies,}
+                    'replies:':_replies,
+                    'notes:':notes,}
         spacing = max(len(p) for p, test in prefixes.items() if test) + 1
         align = (ind + len(start)) * depth + spacing  # TODO max(len(things)) instead of 14 hardcoded
         def align_prefix(prefix):
@@ -809,6 +812,8 @@ class Hybrid(HypothesisHelper):
 
         childs_text = row('children:', lambda:childs)
 
+        notes_text = row('notes:', lambda:linewrap(notes, align, space=SPACE, depth=depth, ind=ind))
+
         endbar = f'\n{t:_<80}{NL}'
 
         def rm_n(*args):
@@ -824,6 +829,7 @@ class Hybrid(HypothesisHelper):
                         title_text,
                         parent_id,
                         value_text,
+                        notes_text,
                         _summary,
                         #ast_text,  # not used in hybrid and not useful in protc anymore
                         rm_n(exact_text,
@@ -1084,6 +1090,25 @@ class AstGeneric(Hybrid):
         else:
             childs = CLOSE * nparens + comment
 
+
+        _notes = '\n'.join(self.curatorNotes)  # the \n will be replaced during rewrap
+        # TODO get user per note as well
+        #'{SPACE}by{SPACE}{self._anno.user}{NL}'  # FIXME lifting notes from replies => inaccurate
+        if _notes:
+            # notes = f'{NL}#;{NL}<<--note{NL}' + linewrap(_notes, start=0, end=120, sep='', space=SPACE, nl=NL, ind=0) + f'{NL}--note'
+            #_pl = (' ' * self.linePreLen) if depth > 1 else ''
+            _npre = NL if depth == 1 else ''
+            _nindent = self.indentDepth * (depth - 1)
+            _cur = f'{_npre};{SPACE}NOTE' + NL + SPACE * _nindent
+            notes = f'{_cur};{SPACE}' + linewrap(_notes, start=0, end=120,
+                                                  sep=f';{SPACE}', space=SPACE, nl=NL,
+                                                  #ind=0 if depth == 1 else self.linePreLen,
+                                                  ind=_nindent,
+                                                  depth=1) + (NL if depth > 1 else '') + SPACE * _nindent
+            if html: notes = f'<span class="comment">{notes}</span>'
+        else:
+            notes = ''
+
         start = f'{NL}{OPEN()}' if top else OPEN()  # ))
         #print('|'.join(''.join(str(_) for _ in range(1,10)) for i in range(12)))
 
@@ -1091,7 +1116,7 @@ class AstGeneric(Hybrid):
         if html: id_ = color(id_)
         prov = f"{OPEN(1)}hyp:{SPACE}{id_}{CLOSE}"
 
-        return f'{start}{self.astType}{SPACE}{value}{SPACE}{prov}{childs}'
+        return f'{notes}{start}{self.astType}{SPACE}{value}{SPACE}{prov}{childs}'
 
 
 class protc(AstGeneric):
