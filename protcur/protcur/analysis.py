@@ -1021,13 +1021,17 @@ class AstGeneric(Hybrid):
             else:
                 printD(tc.red('WARNING:'), f'unhandled type for {self._repr} {self.tags}')
                 close = CLOSE * (nparens - 1)
-                out = super().__repr__(html=html, number=number, depth=depth, nparens=0) + close
+                out = super().__repr__(html=html, number=number, depth=depth, nparens=0)
                 mnl = '\n' if depth == 1 else ''
                 here_string_marker = '----'
+                _use_hstr = (not self.astType and (self.parent and self.parent.astType
+                                                   or not self.parent))
+                _os = f'#<<{here_string_marker}' if _use_hstr else ''
+                _cs = f'\n{here_string_marker}\n' if _use_hstr else ''
                 return out if html else (mnl +
-                                         f'#<<{here_string_marker}' +
+                                         _os +
                                          out.rstrip() +
-                                         f'\n{here_string_marker}\n' +
+                                         _cs +
                                          close)
 
         self.linePreLen = self.indentDepth * (depth - 1) + len('(') + len(str(self.astType)) +  len(' ')
