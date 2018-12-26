@@ -608,7 +608,9 @@ All actualize sections should specify a variable name that will be used in inher
   ; TODO way to provide more structure, but maybe not from this
   #:datum-literals (*measure protc:*measure)
   (pattern ((~or* *measure protc:*measure)
-            text:str prov:sc-cur-hyp body ...)) ; TODO 
+            text:str
+            prov:sc-cur-hyp
+            body ...)) ; TODO 
   )
 
 (define-sc-aspect-lift sc-cur-result result protc:result)
@@ -622,16 +624,25 @@ All actualize sections should specify a variable name that will be used in inher
 (define-syntax-class sc-cur-vary
   #:datum-literals (vary protc:vary protc:implied-vary)
   (pattern  ((~or* vary protc:vary protc:implied-vary)
-             name:str prov:sc-cur-hyp (~alt inv:sc-cur-invariant
+             name:str prov:sc-cur-hyp (~alt unconv:str
+                                            inv:sc-cur-invariant
                                             par:sc-cur-parameter*) ...)))
 
 (define-syntax-class sc-cur-aspect
   #:datum-literals (aspect protc:aspect protc:implied-aspect)
   (pattern ((~or* aspect protc:aspect protc:implied-aspect)
-            (~or* name:str term:sc-cur-term) prov:sc-cur-hyp
-            (~or* asp:sc-cur-aspect
+            (~or* name:str term:sc-cur-term)
+            prov:sc-cur-hyp
+            cnt-0:sc-cur-context ...  ; allow multiple sections for now, all will be merge into one
+            (~or* unconv:str
+                  asp:sc-cur-aspect
                   inv:sc-cur-invariant
-                  par:sc-cur-parameter*)))
+                  par:sc-cur-parameter*
+                  mes:sc-cur-*measure
+                  res:sc-cur-result
+                  var:sc-cur-vary)
+            cnt-1:sc-cur-context ...  ; easy way to allow before or after the main content
+            ))
   (pattern ((~or* aspect protc:aspect protc:implied-aspect)
             ; TODO figure out the right way to handle these
             ; the intention of the structure is clear, we just need to
@@ -653,6 +664,37 @@ All actualize sections should specify a variable name that will be used in inher
     [thing:sc-cur-aspect #'thing])
   )
 
+(define-syntax-class sc-cur-context
+  ; specifically aspect context
+  ; the issue is that aspects can require multiple primary participants
+  ; and also have multiple context participants with their own aspects
+  #:datum-literals (context protc:context protc:implied-context)
+  (pattern ((~or* context protc:context protc:implied-context)
+            (~or* name:str term:sc-cur-term)
+            prov:sc-cur-hyp
+            (~or* unconv:str
+                  bbc:sc-cur-bbc
+                  ; TODO determine what else can go as context
+                  ; and specifically whether aspects on the same
+                  ; participant can be context or whether that
+                  ; needs to be dealt with symbolically
+                  ; it seems like there might be some cases where
+                  ; logically or temporally you have to know the
+                  ; value of one aspect before you can determine
+                  ; the value of another aspect, which could be
+                  ; interpreted as context rather than just
+                  ; ordering rules
+
+                  ; asp:sc-cur-aspect
+
+                  ; lifted to aspects, will uncomment when needed
+                  ; inv:sc-cur-invariant
+                  ; par:sc-cur-parameter*
+
+                  ; previous results are likely to be used here
+                  ; will uncomment when it is clear we need them
+                  ; res:sc-cur-result
+                  ))))
 (define-syntax-class sc-cur-input
   #:datum-literals (input protc:input protc:implied-input)
   (pattern ((~or* input protc:input protc:implied-input)

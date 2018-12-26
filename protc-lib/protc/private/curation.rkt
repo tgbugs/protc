@@ -34,10 +34,12 @@
             invariant protc:invariant)
     [(_ (~or* name:str term:sc-cur-term) (hyp: (quote id))
         (~alt ;inv/par:sc-cur-inv/par
+         unconv:str
+         asp:sc-cur-aspect
          inv:sc-cur-invariant
          par:sc-cur-parameter*
          ; TODO tighter restrictions needed here
-         body:expr) ...)
+         #;body:expr) ...)
      #:with black-box (if (attribute name)
                           (datum->syntax #'name (string->symbol (syntax-e #'name)))
                           ; FIXME type vs token ...
@@ -47,7 +49,8 @@
      #'(actualize black-box #:prov (hyp: 'id)
                   (~? inv.lifted) ...
                   (~? par.lifted) ...
-                  (~? body (raise-syntax-error "HOW?!")) ...
+                  (~? asp (raise-syntax-error "HOW?!")) ...
+                  ;(~? body (raise-syntax-error "HOW?!")) ...
                )
      ]))
 
@@ -56,9 +59,10 @@
     #:datum-literals (hyp: quote spec make)
     #:literal-sets (protc-fields protc-ops)  ; whis this not working?
     [(_ (~or* name:str term:sc-cur-term) (hyp: (quote id))
-        (~alt asp:sc-cur-aspect
-              par:sc-cur-parameter*
+        (~alt unconv:str
+              asp:sc-cur-aspect
               inv:sc-cur-invariant
+              par:sc-cur-parameter*
               bbc:sc-cur-bbc
               input:expr) ...)
      #:with spec-name (if (number? (syntax-e #'id))
@@ -83,7 +87,8 @@
      ]))
 (module+ test
   (output "thing" (hyp: 'prov-a)
-          (parameter* (quantity 100 (unit 'meters 'milli)) (hyp: 'prov-b)))
+          (parameter* (quantity 100 (unit 'meters 'milli))
+                      (hyp: 'prov-b)))
   )
 
 (define (black-box-component name prov . aspects) #f)
@@ -95,7 +100,8 @@
   (syntax-parse stx
     #:datum-literals (hyp: quote)
     [(_ (~or* name:str term:sc-cur-term) (hyp: (quote id))
-        (~alt par:sc-cur-parameter*
+        (~alt unconv:str
+              par:sc-cur-parameter*
               inv:sc-cur-invariant) ...)
      #`(quote #,stx)]))
 (module+ test
@@ -110,19 +116,26 @@
 (define-syntax (aspect stx)
   (syntax-parse stx
     #:datum-literals (hyp: quote)
-    [(_ (~or* name:str term:sc-cur-term)
+    [_:sc-cur-aspect
+     #;
+     (_ (~or* name:str term:sc-cur-term)
         (hyp: (quote id))
+        cnt:sc-cur-context ...
         (~optional
-         (~or* asp:sc-cur-aspect  ; allow aspect chaining
-               par:sc-cur-parameter*
+         (~or* unconv:str
+               asp:sc-cur-aspect  ; allow aspect chaining
                inv:sc-cur-invariant
-               res:sc-cur-*measure
+               par:sc-cur-parameter*
+               mes:sc-cur-*measure
                res:sc-cur-result
                var:sc-cur-vary)))
      ; TODO check that the given unit matches
      #`(quote #,stx)]))
 (module+ test
   (aspect "mass" (hyp: '0))
+  (aspect "test-unconv" (hyp: 'lol) "unconverted")
+  (aspect "test-measure" (hyp: 'lol)
+          (*measure "measure something!" (hyp: 'hrm)))
   (aspect "bob"
           (hyp: '1)
           (parameter*
