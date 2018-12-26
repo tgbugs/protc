@@ -605,7 +605,7 @@ All actualize sections should specify a variable name that will be used in inher
 ; to let people specify the structure of the result that is going to come
 ; out at run time, it also fits very nicely as the mirror of parameter in this sense
 (define-syntax-class sc-cur-*measure
-  ; TODO way to provide more structure, but maybe not from this
+  ; TODO way to provide more structure, but maybe not from this syntax class
   #:datum-literals (*measure protc:*measure)
   (pattern ((~or* *measure protc:*measure)
             text:str
@@ -613,8 +613,24 @@ All actualize sections should specify a variable name that will be used in inher
             body ...)) ; TODO 
   )
 
+(define-syntax-class sc-cur-calculate
+  ; this is actually nice to tag with because it is immediately clear
+  ; that there is missing information when you say calculate the value
+  ; and there is no measurement inbetween, for some specs it doesn't
+  ; really matter how, but for others it does, calculated aspects without
+  ; hows warn
+  ; maybe name it protc:*calculate for clarity?
+  ; and use protc:compute for pure symbol? not quite right ...
+  ; having both forms would be confusing and probably unneeded
+  #:datum-literals (calculate protc:calculate)
+  (pattern ((~or* calculate protc:calculate)
+            text:str
+            prov:sc-cur-hyp
+            body ...)) ; TODO 
+  )
+
 (define-sc-aspect-lift sc-cur-result result protc:result)
-; TODO lift results to *measure or symbolic-measure specs
+; TODO lift results to *measure or calculate specs
 
 (define-syntax-class sc-cur-bbc
   #:datum-literals (black-box-component protc:black-box-component)
@@ -634,15 +650,18 @@ All actualize sections should specify a variable name that will be used in inher
             (~or* name:str term:sc-cur-term)
             prov:sc-cur-hyp
             cnt-0:sc-cur-context ...  ; allow multiple sections for now, all will be merge into one
-            (~or* unconv:str
-                  asp:sc-cur-aspect
-                  inv:sc-cur-invariant
-                  par:sc-cur-parameter*
-                  mes:sc-cur-*measure
-                  res:sc-cur-result
-                  var:sc-cur-vary)
+            (~optional
+             (~or* unconv:str
+                   asp:sc-cur-aspect
+                   inv:sc-cur-invariant
+                   par:sc-cur-parameter*
+                   mes:sc-cur-*measure
+                   cal:sc-cur-calculate
+                   res:sc-cur-result
+                   var:sc-cur-vary))
             cnt-1:sc-cur-context ...  ; easy way to allow before or after the main content
             ))
+  #;
   (pattern ((~or* aspect protc:aspect protc:implied-aspect)
             ; TODO figure out the right way to handle these
             ; the intention of the structure is clear, we just need to

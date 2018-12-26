@@ -1157,7 +1157,8 @@ class protc(AstGeneric):
               'implied-aspect',
               'how',
               '*make*',  # FIXME output?? also yay higher order functions :/
-              'symbolic-measure',
+              'symbolic-measure',  # DEPRECATED
+              'calculate',
               'implied-input',
               'result',
               'output-spec',

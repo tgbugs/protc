@@ -116,7 +116,17 @@
 (define-syntax (aspect stx)
   (syntax-parse stx
     #:datum-literals (hyp: quote)
-    [_:sc-cur-aspect
+    [section:sc-cur-aspect
+     #:do ((when (not (or (attribute section.asp)
+                          (attribute section.inv)
+                          (attribute section.par)
+                          (attribute section.mes)
+                          (attribute section.cal)
+                          (attribute section.res)
+                          (attribute section.var)))
+             ; TODO actually create a warning object
+             (displayln (format "WARNING: Aspect missing body in\n~a"
+                                (syntax/loc stx #'section)))))
      #;
      (_ (~or* name:str term:sc-cur-term)
         (hyp: (quote id))
@@ -208,6 +218,12 @@
     [_:sc-cur-*measure
      #`(quote #,stx)]))
 
+(define-syntax (calculate stx)
+  (syntax-parse stx
+    [_:sc-cur-calculate
+     #`(quote #,stx)]))
+
+#; ; deprecated in favor of protc:calculate
 (define-syntax (symbolic-measure stx)
   #''TODO)
 
