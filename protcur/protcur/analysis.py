@@ -662,7 +662,7 @@ class Hybrid(HypothesisHelper):
             # this is an example of how to inject a reply as a child
             yield from self.parent.direct_children
 
-        elif 'protc:implied-aspect' in self.tags:
+        elif 'protc:implied-aspect' in self.tags:# or 'protc:implied-context' in self.tags:
             # this is an example of how to inject a reply as a parent
             yield self.parent
 
@@ -678,7 +678,7 @@ class Hybrid(HypothesisHelper):
                     print(f"WARNING: child of {self._repr} {id_} does not exist!")
                 continue
             for reply in child.replies:  # because we cannot reference replies directly in the client >_<
-                if 'protc:implied-aspect' in reply.tags:
+                if 'protc:implied-aspect' in reply.tags:# or 'protc:implied-context' in reply.tags:
                     self.hasAstParent = True  # FIXME called every time :/
                     yield reply
                     child = None  # inject the implied aspect between the input and the parameter
@@ -1142,6 +1142,7 @@ class protc(AstGeneric):
               'references-for-data',
               'references-for-evidence',
               'vary',  # TODO
+              'context',  # TODO
               'aspect',
               'black-box-component',
               'has-part',  # FIXME these are not being incorporated properly when they have parents...
@@ -1152,6 +1153,7 @@ class protc(AstGeneric):
               'order',
               'repeat',
               'implied-vary',  # TODO
+              #'implied-context',  # TODO
               'implied-aspect',
               'how',
               '*make*',  # FIXME output?? also yay higher order functions :/
