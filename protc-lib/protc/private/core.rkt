@@ -1,6 +1,8 @@
 ;;; core evaluation model
 #lang racket/base
 
+(require (for-syntax racket/base syntax/parse racket/syntax)
+         racket/generic)
 (module+ test
   (require rackunit))
 
@@ -101,22 +103,100 @@ earth's location which is the aspect of a proper name and thus
 --rambling--
 
 ;; naming
+;; these are essentially predicates that take a symbolic name + context and expand it to
+;; a function on the symbolization that must be provided for that name
+;; if we were to use types then the type of the first argument should be considered
+;; to be equivalent to a black box that has the name etched on it even if the
+;; the context is literally the set of all other names that point directly
+;; to a naming function in the current context
+;; functions on being names (ya types help here) must specify the aspect
+;; that is being measured and that aspect must be defined in a way that is
+;; independent of the name in question (woo circularity)
+;; NOTE also need an error function which allows equivalence under a definable erf
+;; we exploit lisp lexical scoping as a proxy for contexts
+;; requiring contexts is equivalent to expanding the context
+;; the reason why we need implementation decouple (at the module level)
+;; is so that we can refer to a name which may have multiple definitions
+;; [single counter example sufficient to prove naming functions disagree]
+;; and we use a "because I trust the vendor" or "it was labeled as such"
+;; criteria instead of "this is a fundamental scientific definition"
+;; we need this so that free variables do not have to be explicitly lifted
+;; into an outer containing function -- however, we do need types to make it work
+;; this should really be implemented in turnstile if we are using types
+;; but for now we are going to do it with lists
+
+(define-for-syntax type-being-list '())
+(define-for-syntax (add-being identifier)
+  ; use the symbol 'i-am-a-smbol rather than the syntax
+  (set! type-being-list (cons (syntax-e identifier) type-being-list)))
+
+; name is the local name for protc, it can be globalized in a number of different ways
+; use pipe syntax to include spaces in names |this is a name with spaces| 
+; you may have more than one name-function in a single module and when
+; augmented with a result storage backend or a simulation function you
+; can immediately alert if some instance causes the definitions to be incompatible
+; if more than one function is defined then only functions where all free variables
+; are defined in the current-context at runtime will be evaluated in untested will
+; be marked. the empty naming function is allowed and default behavior is to use
+; everything? as the naming function, though using nothing? is probably better
+; so as to alert people to the issue, probably need a way to continue execution
+; in the nothing case ...
+(define-syntax (define-name stx)
+  (syntax-parse stx
+    #:literals (define)
+    [(_ name:id (define (naming-function:id aspect:id ...) body:expr ...) ...)
+     #:do ((add-being #'name))
+     #:with predicate? (format-id #'name
+                                 #:source #'name
+                                 "~a?"
+                                 (syntax-e #'name))
+     #:with ((aspect-value ...) ...) (map (λ (a) (format-id a
+                                                  #:source a
+                                                  "~a-value"
+                                                  (syntax-e a)))
+                                    #'((aspect ...) ...)
+                                    )
+     #'(begin
+         (define (naming-function aspect ...) body ...) ...
+         (define (predicate? thing)
+           ; this way of defining a predicate is NOT indended for
+           ; rendering as a protocol, because there is no ordering
+           ; nor anything else, need to deal with that elsewhere
+           ; when I ask predicate? during definition measure needs
+           ; to return a representation for export and runtime
+           (define aspect-value (measure thing aspect)) ... ...
+           (and (naming-function aspect-value ...) ...)))]))
+
+(module+ test
+  (define-name mouse
+    (define (m1 rna-seq-mammal-16s-equivalent)
+      (contains? rna-seql-mammal-16s-equivalent "i am a mouse")))
+  (mouse? "hohoh")
+  )
 
 (define universal-context (context '((category . '(member-1 member-2))) ))
 
-(define bound-in-context? thing context
+(define (bound-in-context? thing context)
   ""
-  this is a measurement function which must actually be true whether or
+  ; this is a measurement function which must actually be true whether or
   )
+
+(define (any lst)
+  (for/or ([l lst]) l))
+
+(define (already-bound? thing)
+  ; not in any known alist TODO
+  #f)
 
 (define (make-proper-name categorical-name [current-context universal-context])
   (λ (thing)
     (and (categorical-name thing)
          ; not already named <- this shit is hard
          (not (bound-in-context? thing current-context))
-         (not (any (map (λ (proper-name) (already-bound thing)) proper-names)))
+         (not (any (map (λ (proper-name) (already-bound? thing)) (proper-names current-context))))
          (context ))))
 
+#;
 (define-syntax (proper-name stx)
   (syntax-parse stx
     [(_ name:id context-definition:sc-context ...)
@@ -133,6 +213,15 @@ earth's location which is the aspect of a proper name and thus
     "Is this anything? Yep!"
     #t)
   (check-true (anything "asdf" null))
+
+  (define (existence? [black-box] [black-box-complement])
+    "accepts on anything including the null set but it cannot distinguish between
+     arguments that cannot be expressed symbolically and reduces all of them to the
+     empty set"
+    #t)
+  (check-true (existence?))
+  (check-true (existence? null null))
+  (check-true (existence? "thing" "context"))
 
   (define (my-name black-box black-box-complement)
     ; categorical criteria
@@ -153,8 +242,8 @@ earth's location which is the aspect of a proper name and thus
 (define-syntax (categorical-name stx)
   "criteria"
   (syntax-parse stx
-    [(_ name:id)
-     #'(define name )]))
+    [(_ (thing) more)
+     #'"we catually make something"]))
 
 (define-syntax (cat-name stx)
   (syntax-parse stx
@@ -163,11 +252,10 @@ earth's location which is the aspect of a proper name and thus
 
 (define (rank-dimension dimension . black-boxs)
   ; for each
-  (let* ([black-box-aspect-pair (car black-box-aspect-pairs)]
-         []
-         ) )
-  )
-
+  ;(let* ([black-box-aspect-pair (car black-box-aspect-pairs)])
+  (let* ([black-box-aspect-pair '(lololololol)])
+    "TODO"
+    ))
 (define (read-bound-symbol black-box)
   "If there is a symbol on the black box then you can read it."
   )
@@ -179,8 +267,15 @@ earth's location which is the aspect of a proper name and thus
   )
 
 ;; contexts
-(struct context (category-alist) #:inspect (make-inspector))
+(define-generics gen-context
+  (proper-names gen-context))
+(struct context (category-alist) #:inspector (make-inspector)
+  #:methods gen:gen-context
+  [(define (proper-names context) '(thing1 thing2 thing3 ...))])
 
+(define get-current-context (make-parameter "TODO"))
+
+#; ; yunowork
 (define (categorical->proper categorical-name)
   ; TODO
   "obtain the proper name of the instance of a categorical name in the current context
@@ -193,7 +288,9 @@ earth's location which is the aspect of a proper name and thus
     )
   )
 
-(define (categorical->many-proper))
+(define (categorical->many-proper categorical-name context)
+  "get all proper names in the current context that correspond to a categorical name
+   NOTE: need to implement cat->super-cat")
 
 ;; aspects
 
@@ -201,9 +298,26 @@ earth's location which is the aspect of a proper name and thus
   ; TODO do dimensional analysis via rosette
   1)
 
-(define (actualizable?)
+(define (actualizable? aspect)
   ; TODO
   (aspect->dimension aspect))
+
+(define (categorical? name)
+  "FXIME not even close to right"
+  #t)
+
+(define (proper? name)
+  "FXIME not even close to right"
+  #t)
+
+(define (proper->categorical name)
+  "get the category of a peroper name aka go up a level"
+  ; TODO
+  'lol)
+
+(define (vector-aspect? thing)
+  ; fixme clearly wrong
+  (list? thing))
 
 (define (scalarizable? aspect name)
   "do we know how to uniquely scalarize this aspect for this name"
@@ -233,7 +347,8 @@ earth's location which is the aspect of a proper name and thus
     ; lengths
     ; https://en.wikipedia.org/wiki/List_of_finite_spherical_symmetry_groups spheres require 6???
     (if (vector-aspect? aspect)
-        )))
+        'yay!
+        'nooooooooooooooo!)))
 
 (define (aspect->unit aspect)
   "Given an aspect returns the unitization from the preferred system of units.
@@ -272,6 +387,10 @@ earth's location which is the aspect of a proper name and thus
 ;; in the language (should be possible to do this anyway ...)
 
 ;; quantified
+
+(define count-listener (make-parameter "TODO"))
+(define get-count-listener (make-parameter "TODO 2"))
+(define data-backed (make-parameter get-data-backend))
 
 (define (*count categorical-name enclosing-black-box #:implicit [implicit #f])
   "this is one of three fundamental functions mapping from being to symbol"
@@ -420,8 +539,10 @@ earth's location which is the aspect of a proper name and thus
   ; and it needs to be able to obtain the categorical name for each proper name. Probably.
 
   (define (runtime-*rank)
+    void
     )
   )
 (define (*rank-vector scalar-aspect projection-rule . proper-names)
+  void
   )
 
