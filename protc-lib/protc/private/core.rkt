@@ -2,7 +2,10 @@
 #lang racket/base
 
 (require (for-syntax racket/base syntax/parse racket/syntax)
-         racket/generic)
+         racket/generic
+         racket/bytes
+         syntax/srcloc
+         )
 (module+ test
   (require rackunit))
 
@@ -150,12 +153,13 @@ earth's location which is the aspect of a proper name and thus
                                  #:source #'name
                                  "~a?"
                                  (syntax-e #'name))
-     #:with ((aspect-value ...) ...) (map (λ (a) (format-id a
+     #:with ((aspect-value ...) ...) (map (λ (a)
+                                            ;(println a)
+                                            (format-id a
                                                   #:source a
                                                   "~a-value"
                                                   (syntax-e a)))
-                                    #'((aspect ...) ...)
-                                    )
+                                          (syntax->list #'(aspect ... ...)))
      #'(begin
          (define (naming-function aspect ...) body ...) ...
          (define (predicate? thing)
@@ -168,13 +172,17 @@ earth's location which is the aspect of a proper name and thus
            (and (naming-function aspect-value ...) ...)))]))
 
 (module+ test
+  (define (contains? thing value) #f)
+  (define-name thing)
+  (define-name thing2 (define (nf a b) #f) (define (nf2 c d) #f))  ; wtf
+  (define-name thing2 (define (nf)))
   (define-name mouse
     (define (m1 rna-seq-mammal-16s-equivalent)
       (contains? rna-seql-mammal-16s-equivalent "i am a mouse")))
   (mouse? "hohoh")
   )
 
-(define universal-context (context '((category . '(member-1 member-2))) ))
+(define universal-context (context '((category . '(member-1 member-2))) (execution (make-execution-id))))
 
 (define (bound-in-context? thing context)
   ""
@@ -266,27 +274,48 @@ earth's location which is the aspect of a proper name and thus
   ""
   )
 
+;; execution
+; TODO consistent rules for constructing names
+; FIXME horrible design here
+(define (get-current-executor)
+  "This is overseer stuff ... esp due to possibility for multiple users"
+  ; TODO
+  "unknown"
+  )
+(define (make-execution-id)
+  ; FIXME horrible way to do these, maybe uuid better, maybe not
+  (define hrm (format "~a|~a|~a"
+                      (current-milliseconds)
+                      (source-location-source #'woo)
+                      (get-current-executor)))
+  (println hrm)
+  (sha256-bytes (string->bytes/utf-8 hrm)
+   ))
+
+(struct execution (proper-name) #:inspector (make-inspector))
+
 ;; contexts
 (define-generics gen-context
-  (proper-names gen-context))
-(struct context (category-alist) #:inspector (make-inspector)
+  (proper-names gen-context)
+  (categorical-names gen-context))
+(struct context (category-alist execution) #:inspector (make-inspector)
   #:methods gen:gen-context
-  [(define (proper-names context) '(thing1 thing2 thing3 ...))])
-
-(define get-current-context (make-parameter "TODO"))
-
-#; ; yunowork
-(define (categorical->proper categorical-name)
   ; TODO
+  [(define (proper-names context) '(thing1 thing2 thing3 ...))
+   (define (categorical-names context) #hash((cat1 . '(thing thing2 ...))
+                                             (cat2 . '(thing3 ...))))
+   ])
+
+(define (categorical->proper categorical-name)
+  ; TODO FIXME want to use module scope + name type for this ...
   "obtain the proper name of the instance of a categorical name in the current context
    fails if there is more than one matching proper name in the current context
    this is a type -> token or type -> instance lookup"
   (parameterize ([current-context (get-current-context)])
-    (let ([members (category-members category current-context)])
-      (if (> 1 (length members)))
-      )
-    )
-  )
+    (let ([members (hash-ref (categorical-names current-context) categorical-name)])
+      (if (> 1 (length members))
+          (error "U WOT M8")
+          (car members)))))
 
 (define (categorical->many-proper categorical-name context)
   "get all proper names in the current context that correspond to a categorical name
@@ -389,8 +418,28 @@ earth's location which is the aspect of a proper name and thus
 ;; quantified
 
 (define count-listener (make-parameter "TODO"))
-(define get-count-listener (make-parameter "TODO 2"))
-(define data-backed (make-parameter get-data-backend))
+(define current-context (make-parameter "TODO 2"))
+(define data-backend (make-parameter (λ (arg) (λ (aarg) (format "~a not implemented" arg)))))
+
+(define (simple-data-store arg)
+  (define store '((empty record)))
+  (define (add record) (set! store (cons record store)))
+  (cond [(eq? arg 'add) add]
+        [else (λ (x) "WHAT HAVE YOU DONE!?")]))
+
+(define (get-data-backend)
+  ; TODO
+  simple-data-store)
+
+
+(define (get-current-context)
+  ; TODO really we just want this to be the namespace of the current module
+  universal-context)
+
+(define (get-count-listener)
+  ; TODO what to listen on for input
+  ; be it a form or an input line etc.
+  read-line)
 
 (define (*count categorical-name enclosing-black-box #:implicit [implicit #f])
   "this is one of three fundamental functions mapping from being to symbol"
@@ -417,7 +466,7 @@ earth's location which is the aspect of a proper name and thus
           (execution-proper-name (context-execution current-context)))
         (define record (list protocol-execution-proper-name proper-name categorical-name value))
         ; we can then run (categorical-name->unit categorical-name proper-name) after the fact
-        (send data-backend add record))))
+        ((data-backend 'add) record))))
   runtime-*count)
 
 ;; unquantified
@@ -454,6 +503,10 @@ earth's location which is the aspect of a proper name and thus
   ; for its substrates (clearly a confusing word choice here)
   (void))
 
+(define (bbcons . black-boxes)
+  "black box constructor can be treated as a spatiotemporal union sort of"
+  void)
+
 (define (substrate-count aspect proper-name)
   "the substrate is quantifying something but we don't have direct access to the units"
   ; even if we can't directly symbolize the scalar unit
@@ -473,9 +526,11 @@ earth's location which is the aspect of a proper name and thus
   ; is a simple way to indicate that we really aren't counting anything in the world
   ; directly, and that the projection actually opperates in the opposite direction
 
+  (define executor (get-current-executor))  ; TODO FIXME
   (define sensory-modality
     ; from the implementation of the protocol, or the prov
-    (context-lookup 'sensory-modality current-context))
+    ; FIXME TODO
+    (hash-ref (context-category-alist current-context) 'sensory-modality))
 
   (define unknown-that-executor-is-counting
     (categorical-name (thing)  ; really categorical name is just lambda here
@@ -501,8 +556,8 @@ earth's location which is the aspect of a proper name and thus
   (define-unit  ; temporary
     sensory-unit
     aspect
-    (format "unit of %a without a known symbolization where 1 sensory-unit
-             corresponds to exactly 1 %a" aspect unknown-that-executor-is-counting))
+    (format "unit of ~a without a known symbolization where 1 sensory-unit
+             corresponds to exactly 1 ~a" aspect unknown-that-executor-is-counting))
 
   #; ; old
   ((project-unit-onto-being-subset substrate-unit)
@@ -515,22 +570,44 @@ earth's location which is the aspect of a proper name and thus
    (*count projected-substrate-unit executor #:implicit #t)))
 
 ;; comparators
+(define equality-listener (make-parameter (λ () null)))
+(define greater-than-listener (make-parameter (λ () null)))
+(define less-than-listener (make-parameter (λ () null)))
+(define (get-equality-listener)
+  ; TODO what to listen on for input
+  ; be it a form or an input line etc.
+  read-line)
+(define (get-less-than-listener)
+  ; TODO what to listen on for input
+  ; be it a form or an input line etc.
+  read-line)
+(define (get-greater-than-listener)
+  ; TODO what to listen on for input
+  ; be it a form or an input line etc.
+  read-line)
+
 (define (*< aspect pn-1 pn-2)
   "unquantified less-than"
   ; any aspect here needs to be scalarizable for both proper names
-  (not (*= aspect pn-1 pn-2))
-  )
+  (define runtime-*= (*= aspect pn-1 pn-2))
+  (define (runtime-*<)
+    (parameterize ([less-than-listener (get-less-than-listener)])
+      (and (not (runtime-*=)) (less-than-listener))))
+  runtime-*<)
 (define (*> aspect pn-1 pn-2)
   "unquantified greater-than"
-  (not )
-  )
+  (define runtime-*= (*= aspect pn-1 pn-2))
+  (define (runtime-*>)
+    (parameterize ([greater-than-listener (get-less-than-listener)])
+      (and (not (runtime-*=)) (greater-than-listener))))
+  runtime-*>)
 
 (define (*= aspect pn-1 pn-2)
   "unquantified equality"
-  (s)
   (define (runtime-*=)
-    (parameterize ([equal-listener (get-unq-equal-listener)])))
-  )
+    (parameterize ([equality-listener (get-equality-listener)])
+      (equality-listener)))
+  runtime-*=)
 
 (define (*rank scalar-aspect . proper-names)
   ; At compile time this function should be able to read the specs for the proper names
@@ -541,6 +618,7 @@ earth's location which is the aspect of a proper name and thus
   (define (runtime-*rank)
     void
     )
+  runtime-*rank
   )
 (define (*rank-vector scalar-aspect projection-rule . proper-names)
   void
