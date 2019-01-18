@@ -151,7 +151,7 @@ earth's location which is the aspect of a proper name and thus
 ; in the nothing case ...
 
 (define-for-syntax (make-value name)
-  (println name)
+  ;(println name)
   (format-id name
              #:source name
              "~a-value"
@@ -171,7 +171,7 @@ earth's location which is the aspect of a proper name and thus
                                                       (syntax-e a)))
                                           (syntax->list #'(aspect ... ...)))
      (let ([out #'(list aspect-value ... ...)])
-       (pretty-print (syntax->datum out))
+       ;(pretty-print (syntax->datum out))
        out
        )
      ]))
@@ -197,10 +197,10 @@ earth's location which is the aspect of a proper name and thus
 
 (define-syntax (define-name stx)
   (syntax-parse stx
-    #:literals (define)
+    #:datum-literals (on-aspect)
     ; FIXME aspect isn't just an id, it is id for scalar, but (:: a-1 a-2) for vector
-    [(_ name:id (define (naming-function:id aspect:id ...) body:expr ...) ...)
-     #:do ((add-being #'name) (displayln (~a "type-being-list:" type-being-list)))
+    [(_ name:id (on-aspect (aspect:id ...) body:expr ...) ...)
+     #:do ((add-being #'name) #;(displayln (~a "type-being-list:" type-being-list)))
      #:with predicate? (format-id #'name
                                   #:source #'name
                                   "~a?"
@@ -210,11 +210,12 @@ earth's location which is the aspect of a proper name and thus
      #:with ((aspect-value ...) ...) (map (λ (sl) (map make-value sl))
                                           (map syntax->list
                                                (syntax-e #'((aspect ...) ...))))
-     #:do ((displayln (~a "aspect-value:" (syntax-e #'(aspect-value ... ...)))))
+     #:with (naming-function-temp ...) (generate-temporaries #'((aspect ...) ...))
+     ;#:do ((displayln (~a "aspect-value:" (syntax-e #'(aspect-value ... ...)))))
      (let ([out #'(begin
                     (~@
-                     (provide (contract-out [naming-function (any . -> . boolean?)])) ; TODO any should be name? I think
-                     (define (naming-function aspect ...) body ...)) ...
+                     (provide (contract-out [naming-function-temp (any . -> . boolean?)])) ; TODO any should be name? I think
+                     (define (naming-function-temp aspect ...) body ...)) ...
                     (define (predicate? thing)
                       ; this way of defining a predicate is NOT indended for
                       ; rendering as a protocol, because there is no ordering
@@ -222,22 +223,28 @@ earth's location which is the aspect of a proper name and thus
                       ; when I ask predicate? during definition measure needs
                       ; to return a representation for export and runtime
                       (define aspect-value (measure thing aspect)) ... ...
-                      (and (naming-function aspect-value ...) ...)))])
-       (pretty-print (syntax->datum out))
+                      (and (naming-function-temp aspect-value ...) ...)))])
+       #;(pretty-print (syntax->datum out))
        out)]))
 
 (module+ test
+  (require "aspects.rkt")
   (define (contains? thing value) #f)
   (define-name thing)
-  (define-name hrm (define (nn a) "a body"))
+  (define-name hrm (on-aspect (a) "a body"))
   (define-name thing2
-    (define (nf a b) #f)
-    (define (nf2 c d) #f))  ; wtf
-  (define-name thing3 (define (nf3) 'very-good))
+    (on-aspect (a b) #f)
+    (on-aspect (nf2 c d) #f))  ; wtf
+  (define-name thing3 (on-aspect (asp) 'very-good))
   (thing3? "test")
+  (define-aspect mam16se rna-seq-mammal-16s-equivalent
+    "a genomic sequence that exists in all mammals that can be used to anchor primers whose
+     contents can be used to determine which species the dna came from e.g. something like
+     https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3865308/")
+  (rna-seq-mammal-16s-equivalent)
   (define-name mouse
-    (define (m1 rna-seq-mammal-16s-equivalent)
-      (contains? rna-seql-mammal-16s-equivalent "i am a mouse")))
+    (on-aspect (rna-seq-mammal-16s-equivalent)
+      (contains? rna-seq-mammal-16s-equivalent "i am a mouse")))
   (mouse? "hohoh")
   )
 
@@ -290,6 +297,7 @@ earth's location which is the aspect of a proper name and thus
   (check-true (existence? null null))
   (check-true (existence? "thing" "context"))
 
+  #;
   (define (my-name black-box black-box-complement)
     ; categorical criteria
     ; literally has a symbol attached to it criteria
