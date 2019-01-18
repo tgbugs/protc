@@ -248,6 +248,54 @@ earth's location which is the aspect of a proper name and thus
   (mouse? "hohoh")
   )
 
+;; execution
+; TODO consistent rules for constructing names
+; FIXME horrible design here
+(define (get-current-executor)
+  "This is overseer stuff ... esp due to possibility for multiple users"
+  ; TODO
+  "unknown"
+  )
+(define (make-execution-id)
+  ; FIXME horrible way to do these, maybe uuid better, maybe not
+  (define hrm (format "~a|~a|~a"
+                      (current-milliseconds)
+                      (source-location-source #'woo)
+                      (get-current-executor)))
+  (println hrm)
+  (sha256-bytes (string->bytes/utf-8 hrm)
+                ))
+
+(struct execution (proper-name) #:inspector (make-inspector))
+
+;; contexts
+(define-generics gen-context
+  (proper-names gen-context)
+  (categorical-names gen-context))
+(struct context (category-alist execution) #:inspector (make-inspector)
+  #:methods gen:gen-context
+  ; TODO
+  [(define (proper-names context) '(thing1 thing2 thing3 ...))
+   (define (categorical-names context) #hash((cat1 . '(thing thing2 ...))
+                                             (cat2 . '(thing3 ...))))
+   ])
+
+(define (categorical->proper categorical-name)
+  ; TODO FIXME want to use module scope + name type for this ...
+  "obtain the proper name of the instance of a categorical name in the current context
+   fails if there is more than one matching proper name in the current context
+   this is a type -> token or type -> instance lookup"
+  (parameterize ([current-context (get-current-context)])
+    (let ([members (hash-ref (categorical-names current-context) categorical-name)])
+      (if (> 1 (length members))
+          (error "U WOT M8")
+          (car members)))))
+
+(define (categorical->many-proper categorical-name context)
+  "get all proper names in the current context that correspond to a categorical name
+   NOTE: need to implement cat->super-cat")
+
+
 (define universal-context (context '((category . '(member-1 member-2))) (execution (make-execution-id))))
 
 (define (bound-in-context? thing context)
@@ -262,6 +310,7 @@ earth's location which is the aspect of a proper name and thus
   ; not in any known alist TODO
   #f)
 
+#;
 (define (make-proper-name categorical-name [current-context universal-context])
   (λ (thing)
     (and (categorical-name thing)
@@ -340,53 +389,6 @@ earth's location which is the aspect of a proper name and thus
 (define (count-categorical black-box-component)
   ""
   )
-
-;; execution
-; TODO consistent rules for constructing names
-; FIXME horrible design here
-(define (get-current-executor)
-  "This is overseer stuff ... esp due to possibility for multiple users"
-  ; TODO
-  "unknown"
-  )
-(define (make-execution-id)
-  ; FIXME horrible way to do these, maybe uuid better, maybe not
-  (define hrm (format "~a|~a|~a"
-                      (current-milliseconds)
-                      (source-location-source #'woo)
-                      (get-current-executor)))
-  (println hrm)
-  (sha256-bytes (string->bytes/utf-8 hrm)
-                ))
-
-(struct execution (proper-name) #:inspector (make-inspector))
-
-;; contexts
-(define-generics gen-context
-  (proper-names gen-context)
-  (categorical-names gen-context))
-(struct context (category-alist execution) #:inspector (make-inspector)
-  #:methods gen:gen-context
-  ; TODO
-  [(define (proper-names context) '(thing1 thing2 thing3 ...))
-   (define (categorical-names context) #hash((cat1 . '(thing thing2 ...))
-                                             (cat2 . '(thing3 ...))))
-   ])
-
-(define (categorical->proper categorical-name)
-  ; TODO FIXME want to use module scope + name type for this ...
-  "obtain the proper name of the instance of a categorical name in the current context
-   fails if there is more than one matching proper name in the current context
-   this is a type -> token or type -> instance lookup"
-  (parameterize ([current-context (get-current-context)])
-    (let ([members (hash-ref (categorical-names current-context) categorical-name)])
-      (if (> 1 (length members))
-          (error "U WOT M8")
-          (car members)))))
-
-(define (categorical->many-proper categorical-name context)
-  "get all proper names in the current context that correspond to a categorical name
-   NOTE: need to implement cat->super-cat")
 
 ;; aspects
 
