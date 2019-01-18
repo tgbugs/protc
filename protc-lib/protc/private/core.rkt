@@ -10,6 +10,7 @@
          racket/generic
          racket/bytes
          syntax/srcloc
+         "utils.rkt"
          )
 (module+ test
   (require rackunit))
@@ -75,6 +76,8 @@
 (define (make-context))
 
 ;;; primer on proper names
+#;
+(
 #<<--rambling--
 
 Conceptually this should construct a function that when given some black box
@@ -109,7 +112,7 @@ traditionally on their location in the sky, since that depends on
 earth's location which is the aspect of a proper name and thus
 
 --rambling--
-
+)
 ;; naming
 ;; these are essentially predicates that take a symbolic name + context and expand it to
 ;; a function on the symbolization that must be provided for that name
@@ -190,32 +193,39 @@ earth's location which is the aspect of a proper name and thus
   "atomic measure"
   (syntax-parse stx
     [(_ being:id aspect:id)
-     #''(lookup the spec for measuring that aspect for that thing if there is one)
-     ]
-    )
-  )
+     #:with aspect-name (datum->syntax #'aspect (symbol->string (syntax-e #'aspect)))
+     #'(list (if-defined aspect
+                         aspect
+                         (begin (println (format "WARNING: aspect ~a is not defined" aspect-name)) null)
+                         ) "lookup the spec for measuring that aspect for that thing if there is one")
+     ]))
 
 (define-syntax (define-name stx)
   (syntax-parse stx
     #:datum-literals (on-aspect)
+    #:literals (any/c)
     ; FIXME aspect isn't just an id, it is id for scalar, but (:: a-1 a-2) for vector
-    [(_ name:id (on-aspect (aspect:id ...) body:expr ...) ...)
+    [(_ name:id (~optional doc:string) (on-aspect (aspect:id ...) body:expr ...) ...)
      #:do ((add-being #'name) #;(displayln (~a "type-being-list:" type-being-list)))
      #:with predicate? (format-id #'name
                                   #:source #'name
                                   "~a?"
                                   (syntax-e #'name))
-     ; problem is in here somehow
-
      #:with ((aspect-value ...) ...) (map (λ (sl) (map make-value sl))
+                                          (map syntax->list
+                                               (syntax-e #'((aspect ...) ...))))
+     #:with ((args-contract ...) ...) (map (λ (sl) (map (λ (s) #'any/c) sl))
                                           (map syntax->list
                                                (syntax-e #'((aspect ...) ...))))
      #:with (naming-function-temp ...) (generate-temporaries #'((aspect ...) ...))
      ;#:do ((displayln (~a "aspect-value:" (syntax-e #'(aspect-value ... ...)))))
      (let ([out #'(begin
                     (~@
-                     (provide (contract-out [naming-function-temp (any . -> . boolean?)])) ; TODO any should be name? I think
-                     (define (naming-function-temp aspect ...) body ...)) ...
+                     ; TODO any/c should be name?
+                     (define/contract (naming-function-temp aspect ...)
+                       (args-contract ... . -> . boolean?)
+                       body ...)
+                     ) ...
                     (define (predicate? thing)
                       ; this way of defining a predicate is NOT indended for
                       ; rendering as a protocol, because there is no ordering
@@ -223,30 +233,60 @@ earth's location which is the aspect of a proper name and thus
                       ; when I ask predicate? during definition measure needs
                       ; to return a representation for export and runtime
                       (define aspect-value (measure thing aspect)) ... ...
+                      ; TODO using and here is incorrect
+                      ; have to introspect the body of the naming function
+                      ; to determine if it is applicable in the current context
+                      ; warn on missing aspects, etc
                       (and (naming-function-temp aspect-value ...) ...)))])
-       #;(pretty-print (syntax->datum out))
+       (pretty-print (syntax->datum out))
        out)]))
 
 (module+ test
   (require "aspects.rkt")
   (define (contains? thing value) #f)
   (define-name thing)
+  ;(thing?)  ; fails, but do we want it to? yes probably
+  (thing? "yes")
   (define-name hrm (on-aspect (a) "a body"))
   (define-name thing2
     (on-aspect (a b) #f)
     (on-aspect (nf2 c d) #f))  ; wtf
-  (define-name thing3 (on-aspect (asp) 'very-good))
+  ;(define-name thing3 (on-aspect (asp) 'very-good))  ; fails as expected
+  (define-name thing3 (on-aspect (asp) #f))
   (thing3? "test")
   (define-aspect mam16se rna-seq-mammal-16s-equivalent
     "a genomic sequence that exists in all mammals that can be used to anchor primers whose
      contents can be used to determine which species the dna came from e.g. something like
      https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3865308/")
-  (rna-seq-mammal-16s-equivalent)
+  ;(rna-seq-mammal-16s-equivalent)
+  ; at this point we only need to know that the aspect is known
+  ; and when this stuff is imported it should be looking up aspects
+  ; in the top level environment, even when it does whether there is
+  ; actual documentation for what the aspect means in that context
+  ; is checked by this part of the code (which is in the overseer/orchstrator/conductor?)
+  ; that is checked beforehand at the time the protocol is written
+  ; and that will compile down to this even deeper representation
+  ; ALTERNATELY we can do all the checking down here
+  ; the values returned by (measure thing aspect) probably need restrictions??
   (define-name mouse
     (on-aspect (rna-seq-mammal-16s-equivalent)
       (contains? rna-seq-mammal-16s-equivalent "i am a mouse")))
   (mouse? "hohoh")
-  )
+  (define-name bad-glass
+    "a bad definition for glass"
+    (on-aspect (transparency solidity)
+               ; FIXME should this actually have to be defined on units?
+               ; or if it is not then an implicit threhold function is implied?
+               ; the problem here is that you want to know in context what
+               ; type of value is expected for each aspect, which is why
+               ; requiring the aspect to be defined is important, since
+               ; measure aspect's results will depend on that :/
+               ; the actual logic here cannot operate on dimensional aspects
+               ; since a change in default units can completely change the acceptance criteria
+               (and transparency solidity))
+    #; ; predicate aspects vs something else
+    (on-aspect (transparent solid)
+               (and transparent solid))))
 
 ;; execution
 ; TODO consistent rules for constructing names
