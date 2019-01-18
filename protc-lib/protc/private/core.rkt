@@ -1,7 +1,12 @@
 ;;; core evaluation model
 #lang racket/base
 
-(require (for-syntax racket/base syntax/parse racket/syntax)
+(require (for-syntax racket/base
+                     syntax/parse
+                     racket/pretty
+                     racket/format
+                     racket/syntax)
+         racket/contract
          racket/generic
          racket/bytes
          syntax/srcloc
@@ -44,7 +49,7 @@
 ;; unit
 
 (module+ test
-  (define-black-box )
+  ;(define-black-box )
   ; processs for verifying that an agent has a ruler
   ; given the dpi of the attached screen
   ; render a line of random known lenght and ask them
@@ -144,38 +149,92 @@ earth's location which is the aspect of a proper name and thus
 ; everything? as the naming function, though using nothing? is probably better
 ; so as to alert people to the issue, probably need a way to continue execution
 ; in the nothing case ...
-(define-syntax (define-name stx)
+
+(define-for-syntax (make-value name)
+  (println name)
+  (format-id name
+             #:source name
+             "~a-value"
+             (syntax-e name)))
+(define-syntax (test-help stx)
   (syntax-parse stx
     #:literals (define)
     [(_ name:id (define (naming-function:id aspect:id ...) body:expr ...) ...)
-     #:do ((add-being #'name))
-     #:with predicate? (format-id #'name
-                                 #:source #'name
-                                 "~a?"
-                                 (syntax-e #'name))
-     #:with ((aspect-value ...) ...) (map (λ (a)
-                                            ;(println a)
-                                            (format-id a
-                                                  #:source a
-                                                  "~a-value"
-                                                  (syntax-e a)))
+     ;#:with ((aspect-value ...) ...) #'((aspect ...) ...)
+     #:with ((aspect-value ...) ...) (map (λ (sl) (map make-value sl))
+                                          (map syntax->list
+                                               (syntax-e #'((aspect ...) ...))))
+     #;
+     (map (λ (a) (format-id a
+                                                      #:source a
+                                                      "~a?"
+                                                      (syntax-e a)))
                                           (syntax->list #'(aspect ... ...)))
-     #'(begin
-         (define (naming-function aspect ...) body ...) ...
-         (define (predicate? thing)
-           ; this way of defining a predicate is NOT indended for
-           ; rendering as a protocol, because there is no ordering
-           ; nor anything else, need to deal with that elsewhere
-           ; when I ask predicate? during definition measure needs
-           ; to return a representation for export and runtime
-           (define aspect-value (measure thing aspect)) ... ...
-           (and (naming-function aspect-value ...) ...)))]))
+     (let ([out #'(list aspect-value ... ...)])
+       (pretty-print (syntax->datum out))
+       out
+       )
+     ]))
+#;
+(module+ test
+  (test-help name-1)
+  ;(test-help name-2 (define))  should fail
+  (test-help name-3
+             (define (nf-1 a-1 a-2))
+             (define (nf-2 a-3 a-4)))
+  (test-help name-2 (define (nf a-1 a-2)))
+  (test-help name-2 (define (nf a-1)))
+  (test-help hrm (define (nn a))))
+
+(define-syntax (measure stx)
+  "atomic measure"
+  (syntax-parse stx
+    [(_ being:id aspect:id)
+     #''(lookup the spec for measuring that aspect for that thing if there is one)
+     ]
+    )
+  )
+
+(define-syntax (define-name stx)
+  (syntax-parse stx
+    #:literals (define)
+    ; FIXME aspect isn't just an id, it is id for scalar, but (:: a-1 a-2) for vector
+    [(_ name:id (define (naming-function:id aspect:id ...) body:expr ...) ...)
+     #:do ((add-being #'name) (displayln (~a "type-being-list:" type-being-list)))
+     #:with predicate? (format-id #'name
+                                  #:source #'name
+                                  "~a?"
+                                  (syntax-e #'name))
+     ; problem is in here somehow
+
+     #:with ((aspect-value ...) ...) (map (λ (sl) (map make-value sl))
+                                          (map syntax->list
+                                               (syntax-e #'((aspect ...) ...))))
+     #:do ((displayln (~a "aspect-value:" (syntax-e #'(aspect-value ... ...)))))
+     (let ([out #'(begin
+                    (~@
+                     (provide (contract-out [naming-function (any . -> . boolean?)])) ; TODO any should be name? I think
+                     (define (naming-function aspect ...) body ...)) ...
+                    (define (predicate? thing)
+                      ; this way of defining a predicate is NOT indended for
+                      ; rendering as a protocol, because there is no ordering
+                      ; nor anything else, need to deal with that elsewhere
+                      ; when I ask predicate? during definition measure needs
+                      ; to return a representation for export and runtime
+                      (define aspect-value (measure thing aspect)) ... ...
+                      (and (naming-function aspect-value ...) ...)))])
+       (pretty-print (syntax->datum out))
+       out)]))
 
 (module+ test
   (define (contains? thing value) #f)
   (define-name thing)
-  (define-name thing2 (define (nf a b) #f) (define (nf2 c d) #f))  ; wtf
-  (define-name thing2 (define (nf)))
+  (define-name hrm (define (nn a) "a body"))
+  (define-name thing2
+    (define (nf a b) #f)
+    (define (nf2 c d) #f))  ; wtf
+  (define-name thing3 (define (nf3) 'very-good))
+  (thing3? "test")
   (define-name mouse
     (define (m1 rna-seq-mammal-16s-equivalent)
       (contains? rna-seql-mammal-16s-equivalent "i am a mouse")))
@@ -222,7 +281,7 @@ earth's location which is the aspect of a proper name and thus
     #t)
   (check-true (anything "asdf" null))
 
-  (define (existence? [black-box] [black-box-complement])
+  (define (existence? [black-box null] [black-box-complement null])
     "accepts on anything including the null set but it cannot distinguish between
      arguments that cannot be expressed symbolically and reduces all of them to the
      empty set"
@@ -290,7 +349,7 @@ earth's location which is the aspect of a proper name and thus
                       (get-current-executor)))
   (println hrm)
   (sha256-bytes (string->bytes/utf-8 hrm)
-   ))
+                ))
 
 (struct execution (proper-name) #:inspector (make-inspector))
 
