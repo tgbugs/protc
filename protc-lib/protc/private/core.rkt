@@ -200,13 +200,16 @@ earth's location which is the aspect of a proper name and thus
                          ) "lookup the spec for measuring that aspect for that thing if there is one")
      ]))
 
+(struct name-data (name-string) #:transparent)
+
 (define-syntax (define-name stx)
   (syntax-parse stx
     #:datum-literals (on-aspect)
-    #:literals (any/c)
+    #:literals (any/c name-data)
     ; FIXME aspect isn't just an id, it is id for scalar, but (:: a-1 a-2) for vector
     [(_ name:id (~optional doc:string) (on-aspect (aspect:id ...) body:expr ...) ...)
      #:do ((add-being #'name) #;(displayln (~a "type-being-list:" type-being-list)))
+     #:with name-string (datum->syntax #'name (symbol->string (syntax-e #'name)))
      #:with predicate? (format-id #'name
                                   #:source #'name
                                   "~a?"
@@ -220,13 +223,18 @@ earth's location which is the aspect of a proper name and thus
      #:with (naming-function-temp ...) (generate-temporaries #'((aspect ...) ...))
      ;#:do ((displayln (~a "aspect-value:" (syntax-e #'(aspect-value ... ...)))))
      (let ([out #'(begin
+                    (define name (name-data name-string))
                     (~@
                      ; TODO any/c should be name?
                      (define/contract (naming-function-temp aspect ...)
                        (args-contract ... . -> . boolean?)
                        ; FIXME body not sufficiently expressive?
                        ; or do we just use other predicates as free variables?
-                       body ...)
+                       (let ([thing name])
+                         ; allows body to pass name
+                         ; have to use let due to (begin blah) issue
+                         "hello!"
+                         body ...))
                      ) ...
                     (define (predicate? thing)
                       ; this way of defining a predicate is NOT indended for
@@ -240,6 +248,7 @@ earth's location which is the aspect of a proper name and thus
                       ; to determine if it is applicable in the current context
                       ; warn on missing aspects, etc
                       (and (naming-function-temp aspect-value ...) ...)))])
+       #;
        (pretty-print (syntax->datum out))
        out)]))
 
@@ -330,7 +339,7 @@ earth's location which is the aspect of a proper name and thus
   (define-name message-received
     (on-aspect (address bytes-in-register))
     )
-  (define-name message-from-agent
+  (define-name message-from-agent-urg
     "Is the black box im communicating with the one that I think I am?"
     (on-aspect (signature content)  ; FIXME no way to differentiate the phase at which each of these is needed
                (define public-key (lookup agent public-key))  ; FIXME nasty free variables
@@ -635,21 +644,20 @@ earth's location which is the aspect of a proper name and thus
 ; if we can use the proper name to look up other data associated with it it may be possible
 ;(struct record (execution-id timestamp proper-name categorical-name value) #:transparent)
 ;(struct record (execution-id timestamp proper-name aspect value) #:transparent)
-(struct payload (protocol-version-id  ; aka hash + line number or deterministic hash on the source
-                 execution-id  ; probably need execution sub ids if executor or other changes?
-                 executor  ; for signed work need public key
-                 categorical-name
-                 proper-name  ; in a sense this could be a local proper name
-                 aspect  ; TODO ah the joys of how to deal with multiple aspects and multiple values
-                 value   ; also known as, what to do about opaque data file formats
-                 timestamp  ; from agent? that would be the agent timestamp if it has one ... debug only?
-                 aspect-agent  ; for signed work need public key
-                 aspect-impl-used
-                 inferred-prov ; this should all be coming from the protocol?
-                 measured-prov ; if you have a smart measuring device 
-                 aspect-agent-checksum
-                 aspect-agent-signed checksum
-                ) #:transparent)
+(struct denormalized (protocol-version-id  ; aka hash + line number or deterministic hash on the source
+                      execution-id  ; probably need execution sub ids if executor or other changes?
+                      executor  ; for signed work need public key
+                      categorical-name
+                      proper-name  ; in a sense this could be a local proper name
+                      aspect  ; TODO ah the joys of how to deal with multiple aspects and multiple values
+                      value   ; also known as, what to do about opaque data file formats
+                      timestamp  ; from agent? that would be the agent timestamp if it has one ... debug only?
+                      aspect-agent  ; for signed work need public key
+                      aspect-impl-used
+                      inferred-prov ; this should all be coming from the protocol?
+                      measured-prov ; if you have a smart measuring device 
+                      aspect-agent-checksum
+                      aspect-agent-signed checksum) #:transparent)
 
 (struct pn-record (execution-proper-name ; only issue with leaving out protocol-proper-name is if a change was made on the fly ...
                    agent-proper-name  ; superclass of executor which includes machines, overseer etc
@@ -675,7 +683,7 @@ earth's location which is the aspect of a proper name and thus
 (struct internal-record-e (random-measurement-id proper-name aspect execution-proper-name))
 ; approved agent for this measurement is sent random-measurement-id encrypted with public key
 ; only an agent holding the coresponding private key can send back the random measurement id
-(struct payload-e (agent-private-key-encrypted (overseer-public-key-encrypted (random-measurement-id value))))
+;(struct payload-e (agent-private-key-encrypted (overseer-public-key-encrypted (random-measurement-id value))))
 ; yes this conflates identity with encryption and is pgp thinking and has no forward secrecy
 ; the exact handling here should be tailored to the danger of what you are trying to measure
 ; most of the time the threat model is that sensors might get swapped due to line noise or something
