@@ -524,10 +524,59 @@ earth's location which is the aspect of a proper name and thus
 ;; since they are priors in the language need a representation for them
 ;; in the language (should be possible to do this anyway ...)
 
-;; quantified
+;; data store records etc.
+;; see https://docs.racket-lang.org/more/#(part._.Continuations)
+;; for how to implement these using continuations
+;; the dispatch table can allow us to transparently switch
+;; between listeners if we construct the dispatch tag in a sane way
 
-(define count-listener (make-parameter "TODO"))
-(define current-context (make-parameter "TODO 2"))
+; these aren't sufficient to map back to the full execution context I think
+; even if the execution id holds a pointer to the protocol, or maybe
+; if we can use the proper name to look up other data associated with it it may be possible
+;(struct record (execution-id timestamp proper-name categorical-name value) #:transparent)
+;(struct record (execution-id timestamp proper-name aspect value) #:transparent)
+(struct payload (protocol-version-id  ; aka hash + line number or deterministic hash on the source
+                 execution-id  ; probably need execution sub ids if executor or other changes?
+                 executor  ; for signed work need public key
+                 categorical-name
+                 proper-name  ; in a sense this could be a local proper name
+                 aspect  ; TODO ah the joys of how to deal with multiple aspects and multiple values
+                 value   ; also known as, what to do about opaque data file formats
+                 timestamp  ; from agent?
+                 aspect-agent  ; for signed work need public key
+                 aspect-impl-used
+                 inferred-prov ; this should all be coming from the protocol?
+                 measured-prov ; if you have a smart measuring device 
+                 aspect-agent-checksum
+                 aspect-agent-signed checksum
+                ) #:transparent)
+
+; file-path, file-format, and file-checksum are legitimate aspects
+; the category of proper name for that would be the whole experimental
+; setup including the actual subject of interest, but the transform below will be required
+; allowing for non black boxed aspects that depend on those things
+; is probably a good idea so that purely computational bits can be
+; treated as if they were simply any other measurement ...
+; the alternative is forcing a transformation to be defined on
+; the data file which maps its values to the 'documentation only'
+; aspects of the black box in question, so for example the average
+; membrane potential from 1 second to 1.001 seconds would be
+; lifted to the aspect representation from the data file
+; this seems inefficient in practice, but would make the documentation
+; clearer, rather than having to map the arcana that is a python script
+; that analyzes ephys files, of course sometimes we want to pretend
+; that our data doesn't correspond to names just quite yet so we use
+; the sneaky "Region Of Interest" as a proxy (huh, that's an insight ...)
+; the alternative of the transform would be a function that could translate
+; patterns of access to the data file into their fundamental "what was counted"
+; representation, allowing for the mathematical model between what was counted
+; and the actual aspect you were trying to measure to be created explicitly
+; a good example of this is be being able to account for junction potential
+; simply by having the abstract model of the circuit and observing that
+; that value is not accounted for explicitly in the protocol
+; points to the need for "filled in from future result"
+; or "calculated from first principles" the second being much easier ...
+
 (define data-backend (make-parameter (λ (arg) (λ (aarg) (format "~a not implemented" arg)))))
 
 (define (simple-data-store arg)
@@ -541,6 +590,28 @@ earth's location which is the aspect of a proper name and thus
   simple-data-store)
 
 
+
+;; listeners
+(define equality-listener (make-parameter (λ () null)))
+(define greater-than-listener (make-parameter (λ () null)))
+(define less-than-listener (make-parameter (λ () null)))
+(define (get-equality-listener)
+  ; TODO what to listen on for input
+  ; be it a form or an input line etc.
+  read-line)
+(define (get-less-than-listener)
+  ; TODO what to listen on for input
+  ; be it a form or an input line etc.
+  read-line)
+(define (get-greater-than-listener)
+  ; TODO what to listen on for input
+  ; be it a form or an input line etc.
+  read-line)
+
+
+(define count-listener (make-parameter "TODO"))
+(define current-context (make-parameter "TODO 2"))
+
 (define (get-current-context)
   ; TODO really we just want this to be the namespace of the current module
   universal-context)
@@ -549,6 +620,9 @@ earth's location which is the aspect of a proper name and thus
   ; TODO what to listen on for input
   ; be it a form or an input line etc.
   read-line)
+
+
+;; quantified
 
 (define (*count categorical-name enclosing-black-box #:implicit [implicit #f])
   "this is one of three fundamental functions mapping from being to symbol"
@@ -679,22 +753,6 @@ earth's location which is the aspect of a proper name and thus
    (*count projected-substrate-unit executor #:implicit #t)))
 
 ;; comparators
-(define equality-listener (make-parameter (λ () null)))
-(define greater-than-listener (make-parameter (λ () null)))
-(define less-than-listener (make-parameter (λ () null)))
-(define (get-equality-listener)
-  ; TODO what to listen on for input
-  ; be it a form or an input line etc.
-  read-line)
-(define (get-less-than-listener)
-  ; TODO what to listen on for input
-  ; be it a form or an input line etc.
-  read-line)
-(define (get-greater-than-listener)
-  ; TODO what to listen on for input
-  ; be it a form or an input line etc.
-  read-line)
-
 (define (*< aspect pn-1 pn-2)
   "unquantified less-than"
   ; any aspect here needs to be scalarizable for both proper names
