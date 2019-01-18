@@ -224,6 +224,8 @@ earth's location which is the aspect of a proper name and thus
                      ; TODO any/c should be name?
                      (define/contract (naming-function-temp aspect ...)
                        (args-contract ... . -> . boolean?)
+                       ; FIXME body not sufficiently expressive?
+                       ; or do we just use other predicates as free variables?
                        body ...)
                      ) ...
                     (define (predicate? thing)
@@ -272,6 +274,15 @@ earth's location which is the aspect of a proper name and thus
     (on-aspect (rna-seq-mammal-16s-equivalent)
       (contains? rna-seq-mammal-16s-equivalent "i am a mouse")))
   (mouse? "hohoh")
+  (define-name ruler
+    ; this doesn't work as well down at this level because the executor
+    ; becomes the black box that evaluates a predicate
+    ; augmenting with prov, such as "take a picture" could help, but
+    ; that is another feature
+    "the ruler should look like this"
+    (on-aspect (similar-to-picture?)
+               similar-to-picture?))
+  
   (define-name bad-glass
     "a bad definition for glass"
     (on-aspect (transparency solidity)
@@ -288,6 +299,95 @@ earth's location which is the aspect of a proper name and thus
     (on-aspect (transparent solid)
                (and transparent solid))))
 
+(module+ agent-oof
+  ; oof what a mess, reveals pretty conclusively that
+  ; define-name is not at all working the way we want it to
+  (define-name agent-bad
+    (on-aspect (public-key random-value message-received)
+               ; FIXME random value is not an aspect of the agent
+               ; but of the whole situation
+               ; furthermore the problem with this approach
+               ; is that it is hard to define processive invariants
+               ; as part of a name, there are other ways this could be encoded
+               ; such as using agent-sent-random-value-encrypted-with-public-key
+               ; but the higher level agent definition would be anything that
+               ; when sent a random (putatively secret) value encrypted with
+               ; the the public-key returned a message encrypting the random value
+               ; with the private-key such that when decrypted with the agent-public-key
+               ; and overseer-private-key the value matched the original random value
+               ; the problem is that these definitions are purely functional predicates
+               ; they can't be transactional UNLESS they make use of other naming functions
+               ))
+  (define-name agent-verification-black-box
+    (on-aspect (public-key message-received random-value)
+               ))
+  (define-name agent-verification-black-box-that-wont-leak-random-value
+    ; if these are symbolic aspects then this works just fine ... and we should switch back to define >_<
+    ; except for the issue with types :/
+    (on-aspect (agent-public-key overseer-private-key message-received random-value)
+               )
+    )
+  (define-name message-received
+    (on-aspect (address bytes-in-register))
+    )
+  (define-name message-from-agent
+    "Is the black box im communicating with the one that I think I am?"
+    (on-aspect (signature content)  ; FIXME no way to differentiate the phase at which each of these is needed
+               (define public-key (lookup agent public-key))  ; FIXME nasty free variables
+               ;(knows-private-key-for-public-key)
+               ;(has-ability-to-reproduce-a-value-i-thought-was-secret-that-i-made-public-after-encrypting-with-a-public-key)
+               ; amusingly the difficulty I have encountered in expressing this is precisely because I'm actually asking the wrong question
+               ;(define public-key "the public key that defines this agent")  ; lifted for category level
+               (= (decrypt public-key signature) (cypher content))
+               ; maintaining the secrecy of the message is now orthogonal
+               ; since the message can be anything
+               ))
+  (define-name message-from-proper-agent-1
+    (on-aspect (signature message)
+               (parameterize ([public-key "proper-agent-1 public key"])  ; FIXME this is bad an annoying :(
+                 (message-from-agent message-from-proper-agent-1)
+                 )
+               ))
+  ; predicates don't quite work when you need an alist :/
+  ; basically if I define a _local_ name by some value
+  ; and I want to be able to reuse categorical or generic predicates the we need lookup
+  ; if you define things every time then they work, but the information is trapped and you
+  ; have to apply the predicate as a black box to everything
+  ; more importantly define-name does not compose at all in the way desired
+  (define how-i-would-rather-do-it?
+    (define (symbolic-constraints agent-public-key overseer-private-key random-value return-address)
+      ; return address is often left out of the equation >_<
+      ; overseer-public-key could also be a one-time-pad or temp key etc.
+      (define message-sent (encrypt agent-public-key (random-value overseer-public-key)))
+      "send message-sent to everyone and everything asking for them to return it!"
+      "can't assume we have the agents address, they may actually come to us"
+      "how to deal with the return address is another issue entirely"
+      "some forms of communication (email) will always leak the return"
+      (loop-until-done
+       (define message-received (measure return-address next-message))
+       ; remember kids, always encrypt with the other person's public key first!
+       (= (decrypt agent-public-key (decrypt overseer-private-key message-received)) random-value)
+       )))
+
+  ; all the free variables argh, I guess it is ok??
+  (define (message-from-agent? signature message agent-proper-name)
+    (define public-key (lookup agent-proper-name public-key))
+    (= (decrypt public-key signature) (cypher message)))
+
+  (define (proper-agent-1? thing)
+    ;(define random-value (random))
+    ;(define message (encrypt public-key random-value))
+    (define public-key (lookup agent-proper-name public-key))
+    (send-to
+     thing
+     "hey, can you send me a message and signature encrypted with the private key for proper-agent-1?"
+     return-address)
+    (define-values (signature message-received) (message-listen return-address))
+    (message-from-agent? signature message-received proper-agent-1)
+    ; challenge response here ... if they have a private key and send you any message
+    ; back and you have their public key then why do you need the random value at all!?
+    )
+  )
 ;; execution
 ; TODO consistent rules for constructing names
 ; FIXME horrible design here
@@ -542,7 +642,7 @@ earth's location which is the aspect of a proper name and thus
                  proper-name  ; in a sense this could be a local proper name
                  aspect  ; TODO ah the joys of how to deal with multiple aspects and multiple values
                  value   ; also known as, what to do about opaque data file formats
-                 timestamp  ; from agent?
+                 timestamp  ; from agent? that would be the agent timestamp if it has one ... debug only?
                  aspect-agent  ; for signed work need public key
                  aspect-impl-used
                  inferred-prov ; this should all be coming from the protocol?
@@ -550,6 +650,37 @@ earth's location which is the aspect of a proper name and thus
                  aspect-agent-checksum
                  aspect-agent-signed checksum
                 ) #:transparent)
+
+(struct pn-record (execution-proper-name ; only issue with leaving out protocol-proper-name is if a change was made on the fly ...
+                   agent-proper-name  ; superclass of executor which includes machines, overseer etc
+                   proper-name  ; we can factor categorical name into the proper name creation record
+                   aspect
+                   value))
+(struct prov-record (agent-proper-name agent-signed-checksum)) ; probably in pn-record
+(pn-record "example-1" "overseer" "example-1" "protocol" "the-protocol-proper-name")
+(pn-record "example-1" "overseer" "(categories-for example-1)" "some-cat-name" "new-proper-name")
+; this isn't quite right since it should be logging the actual functions, but could probably get that from
+; the first record up there
+
+; an alternative would be to actually store the individual measurement ids
+; while this might seem like overkill, I think may map better onto the actual execution
+; there is some weirdness in whether the agent needs to be able to verify or even know about
+; the proper name IF that agent is not also the executor, which in many cases they will be
+; all proper names and local proper names that are required by the protocol should
+; probably be gathered at the begining of the protocol execution and mapped to the
+; categorical and/or proper names in the spec and impl
+(struct internal-record (measurement-id proper-name aspect execution-proper-name))
+(struct payload (measurement-id value signature))
+; encrypted version
+(struct internal-record-e (random-measurement-id proper-name aspect execution-proper-name))
+; approved agent for this measurement is sent random-measurement-id encrypted with public key
+; only an agent holding the coresponding private key can send back the random measurement id
+(struct payload-e (agent-private-key-encrypted (overseer-public-key-encrypted (random-measurement-id value))))
+; yes this conflates identity with encryption and is pgp thinking and has no forward secrecy
+; the exact handling here should be tailored to the danger of what you are trying to measure
+; most of the time the threat model is that sensors might get swapped due to line noise or something
+; using agent-public-key here is tacitly the proper naming function
+
 
 ; file-path, file-format, and file-checksum are legitimate aspects
 ; the category of proper name for that would be the whole experimental
