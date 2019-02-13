@@ -245,8 +245,11 @@ def citation_tree(annos, html_head='', all=False):
         g.add_trip(su, 'rdfs:label', s)  # redundant
         g.add_trip(ou, 'rdfs:label', o)  # redundant
     ref_graph = g.make_scigraph_json(RFU, direct=True)
-    tree, extra = creatTree('hl:ma2015.pdf', RFU, 'OUTGOING', 10, json=ref_graph, prefixes=PREFIXES, html_head=html_head)
-    return tree, extra
+    if list(g.g):
+        tree, extra = creatTree('hl:ma2015.pdf', RFU, 'OUTGOING', 10, json=ref_graph, prefixes=PREFIXES, html_head=html_head)
+        return tree, extra
+    else:
+        return None, None
 
 def papers(annos):
     idents = {}
@@ -371,7 +374,10 @@ class Hybrid(HypothesisHelper):
             return None, None
 
         if rank:
-            def byRank(json, max=len(data)):
+            ld = len(data)
+            lr = len(rank)
+            maxr = ld if ld > lr else lr
+            def byRank(json, max=maxr):
                 if 'curie' in json:
                     curie = json['curie']
                     prefix, suffix = curie.split(':', 1)
@@ -466,6 +472,13 @@ class Hybrid(HypothesisHelper):
                         self._text.split(self.CURATOR_NOTE_TAG)[1:])
         if self._text.startswith('SKIP'):  # FIXME legacy
             yield self._text[len('SKIP '):]
+
+    @property
+    def feedbackNotes(self):
+        "TODO"
+        for reply in self.replies:
+            if 'PROTCUR:feedback' in reply.tags:
+                yield reply.text  # FIXME only goes down 1 level ... ? I think we only want 1 level so it's ok?
 
     @property
     def value(self):
@@ -664,7 +677,10 @@ class Hybrid(HypothesisHelper):
 
         elif 'protc:implied-aspect' in self.tags:# or 'protc:implied-context' in self.tags:
             # this is an example of how to inject a reply as a parent
-            yield self.parent
+            if self.parent is not None:
+                yield self.parent
+            else:
+                print(f"WARNING: protc:implied-aspect not used in a reply! {self.htmlLink}")
 
         else:
             yield from self.direct_children
@@ -1096,22 +1112,27 @@ class AstGeneric(Hybrid):
 
 
         _notes = '\n'.join(self.curatorNotes)  # the \n will be replaced during rewrap
-        # TODO get user per note as well
-        #'{SPACE}by{SPACE}{self._anno.user}{NL}'  # FIXME lifting notes from replies => inaccurate
-        if _notes:
-            # notes = f'{NL}#;{NL}<<--note{NL}' + linewrap(_notes, start=0, end=120, sep='', space=SPACE, nl=NL, ind=0) + f'{NL}--note'
-            #_pl = (' ' * self.linePreLen) if depth > 1 else ''
-            _npre = NL if depth == 1 else ''
-            _nindent = self.indentDepth * (depth - 1)
-            _cur = f'{_npre};{SPACE}NOTE' + NL + SPACE * _nindent
-            notes = f'{_cur};{SPACE}' + linewrap(_notes, start=0, end=120,
-                                                  sep=f';{SPACE}', space=SPACE, nl=NL,
-                                                  #ind=0 if depth == 1 else self.linePreLen,
-                                                  ind=_nindent,
-                                                  depth=1) + (NL if depth > 1 else '') + SPACE * _nindent
-            if html: notes = f'<span class="comment">{notes}</span>'
-        else:
-            notes = ''
+        _fnotes = '\n'.join(self.feedbackNotes)  # TODO PROTCUR:review
+        def make_notes(_notes, head='NOTE'):
+            # TODO get user per note as well
+            #'{SPACE}by{SPACE}{self._anno.user}{NL}'  # FIXME lifting notes from replies => inaccurate
+            if _notes:
+                # notes = f'{NL}#;{NL}<<--note{NL}' + linewrap(_notes, start=0, end=120, sep='', space=SPACE, nl=NL, ind=0) + f'{NL}--note'
+                #_pl = (' ' * self.linePreLen) if depth > 1 else ''
+                _npre = NL if depth == 1 else ''
+                _nindent = self.indentDepth * (depth - 1)
+                _cur = f'{_npre};{SPACE}{head}' + NL + SPACE * _nindent
+                notes = f'{_cur};{SPACE}' + linewrap(_notes, start=0, end=120,
+                                                    sep=f';{SPACE}', space=SPACE, nl=NL,
+                                                    #ind=0 if depth == 1 else self.linePreLen,
+                                                    ind=_nindent,
+                                                    depth=1) + (NL if depth > 1 else '') + SPACE * _nindent
+                if html: notes = f'<span class="comment">{notes}</span>'
+            else:
+                notes = ''
+
+            return notes
+        notes = make_notes(_notes) + make_notes(_fnotes, 'FEEDBACK')
 
         start = f'{NL}{OPEN()}' if top else OPEN()  # ))
         #print('|'.join(''.join(str(_) for _ in range(1,10)) for i in range(12)))
@@ -2725,10 +2746,11 @@ def main():
     from core import annoSync
     from docopt import docopt
     import requests
+    from hyputils.hypothesis import group, group_to_memfile
     args = docopt(__doc__)
 
     global annos  # this is now only used for making embed sane to use
-    get_annos, annos, stream_thread, exit_loop = annoSync('/tmp/protcur-analysis-annos.pickle',
+    get_annos, annos, stream_thread, exit_loop = annoSync(group_to_memfile(group),
                                                           helpers=(HypothesisHelper, Hybrid, protc, SparcMI))
 
     problem_child = 'KDEZFGzEEeepDO8xVvxZmw'
