@@ -14,7 +14,8 @@
   (d . deci)
   (c . centi)
   (m . milli)
-  (μ . micro)
+  (μ . micro)  ; "\u03BC"
+  (µ . micro)  ; "\u00B5" FIXME this needs to be in a normalization pass
   (u . micro)
   (n . nano)
   (p . pico)
