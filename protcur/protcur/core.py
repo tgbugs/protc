@@ -2,10 +2,10 @@ from hyputils.hypothesis import Memoizer, group, UID
 from hyputils.subscribe import preFilter, AnnotationStream
 from hyputils.handlers import helperSyncHandler, filterHandler
 
-def annoSync(memoization_file=None, helpers=tuple(), tags=tuple()):
+def annoSync(memoization_file=None, helpers=tuple(), tags=tuple(), group=group):
     if group == '__world__':
         raise ValueError('Group is set to __world__ please run the usual `export HYP_ ...` command.')
-    get_annos = Memoizer(memoization_file=memoization_file)
+    get_annos = Memoizer(memoization_file=memoization_file, group=group)
     yield get_annos
     prefilter = preFilter(groups=[group], tags=tags).export()
     helperSyncHandler.memoizer = get_annos
