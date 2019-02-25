@@ -34,6 +34,7 @@ from pyontutils.hierarchies import creatTree
 from pyontutils.scigraph_client import Vocabulary
 from pyontutils.closed_namespaces import rdf, rdfs, owl
 from pysercomb.parsers import racket, units
+from pysercomb.pyr import units as units_pyr
 #from pysercomb import parsing_parsec
 from hyputils.hypothesis import HypothesisAnnotation, HypothesisHelper, idFromShareLink, shareLinkFromId, iterclass
 from protcur.core import linewrap
@@ -1206,10 +1207,6 @@ class protc(AstGeneric):
                                                'telos',
                                                #TODO we need more here...
                                                ))
-    format_nl =  '*', '/', 'range', 'plus-or-minus', 'param:dimensions'
-
-    format_nl_long =  '^'
-
     _manual_fix = {
         'roomtemperature':('protc:fuzzy-quantity', '"room temperature"', '"temperature"'),
         'room temperature':('protc:fuzzy-quantity', '"room temperature"', '"temperature"'),
@@ -1247,45 +1244,6 @@ class protc(AstGeneric):
             return self._value_escape(self.value)
 
     def parameter(self):
-        def isLongNL(tuple_):
-            if tuple_[0] in self.format_nl_long:
-                t1 = type(tuple_[1]) is tuple
-                t2 = type(tuple_[2]) is tuple
-                if t1 and t2:
-                    if len(tuple_[1]) > 2 or len(tuple_[2]) > 2:
-                        return True
-                elif t1 and len(tuple_[1]) > 3:
-                    return true
-                elif t2 and len(tuple_[2]) > 3:
-                    return true
-            return False
-
-        def format_value(tuple_, localIndent=0, depth=0):#, LID=''):
-            out = ''
-            if tuple_:
-                newline = tuple_[0] in self.format_nl or isLongNL(tuple_)
-                indent_for_this_loop = localIndent + len('(') + len(tuple_[0]) + len(' ')  # vim fail )
-                indent_for_next_level = indent_for_this_loop
-                #indent_this = LID + '(' + tuple_[0] + ' '  # vim fail )
-                #indent_next = indent_this
-                for i, v in enumerate(tuple_):
-                    if newline and i > 1:
-                        out += '\n' + ' ' * indent_for_this_loop
-                        #out += '\n' + indent_this
-                    if type(v) is tuple:
-                        v = format_value(v, indent_for_next_level, depth + 1)#, LID=indent_next)
-                    if v is not None:
-                        v = str(v)
-                        if out and out[-1] != ' ':
-                            out += ' ' + v
-                            if i > 1 or not newline:
-                                indent_for_next_level += len(' ') + len(v) # unlike at the top v already has ( prepended if it exists
-                                #indent_next += ' ' + v
-                        else:  # we are adding indents
-                            out += v
-            if out:
-                return '(' + out + ')'
-
         success, v, rest = getattr(self, '_parameter', (None, None, None))  # memoization of the parsed form
 
         if self.value.strip().lower() in self._manual_fix:  # ICK
@@ -1315,7 +1273,8 @@ class protc(AstGeneric):
             test_params.append((value, (success, v, rest)))
 
         if v:
-            v = format_value(v, self.linePreLen)#, LID=' ' * self.linePreLen)
+            v = units_pyr.ProtcParameter(v).format_value(self.linePreLen)
+            #v = format_value(v, self.linePreLen)#, LID=' ' * self.linePreLen)
         return repr(ParameterValue(success, v, rest, indent=self.linePreLen))  # TODO implement as part of processing the children?
 
     def invariant(self):
