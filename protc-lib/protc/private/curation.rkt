@@ -35,6 +35,7 @@
     [(_ (~or* name:str term:sc-cur-term) (hyp: (quote id))
         (~alt ;inv/par:sc-cur-inv/par
          unconv:str
+         adj:sc-cur-adjective
          asp:sc-cur-aspect
          inv:sc-cur-invariant
          par:sc-cur-parameter*
@@ -140,7 +141,11 @@
                res:sc-cur-result
                var:sc-cur-vary)))
      ; TODO check that the given unit matches
-     #`(quote #,stx)]))
+     #`(quote #,stx)]
+    [section:sc-cur-aspect-bad
+     #:do ((displayln (format "WARNING: Aspect has zero or multiple entries in\n~a"
+                              (syntax/loc stx #'section))))
+     #'(void)]))
 (module+ test
   (aspect "mass" (hyp: '0))
   (aspect "test-unconv" (hyp: 'lol) "unconverted")
@@ -161,7 +166,40 @@
             (hyp: '4))
            (parameter*
             (quantity -50 (unit 'volts 'milli))
-            (hyp: '5)))))
+            (hyp: '5))))
+  (aspect "angle"
+          (hyp: 'yes)
+          (black-box-component "start from here thing" (hyp: 'asdf))  ; TODO auto lift?
+          (parameter* (expr (range (quantity 1) (quantity 2 (unit 'meters 'mega)))) (hyp: 'fdsa)))
+  (aspect "sagittal" (hyp: 'asdf)
+          ; OK
+          ; this is ok because the spatial-1d aspect is the direct connection to the parameter*
+          ; and thus the plane of section is assumed to give unambiguously the axis normal to it
+          ; thus to interpret the values we have to walk from inside out and resolve the
+          ; ambiguity from the number out to the 3d black box (oof assumptions)
+
+          ; saggital and thick probably need to be re-ordered? FALSE protc/ur is backwards
+          ; because thick -> spatial-1d applied to a 3d black box needs at least a plane of section
+          ; technically these do not commute, but composition is the wrong operation
+          ; (compose spatial-1d spatial-2d) vs (compose spatial-2d spatial-1d)
+          ; in the first case a length of a thing normal to the plane of section
+          ;  since anything in-plane would be ambiguous
+          ; in the second case either we have to invert this
+          ;  or we have to assume that we are missing at least one spatial-1d axis aspect
+          ;  and we might be missing more
+          ; the situation is more complex if the spatial-2d is an extent rather than an infinite plane
+          ; if we are specifying a spatial-2d then minimally we need two aspects, one that is spatial-1d
+          ; e.g. sagittal is (plane-normal-to medial-lateral-axis) or (plane-coplanar-with a-p d-v)
+          ; if our black box is known to be a plane (which it might not) then we only need (a-p d-v)
+          (aspect "thick" (hyp: 'fdsa)
+                          (parameter*
+                           (quantity 8 (unit 'meters 'micro)) (hyp: 'a))))
+  (aspect "will fail multibody" (hyp: 'asdf)
+          (parameter* (quantity 1) (hyp: '1))
+          (parameter* (quantity 2) (hyp: '2)))
+  #;
+  (aspect "some aspect" (hyp: 'asdf)
+          (no-how-error)))
 
 (define-syntax (unit stx)
   (syntax-parse stx

@@ -38,7 +38,10 @@
                                                       (protc:aspect "angle" (hyp: 'another-annotation))))
 
 (protc:aspect "count" (hyp: 'max)
-              (protc:parameter* (param:quantity 99) (hyp: 'take-one-down))
+              ; multiple parameters/invariants should fail
+              ; BUT need a way to fail gracefully and continue
+              ; and suggest options to fix, such as protc:vary
+              ;(protc:parameter* (param:quantity 99) (hyp: 'take-one-down))
               (protc:parameter* (param:quantity 98) (hyp: 'pass-it-around)))
 
 (protc:output "something with a pH" (hyp: 'a)

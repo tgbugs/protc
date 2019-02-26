@@ -571,6 +571,10 @@ All actualize sections should specify a variable name that will be used in inher
   ; add additional valid prov identifiers here
   (pattern (hyp: (quote hypothesis-urlsafe-uuid))))
 
+(define-syntax-class sc-cur-fail
+  #:datum-literals (param:parse-failure)
+  (pattern (param:parse-failure)))
+
 (define-syntax (define-sc-aspect-lift stx)
   (syntax-parse stx
     ;#:datum-literals (aspect)
@@ -580,21 +584,23 @@ All actualize sections should specify a variable name that will be used in inher
          #:literals (aspect-lifted)
          #:datum-literals (oper-name alt ...)
          (pattern ((~or* oper-name alt ...)
-                   (~or* quantity:sc-quantity dil:sc-dilution boo:sc-bool)
+                   (~or* quantity:sc-quantity dil:sc-dilution boo:sc-bool fail:sc-cur-fail)
                    (~optional rest)
                    prov:sc-cur-hyp)
                   #:attr lifted ;(syntax/loc this-syntax
-                  #'(aspect-lifted (-~? boo.value  ; FIXME these have to be inside an aspect
-                                        (-~? dil.aspect
-                                             (-~? quantity.aspect
-                                                  (raise-syntax-error
-                                                   'no-unit "quantity missing unit"
-                                                   this-syntax (~? quantity)))))
+                  #'(aspect-lifted (-~? fail
+                                        (-~? boo.value  ; FIXME these have to be inside an aspect
+                                             (-~? dil.aspect
+                                                  (-~? quantity.aspect
+                                                       (raise-syntax-error
+                                                        'no-unit "quantity missing unit"
+                                                        this-syntax (~? quantity))))))
                                    prov
                                    (oper-name 'lifted (-~? quantity.normalized
                                                            (-~?
                                                             dil.normalized
-                                                            boo.normalized))))))]))
+                                                            (-~? boo.normalized
+                                                                 fail)))))))]))
 
 (define-sc-aspect-lift sc-cur-parameter* parameter* protc:parameter*)
 
@@ -645,21 +651,40 @@ All actualize sections should specify a variable name that will be used in inher
                                             par:sc-cur-parameter*) ...)))
 
 (define-syntax-class sc-cur-aspect
-  #:datum-literals (aspect protc:aspect protc:implied-aspect)
-  (pattern ((~or* aspect protc:aspect protc:implied-aspect)
+  #:datum-literals (aspect protc:aspect implied-aspect protc:implied-aspect)
+  (pattern ((~or* aspect protc:aspect implied-aspect protc:implied-aspect)
             (~or* name:str term:sc-cur-term)
             prov:sc-cur-hyp
-            cnt-0:sc-cur-context ...  ; allow multiple sections for now, all will be merge into one
+            (~alt
+             (~between (~or* asp:sc-cur-aspect cnt:sc-cur-context bbc:sc-cur-bbc) 0 +inf.0)
+             (~once (~or unconv:str
+                         inv:sc-cur-invariant
+                         par:sc-cur-parameter*
+                         mes:sc-cur-*measure
+                         cal:sc-cur-calculate
+                         res:sc-cur-result
+                         var:sc-cur-vary))) ...
+            ;(~or* cnt-0:sc-cur-context bbc-0:sc-cur-bbc) ...  ; allow multiple context sections for now, all will be merge into one
+            ; TODO for bbc-0 and bbc-1 if they are present lift them to context
+            ; TODO we probably need a way to specify the expected context for aspects ...
+            ;  or more accutately the additional dimensions required to project the
+            ;  abstracted aspect down to something we can count
+            ; FIXME how the heck do you define bindings for actualizing a vector aspect?
+            ;  compositionally I think it is possible to define actualization of sub-aspects
+            #;
             (~optional
              (~or* unconv:str
                    asp:sc-cur-aspect
+                   ; TODO order required vs order doesn't matter
+                   ; certain aspect combinations are commutative others are not?
                    inv:sc-cur-invariant
                    par:sc-cur-parameter*
                    mes:sc-cur-*measure
                    cal:sc-cur-calculate
                    res:sc-cur-result
                    var:sc-cur-vary))
-            cnt-1:sc-cur-context ...  ; easy way to allow before or after the main content
+            ;more-asp:sc-cur-aspect ...  ; FIXME need better expression for max-1 vs allow many
+            ;(~or* cnt-1:sc-cur-context bbc-1:sc-cur-bbc) ...  ; easy way to allow before or after the main content
             ))
   #;
   (pattern ((~or* aspect protc:aspect protc:implied-aspect)
@@ -674,6 +699,7 @@ All actualize sections should specify a variable name that will be used in inher
 (module+ test
   (syntax-parse #'(aspect "length"
                           (hyp: 'some-prov)
+                          #; ; fails as expected
                           (parameter* (quantity 10 (unit 'meters 'milli)) (hyp: 'p0))
                           (parameter* (quantity 20 (unit 'meters 'milli)) (hyp: 'p1)))
     [thing:sc-cur-aspect #'thing])
@@ -682,6 +708,23 @@ All actualize sections should specify a variable name that will be used in inher
                           (parameter* (bool #t) (hyp: 'p2)))
     [thing:sc-cur-aspect #'thing])
   )
+(define-syntax-class sc-cur-aspect-bad
+  #:datum-literals (aspect protc:aspect protc:implied-aspect)
+  (pattern ((~or* aspect protc:aspect protc:implied-aspect)
+            (~or* name:str term:sc-cur-term)
+            prov:sc-cur-hyp
+            (~alt
+             (~between (~or* asp:sc-cur-aspect cnt:sc-cur-context bbc:sc-cur-bbc) 0 +inf.0)
+             (~between (~or unconv:str
+                         inv:sc-cur-invariant
+                         par:sc-cur-parameter*
+                         mes:sc-cur-*measure
+                         cal:sc-cur-calculate
+                         res:sc-cur-result
+                         var:sc-cur-vary) 0 +inf.0)) ...  ; difference is here, basically not once
+            )
+           ; TODO count the number of problem steps
+           ))
 
 (define-syntax-class sc-cur-context
   ; specifically aspect context
@@ -714,9 +757,16 @@ All actualize sections should specify a variable name that will be used in inher
                   ; will uncomment when it is clear we need them
                   ; res:sc-cur-result
                   ))))
+
 (define-syntax-class sc-cur-input
   #:datum-literals (input protc:input protc:implied-input)
   (pattern ((~or* input protc:input protc:implied-input)
+            name:str prov:sc-cur-hyp body:expr ...)))
+
+(define-syntax-class sc-cur-adjective
+  ; TODO warn when this is encountered?
+  #:datum-literals (~or* adjective protc:adjective)
+  (pattern ((~or* adjective protc:adjective)
             name:str prov:sc-cur-hyp body:expr ...)))
 
 (module+ test
