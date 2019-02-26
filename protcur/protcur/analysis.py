@@ -1171,13 +1171,11 @@ class protc(AstGeneric):
               '*measure',  # under represented
               'output',
               'objective*',
-              'no-how-error',
               'order',
               'repeat',
               'implied-vary',  # TODO
               #'implied-context',  # TODO
               'implied-aspect',
-              'how',
               '*make*',  # FIXME output?? also yay higher order functions :/
               'symbolic-measure',  # DEPRECATED
               'calculate',
@@ -1187,6 +1185,8 @@ class protc(AstGeneric):
               'structured-data-header',
               'telos',
               'executor-verb',
+              'how',
+              'no-how-error',
               'var',
             )
     _topLevel = tuple('protc:' + t for t in ('input',
@@ -2735,6 +2735,7 @@ def main():
     print('BAD TIME', stop - start)
     #@profile_me  # a note that trying ot get pref data when there are lots of function calls nearly doubles actual time...
     def text():
+        # NOTE if this is running slow, make sure you aren't using a remote SciGraph
         t = protc.parsed()
         with open('/tmp/protcur.rkt', 'wt') as f: f.write(t)
         # don't return to avoid accidentally repring these fellows :/
