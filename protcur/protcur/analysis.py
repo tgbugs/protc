@@ -38,7 +38,6 @@ from pysercomb.pyr import units as units_pyr
 #from pysercomb import parsing_parsec
 from hyputils.hypothesis import HypothesisAnnotation, HypothesisHelper, idFromShareLink, shareLinkFromId, iterclass
 from protcur.core import linewrap
-from desc.prof import profile_me
 from IPython import embed
 
 try:
@@ -2705,6 +2704,7 @@ def main():
     from core import annoSync
     from docopt import docopt
     import requests
+    from desc.prof import profile_me
     from hyputils.hypothesis import group, group_to_memfile
     args = docopt(__doc__)
 
