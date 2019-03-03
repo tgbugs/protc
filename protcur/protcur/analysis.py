@@ -1032,7 +1032,7 @@ class AstGeneric(Hybrid):
             if self in cycle:
                 cyc = ' '.join(c.id for c in cycle)
                 print('Circular link in', self._repr, 'cycle', cyc)
-                out = f"'{OPEN()}circular-link no-type {OPEN(1)}cycle {cyc}{CLOSE}{CLOSE}" + CLOSE * nparens + debug
+                out = f"{OPEN()}circular-link no-type {OPEN(1)}cycle {cyc}{CLOSE}{CLOSE}" + CLOSE * nparens + debug
                 return out
             else:
                 printD(tc.red('WARNING:'), f'unhandled type for {self._repr} {self.tags}')
@@ -1091,7 +1091,7 @@ class AstGeneric(Hybrid):
                         #print('Circular link in', self.shareLink)
                         cyc = f'{SPACE}'.join(c.id for c in cycle)
                         print('Circular link in', self._repr, 'cycle', cyc)
-                        s = ((f"'{OPEN(1)}circular-link{SPACE}"
+                        s = ((f"{OPEN(1)}circular-link{SPACE}"
                               f"no-type{SPACE}{OPEN(2)}cycle{SPACE}"
                               f"{cyc}{CLOSE}{CLOSE}") + CLOSE * nparens + debug + f'  {i} lol')
                         #s = f"'(circular-link {cycle[0].id})" + ')' * nparens
