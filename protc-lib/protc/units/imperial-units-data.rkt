@@ -9,5 +9,7 @@
   (ºF . degrees-fahrenheit) ; b'\xc2\xba'
   (◦F . degrees-fahrenheit) ; b'\xe2\x97\xa6' white dot
   (lb . pounds)  ; FIXME normalization
-  (lbs . pounds))
+  (lbs . pounds)
+  (Fr . french-gauge)  ; also Fg and F but F has many collisions with degrees-fahrenheit
+  (G . birmingham-gauge))
 )
