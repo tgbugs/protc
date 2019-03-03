@@ -701,31 +701,25 @@ All actualize sections should specify a variable name that will be used in inher
   (pattern ((~or* bbc black-box-component protc:black-box-component)
             (~or* name:str term:sc-cur-term)
             prov:sc-cur-hyp
-            ; TODO I think we only allow nested bbcs which are
-            ; implicitly interpreted as a part-of hierarchy
-            ; and I think that might be able to act as inputs
-            ; to other steps? or do we not want to support that
-            ; since you could specify a step that has a brain slice
-            ; as an input with a parameter attached to a bbc cell-body
-            ; EXAMPLE make my-special-sandwich has input bread
-            ; which has-part holes and seeds, and then you could say
-            ; that the cateogry aspect of the seed should be one of a list
-            ; probably better to use something like (any-of seasme flax pumpkin)
-            ; which would be done via a qualifier on the black box
-            ; on the other hand one might also want to specify
-            ; "bread with holes that are less than .5 cm in diameter"
-            ; with a telos "so that the jelly doesn't leak through"
+            ; TODO I think we only allow nested bbcs which are implicitly interpreted as a
+            ; part-of hierarchy and I think that might be able to act as inputs to other
+            ; steps? or do we not want to support that since you could specify a step that
+            ; has a brain slice as an input with a parameter attached to a bbc cell-body
+            ; EXAMPLE make my-special-sandwich has input bread which has-part holes and
+            ; seeds, and then you could say that the cateogry aspect of the seed should be
+            ; one of a list probably better to use something like (any-of seasme flax
+            ; pumpkin) which would be done via a qualifier on the black box on the other
+            ; hand one might also want to specify "bread with holes that are less than .5
+            ; cm in diameter" with a telos "so that the jelly doesn't leak through"
             (~alt child:sc-cur-bbc
                   asp:sc-cur-aspect
-                  ; FIXME do we restrict the aspect structure here?
-                  ; OR should we only allow aspects to have bbcs as context?
-                  ; in other words, we need a way to know whether the bbc has
-                  ; a parent that is the primary input, or whether it is the
-                  ; black box complement (environment)
-                  ; TODO require non-recursive definition of bbcs in this
-                  ; hierarchy so that a location aspect can use previously
-                  ; definted components that are local to the context without
-                  ; risk of collision
+                  ; FIXME do we restrict the aspect structure here?  OR should we only
+                  ; allow aspects to have bbcs as context?  in other words, we need a way
+                  ; to know whether the bbc has a parent that is the primary input, or
+                  ; whether it is the black box complement (environment) TODO require
+                  ; non-recursive definition of bbcs in this hierarchy so that a location
+                  ; aspect can use previously definted components that are local to the
+                  ; context without risk of collision
                   par:sc-cur-parameter*
                   inv:sc-cur-invariant
                   ) ...))
@@ -822,27 +816,9 @@ All actualize sections should specify a variable name that will be used in inher
                           res:sc-cur-result
                           var:sc-cur-vary
                           ))) ...
-            ;(~or* cnt-0:sc-cur-context bbc-0:sc-cur-bbc) ...  ; allow multiple context sections for now, all will be merge into one
-            ; TODO for bbc-0 and bbc-1 if they are present lift them to context
-            ; TODO we probably need a way to specify the expected context for aspects ...
-            ;  or more accutately the additional dimensions required to project the
-            ;  abstracted aspect down to something we can count
+            ; TODO lift bbc to context, need way to define valid context(s) in define-aspect?
             ; FIXME how the heck do you define bindings for actualizing a vector aspect?
             ;  compositionally I think it is possible to define actualization of sub-aspects
-            #;
-            (~optional
-             (~or* unconv:str
-                   asp:sc-cur-aspect
-                   ; TODO order required vs order doesn't matter
-                   ; certain aspect combinations are commutative others are not?
-                   inv:sc-cur-invariant
-                   par:sc-cur-parameter*
-                   mes:sc-cur-*measure
-                   cal:sc-cur-calculate
-                   res:sc-cur-result
-                   var:sc-cur-vary))
-            ;more-asp:sc-cur-aspect ...  ; FIXME need better expression for max-1 vs allow many
-            ;(~or* cnt-1:sc-cur-context bbc-1:sc-cur-bbc) ...  ; easy way to allow before or after the main content
             )
            #:attr warning #f)
 
@@ -858,16 +834,7 @@ All actualize sections should specify a variable name that will be used in inher
            #:attr cal #f
            #:attr res #f
            #:attr var #f
-           #:attr warning #'"Aspect has no body section!")
-  #;
-  (pattern ((~or* aspect protc:aspect protc:implied-aspect)
-            ; TODO figure out the right way to handle these
-            ; the intention of the structure is clear, we just need to
-            ; figure out what to do with it
-            ; FIXME do not want?
-            name:str prov:sc-cur-hyp (~or* multi-asp:sc-cur-aspect
-                                           multi-inv:sc-cur-invariant
-                                           multi-par:sc-cur-parameter*) ...)))
+           #:attr warning #'"Aspect has no body section!"))
 
 (module+ test
   (check-true
@@ -935,16 +902,12 @@ All actualize sections should specify a variable name that will be used in inher
             prov:sc-cur-hyp  ; for context can just have the link if child is input or bbc
             (~or* unconv:str
                   bbc:sc-cur-bbc
-                  ; TODO determine what else can go as context
-                  ; and specifically whether aspects on the same
-                  ; participant can be context or whether that
-                  ; needs to be dealt with symbolically
-                  ; it seems like there might be some cases where
-                  ; logically or temporally you have to know the
-                  ; value of one aspect before you can determine
-                  ; the value of another aspect, which could be
-                  ; interpreted as context rather than just
-                  ; ordering rules
+                  ; TODO determine what else can go as context and specifically whether
+                  ; aspects on the same participant can be context or whether that needs
+                  ; to be dealt with symbolically it seems like there might be some cases
+                  ; where logically or temporally you have to know the value of one aspect
+                  ; before you can determine the value of another aspect, which could be
+                  ; interpreted as context rather than just ordering rules
 
                   ; asp:sc-cur-aspect
 
@@ -1011,12 +974,11 @@ All actualize sections should specify a variable name that will be used in inher
   ; namely (input thing (aspect count (param 10)) (aspect grams (param 1)))
   ; -> (many (thing (aspect grams (param 1))) 10) which seems reasonable, but
   ; maybe we want to use (aspect count-lift 10) or something to distingish?
-  ; otherwise we have to find a way to infer composite homogenous ... vs signular
-  ; this can help us prevent a proliferation of plural forms unless absolutely needed
-  ; obviously if you have a situation where you need 10 individuals that have a specific
-  ; relational structure between them (such as multi-generation parent/offspring)
-  ; you can't use many and describe everything as parameters on a single individual
-  ; FIXME call this count?
+  ; otherwise we have to find a way to infer composite homogenous ... vs signular this can
+  ; help us prevent a proliferation of plural forms unless absolutely needed obviously if
+  ; you have a situation where you need 10 individuals that have a specific relational
+  ; structure between them (such as multi-generation parent/offspring) you can't use many
+  ; and describe everything as parameters on a single individual FIXME call this count?
   #:datum-literals (many protc:many)
   (pattern ((~or* many protc:many)
             (~or* inp:sc-cur-input bbc:sc-cur-bbc)  ; one at a time here
@@ -1060,42 +1022,33 @@ All actualize sections should specify a variable name that will be used in inher
            ))
 
 (module+ test
-  ; TODO counting and allocation, singular vs collectivty entities
-  ; number of members of a collective vs occurances of a single thing
-  ; it seems that we want the behavior of count to differ depending
-  ; on whether we are referring to the input or the output but this
+  ; TODO counting and allocation, singular vs collectivty entities number of members of a
+  ; collective vs occurances of a single thing it seems that we want the behavior of count
+  ; to differ depending on whether we are referring to the input or the output but this
   ; seems like it is a bad design ...
-  ; (input toothpick (aspect allocation (parameter 10)))
-  ; still has the issue because the input is singular and
-  ; we will only define toothpick once, do we really have
-  ; to force people to define box-of-toothpicks?
-  ; maybe another operation that will automatically lift
-  ; an individual definition to a population, and then we
-  ; can parameterize the population? have member be a function?
-  ; but then we still need a way to pluralize ...
+  ; (input toothpick (aspect allocation (parameter 10))) still has the issue because the
+  ; input is singular and we will only define toothpick once, do we really have to force
+  ; people to define box-of-toothpicks?  maybe another operation that will automatically
+  ; lift an individual definition to a population, and then we can parameterize the
+  ; population? have member be a function?  but then we still need a way to pluralize ...
   ; (input [toothpicks (many toothpick)] (bbc (member toothpicks) (aspect count (param 10))))
-  ; local binding for for inputs? many expand to > 1
-  ; the real question is which approach is going to be the most transparent
-  ; and can we prevent people from using more confusing approaches, or at least
-  ; can we detect and transform equivalent ways to say the same thing into the
-  ; preferred format? which one will require the least amount of writing custom functions
-  ; to check that an aspect was populated correctly?
+  ; local binding for for inputs? many expand to > 1 the real question is which approach
+  ; is going to be the most transparent and can we prevent people from using more
+  ; confusing approaches, or at least can we detect and transform equivalent ways to say
+  ; the same thing into the preferred format? which one will require the least amount of
+  ; writing custom functions to check that an aspect was populated correctly?
 
   ; I really think that count should be able to have a type ...
   ; it would make building the defining tower for all units much easier ...
 
-  ; dealing with count ambiguity if the aspect is count
-  ; then do we ever allow a being to show up in the unit
-  ; technically the "count of thing" is of a different type
-  ; or putatively different type, then other counts and by
-  ; carrying it along as a unit we can do fun things like
-  ; express 5000 sailors / 20 ships -> 250 sailors/ship
-  ; which is much less ambiguous than trying to interpret
-  ; (aspect count (bbc ships) (parameter 10)) vs
-  ; (thing ships (aspect count (parameter 10))) which really should be
-  ; (thing ships (aspect count (bbc member) (parameter 10)))
-  ; basically, how do we express that I need 10 toothpicks?
-  ; how do I express to report that we counted 20 birds?
+  ; dealing with count ambiguity if the aspect is count then do we ever allow a being to
+  ; show up in the unit technically the "count of thing" is of a different type or
+  ; putatively different type, then other counts and by carrying it along as a unit we can
+  ; do fun things like express 5000 sailors / 20 ships -> 250 sailors/ship which is much
+  ; less ambiguous than trying to interpret (aspect count (bbc ships) (parameter 10)) vs
+  ; (thing ships (aspect count (parameter 10))) which really should be (thing ships
+  ; (aspect count (bbc member) (parameter 10))) basically, how do we express that I need
+  ; 10 toothpicks?  how do I express to report that we counted 20 birds?
   (check-true (syntax-parse #'(parameter* (quantity 10) (hyp: '2)) [expr:sc-cur-parameter* #t]))
   (check-true
    (syntax-parse

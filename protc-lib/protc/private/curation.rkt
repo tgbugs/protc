@@ -15,7 +15,7 @@
 
 (provide (all-defined-out)
          (rename-out [input implied-input]  ; this does not prevent the export of input as input
-                     #; ; not entirely clear how we want to deal with this
+                     #; ; not entirely clear how we want to deal with #%top
                      [rdf-top #%top])
          (all-from-out "direct-model.rkt"))
 
@@ -37,14 +37,8 @@
 
 (define-syntax (input stx)
   (syntax-parse stx
-    ;#:datum-literals (hyp:)
-    #;
-    (aspect protc:aspct
-            input protc:input
-            parameter* protc:parameter*
-            invariant protc:invariant)
     [sec:sc-cur-input
-     ; FIXME is there a way to reference down two dots?
+     ; OK is there a way to reference down two dots?
      ; no, you have to do the renaming inside the syntax class
      ; which is a good thing, it provides an enforced abstraction boundary
      #:with black-box (if (attribute sec.name)
@@ -103,7 +97,11 @@
                       (hyp: 'prov-b)))
   )
 
-(define (black-box-component name prov . aspects) #f)
+(define-syntax (black-box-component stx)
+  (syntax-parse stx
+    [section:sc-cur-bbc
+    #'(quote section)  ; TODO FIXME
+    ]))
 
 (define-syntax (vary stx)
   ; when used inside an aspect this will be lifted and loop inverted
@@ -129,66 +127,40 @@
   (syntax-parse stx
     #:datum-literals (hyp: quote)
     [section:sc-cur-aspect
-     #:with (errors ...) (make-errors [(or (attribute section.asp)
-                                           (attribute section.inv)
-                                           (attribute section.par)
-                                           (attribute section.mes)
-                                           (attribute section.cal)
-                                           (attribute section.res)
-                                           (attribute section.var))
-                                       stx
-                                       ;#'name
-                                       (format "WARNING: Aspect missing body in ~a at ~a ~a ~a"
-                                               (syntax->datum #'section)
-                                               ; FIXME section.term.label ...
-                                               (let ([src (syntax-source #'(~? section.name section.term))])
-                                                 (if (not (or (path-string? src) (path-for-some-system? src)))
-                                                     'stdin
-                                                     (file-name-from-path src)))
-                                               (syntax-line #'(~? section.name section.term))
-                                               (syntax-column #'(~? section.name section.term)))
-                                       #:kind protc-missing-section
-                                       #:fix #t  ; TODO
-                                       ]
-                                      [(not (attribute section.warning))
-                                       stx
-                                       (format "WARNING: ~a at ~a ~a ~a"
-                                               (syntax->datum #'(~? section.warning "There is no warning."))
-                                               ; FIXME section.term.label ...
-                                               (let ([src (syntax-source #'(~? section.name section.term))])
-                                                 (if (not (or (path-string? src) (path-for-some-system? src)))
-                                                     'stdin
-                                                     (file-name-from-path src)))
-                                               (syntax-line #'(~? section.name section.term))
-                                               (syntax-column #'(~? section.name section.term))
-                                               )
-                                       #:kind protc-missing-section
-                                       ])
-     #;
-     #:do
-     #;
-     ((when (not (or (attribute section.asp)
-                     (attribute section.inv)
-                     (attribute section.par)
-                     (attribute section.mes)
-                     (attribute section.cal)
-                     (attribute section.res)
-                     (attribute section.var)))
-        ; TODO actually create a warning object
-        (displayln (format "WARNING: Aspect missing body in\n~a"
-                           (syntax/loc stx #'section)))))
-     #;
-     (_ (~or* name:str term:sc-cur-term)
-        (hyp: (quote id))
-        cnt:sc-cur-context ...
-        (~optional
-         (~or* unconv:str
-               asp:sc-cur-aspect  ; allow aspect chaining
-               inv:sc-cur-invariant
-               par:sc-cur-parameter*
-               mes:sc-cur-*measure
-               res:sc-cur-result
-               var:sc-cur-vary)))
+     #:with (errors ...)
+     (make-errors [(or (attribute section.asp)
+                       (attribute section.inv)
+                       (attribute section.par)
+                       (attribute section.mes)
+                       (attribute section.cal)
+                       (attribute section.res)
+                       (attribute section.var))
+                   stx
+                   (format "WARNING: Aspect missing body in ~a at ~a ~a ~a"
+                           (syntax->datum #'section)
+                           (let ([src (syntax-source #'(~? section.name section.term))])
+                             (if (not (or (path-string? src) (path-for-some-system? src)))
+                                 'stdin
+                                 (file-name-from-path src)))
+                           (syntax-line #'(~? section.name section.term))
+                           (syntax-column #'(~? section.name section.term)))
+                   #:kind protc-missing-section
+                   #:fix #t  ; TODO
+                   ]
+                  [(not (attribute section.warning))
+                   stx
+                   (format "WARNING: ~a at ~a ~a ~a"
+                           (syntax->datum #'(~? section.warning "There is no warning."))
+                           ; FIXME section.term.label ...
+                           (let ([src (syntax-source #'(~? section.name section.term))])
+                             (if (not (or (path-string? src) (path-for-some-system? src)))
+                                 'stdin
+                                 (file-name-from-path src)))
+                           (syntax-line #'(~? section.name section.term))
+                           (syntax-column #'(~? section.name section.term))
+                           )
+                   #:kind protc-missing-section
+                   ])
      ; TODO check that the given unit matches
      #`(begin errors ... (quote #,stx))]
     [section:sc-cur-aspect-bad
@@ -205,11 +177,6 @@
                                                (syntax-column #'(~? section.name section.term)))
                                        #:kind protc-warning  ; TODO
                                        #:fix #t])
-     #;
-     #:do
-     #;
-     ((displayln (format "WARNING: Aspect has zero or multiple entries in\n~a"
-                         (syntax/loc stx #'section))))
      #'(begin errors ...)]))
 (module+ test
   (aspect "mass" (hyp: '0))
@@ -279,8 +246,6 @@
      #`(quote #,stx)  ; TODO
      ]))
 
-;(define (invariant aspect value prov) #f)
-
 (define-syntax (parameter* stx)
   (syntax-parse stx
     [_:sc-cur-parameter*
@@ -306,7 +271,6 @@
 
 (define (objective* text prov) #f)
 (define (telos text prov) #f)
-;(define (result aspect value prov) #f)
 
 (define (order) #f)
 (define (repeate) #f)
@@ -328,10 +292,6 @@
     [_:sc-cur-calculate
      #`(quote #,stx)]))
 
-#; ; deprecated in favor of protc:calculate
-(define-syntax (symbolic-measure stx)
-  #''TODO)
-
 (define-syntax (version stx)
   #''TODO)
 
@@ -342,101 +302,11 @@
   #''TODO)
 
 (module+ test
-  ; pretty sure that this does not do what I thought it did?
-  ; what I think I wanted this to do is to take the value of the
-  ; expression returned by one or two if it passed the match
-  ; what it is doing instead is returning a syntacitic form that
-  ; matches one if it exists at all (which it must) and thus
-  ; never gets to two even though they presence of the keyword
-  ; in the pattern means that in theory one could bind #f if #:1 is absent
-  (define-syntax (test?-2 stx)
-    (syntax-parse stx
-      [(_ name:id one:expr two:expr)
-       #'(define-syntax (name stx)
-           (syntax-parse stx
-             [(_
-               (~optional (~seq #:1 one))
-               (~optional (~seq #:2 two))
-               )
-              #'(~? one two)]
-             )
-           )
-       ]))
-
-  (test?-2 all-opt
-           three
-           four)
-
-  (all-opt #:1 1 #:2 2)
-  #;
-  ; broken because only the syntax for one (aka three) shows up
-  (all-opt #:2 2)
-
-  (test?-2 hrm? (~var thing number) (~var gniht string))
-  #;
-  ; none of the below work
-  (hrm? #:1 12312)
-  #;
-  (hrm? #:1 "thing")
-  #;
-  (hrm? #:2 "thing")
-  )
-
-#;
-; also dones't work :/
-(module+ test
-  ; all the other variants just don't work :/ ~optional and ~seq complain
-  ; maybe there is a way to use with-syntax?
-  (with-syntax ([opt (datum->syntax #f '~optional)]
-                [seq (datum->syntax #f '~seq)]
-                )
-    (test?-2 all-opt-??
-             #'(opt (seq #:1 one))
-             #'(opt (seq #:2 two)))
-    #;
-    (test?-2 all-opt-??
-             (#'opt (#'seq #:1 one))
-             (#'opt (#'seq #:2 two))))
-
-
-  (all-opt-?? 1 2))
-
-; this fails because ~? cannot take 3 arguments
-; but I have no idea what I was trying to do here
-; whatever it was I'm fairly certain it didnt' do
-; what I thought I was supposed to do
-#;
-(module+ test
-  (define-syntax (test?-3 stx)
-    (syntax-parse stx
-      [(_ name:id one:expr two:expr three:expr)
-       (ppstx 
-        #'(define-syntax (name stx)
-            (syntax-parse stx
-              [(_
-                one two three
-                )
-               #'(~? one (~? two three))])))]))
-
-  (test?-3 all-opt-2
-           (~optional (~seq #:1 one))
-           (~optional (~seq #:2 two))
-           (~optional (~seq #:3 three)))
-
-  (all-opt-2 #:1 '1)
-  (all-opt-2 #:2 '2)
-  (all-opt-2 #:3 '3)
-
-  )
-
-
-(module+ test
   (define-syntax (test stx)
     (syntax-parse stx
       [(_ thing:sc-cur-invariant)
        #''thing.lifted]))
 
-  ; i have no idea why this doesn't work ; ANSWER: you need convert-syntax-error to wrap the failing expr
   (check-exn exn:fail:syntax? (thunk
                                (convert-syntax-error
                                 (test (parameter* (hyp: '0) (quantity 10 (unit 'meters)))))))
@@ -469,17 +339,6 @@
   (unit-> 'meters 'milli)
   ;(unit-> indirect-meters indirect-milli)  ; fails ...
 
-  #;
-  ; this works now, but it is not clear that it was ever a good approach
-  ; another cases where I think I need to trap the error as I do in rrid-metadata
-  ; however, the fact that syntax-local-eval fails to find thunk and (unit a b) needs
-  ; identifiers means that the runtime-unit implementation is vastly preferable
-  (check-exn exn:fail:syntax? #;exn:fail:syntax:unbound?
-             (thunk
-              (convert-syntax-error
-               (unit-> 'nota 'unit)
-               #;
-               (unit-> ((thunk 'meters)) ((thunk 'milli))))))
   (runtime-unit 'meters 'milli)
   (runtime-unit ((thunk 'meters)) ((thunk 'milli)))
   (check-exn exn:fail:syntax? (thunk (runtime-unit 'nota 'unit)))
