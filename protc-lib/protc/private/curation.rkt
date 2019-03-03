@@ -12,7 +12,7 @@
   "syntax-classes.rkt"))
 
 (provide (all-defined-out)
-         (rename-out [input implied-input])
+         (rename-out [input implied-input])  ; this does not prevent the export of input as input
          (all-from-out "direct-model.rkt"))
 
 ;;;
@@ -32,13 +32,17 @@
             input protc:input
             parameter* protc:parameter*
             invariant protc:invariant)
-    [(_ (~or* name:str term:sc-cur-term) (hyp: (quote id))
+    [(_ (~or* name:str term:sc-cur-term)
+        (hyp: (quote id))
         (~alt ;inv/par:sc-cur-inv/par
          unconv:str
-         adj:sc-cur-adjective
+         inp:sc-cur-input  ; allow nested inputs, will probably need to split spec vs impl here
+         qal:sc-cur-any-qualifier
+         exv:sc-cur-executor-verb
          asp:sc-cur-aspect
          inv:sc-cur-invariant
          par:sc-cur-parameter*
+         tod:sc-cur-todo
          ; TODO tighter restrictions needed here
          #;body:expr) ...)
      #:with black-box (if (attribute name)
@@ -54,6 +58,11 @@
                   ;(~? body (raise-syntax-error "HOW?!")) ...
                )
      ]))
+(module+ test
+  ; default interpretation of nested inputs is a make spec that only lists inputs
+  (input "top level thing" (hyp: 'p)
+         (input "input to tlt 1" (hyp: '1))
+         (input "input to tlt 2" (hyp: '2))))
 
 (define-syntax (output stx)
   (syntax-parse stx

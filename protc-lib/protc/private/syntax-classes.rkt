@@ -247,7 +247,7 @@ All actualize sections should specify a variable name that will be used in inher
                   ;(~optional being->symbol)
                   (~optional telos)
                   (~between aspect-bindings 1 +inf.0)
-                  thing:string
+                  thing:str
                   ) ...
             body:expr ...
             )
@@ -278,7 +278,7 @@ All actualize sections should specify a variable name that will be used in inher
            ))
 
 (define-syntax-class sc-step-ref
-  (pattern instruction:string
+  (pattern instruction:str
            #:attr name #'null;#f
            #:attr [args 1] #f)
   (pattern (name:id args:expr ...)
@@ -298,7 +298,7 @@ All actualize sections should specify a variable name that will be used in inher
            #:attr read #'"hrm, equally problematic"
            ))
 
-(define-syntax-class sc-prtoc-input
+(define-syntax-class sc-protc-input
   (pattern name:id)
   ;(pattern aspect:sc-aspect)
   ;(pattern (name:id aspect:sc-aspect))  ; TODO merge
@@ -575,6 +575,12 @@ All actualize sections should specify a variable name that will be used in inher
   #:datum-literals (param:parse-failure)
   (pattern (param:parse-failure)))
 
+(define-syntax-class sc-cur-todo
+  #:datum-literals (TODO)
+  (pattern (TODO text:str
+                 prov:sc-cur-hyp
+                 body:expr ...)))
+
 (define-syntax (define-sc-aspect-lift stx)
   (syntax-parse stx
     ;#:datum-literals (aspect)
@@ -656,14 +662,16 @@ All actualize sections should specify a variable name that will be used in inher
             (~or* name:str term:sc-cur-term)
             prov:sc-cur-hyp
             (~alt
-             (~between (~or* asp:sc-cur-aspect cnt:sc-cur-context bbc:sc-cur-bbc) 0 +inf.0)
-             (~once (~or unconv:str
-                         inv:sc-cur-invariant
-                         par:sc-cur-parameter*
-                         mes:sc-cur-*measure
-                         cal:sc-cur-calculate
-                         res:sc-cur-result
-                         var:sc-cur-vary))) ...
+             (~between (~or* asp:sc-cur-aspect
+                             cnt:sc-cur-context
+                             bbc:sc-cur-bbc) 0 +inf.0)
+             (~once (~or* unconv:str
+                          inv:sc-cur-invariant
+                          par:sc-cur-parameter*
+                          mes:sc-cur-*measure
+                          cal:sc-cur-calculate
+                          res:sc-cur-result
+                          var:sc-cur-vary))) ...
             ;(~or* cnt-0:sc-cur-context bbc-0:sc-cur-bbc) ...  ; allow multiple context sections for now, all will be merge into one
             ; TODO for bbc-0 and bbc-1 if they are present lift them to context
             ; TODO we probably need a way to specify the expected context for aspects ...
@@ -758,16 +766,59 @@ All actualize sections should specify a variable name that will be used in inher
                   ; res:sc-cur-result
                   ))))
 
+(define-syntax-class sc-cur-executor-verb
+  #:datum-literals (executor-verb protc:executor-verb)
+  (pattern ((~or* executor-verb protc:executor-verb)
+            name:str prov:sc-cur-hyp body:expr ...)))
+
+(define-syntax-class sc-cur-qualifiable
+  (pattern (~or* inp:sc-cur-input
+                 inv:sc-cur-aspect
+                 exv:sc-cur-executor-verb
+                 ;inv:sc-cur-invariant
+                 ;par:sc-cur-parameter*
+                 ;mes:sc-cur-*measure
+                 ; leaving out ipm since the aspect should be lifted preior to qualifiation?
+                 )))
+
+(define-syntax-class sc-cur-any-qualifier
+  ; annotations on aspects or inputs implemented as the parent node in a tree
+  ; anything parent class that allows a qualifier should set the default =must=
+  ; qualifier during expansion
+
+  ; telos and friends are qualifiers that live external to a process since
+  ; the process could be carried out for any number of reasons so this nesting
+  ; structure makes sense
+
+  ; TODO does protc:objective* fit here as well?
+  ; does it make sense to use this as a way to couple other parameters?
+  ; what if there are multiple children that all have the same reason?
+
+  (pattern (~or* tel:sc-cur-telos qal:sc-cur-qualifier)))
+
+(define-syntax-class sc-cur-telos
+  #:datum-literals (telos protc:telos)
+  (pattern ((~or* telos protc:telos)
+            text:str
+            prov:sc-cur-hyp
+            child:sc-cur-qualifiable ...)))
+
+(define-syntax-class sc-cur-qualifier
+  ; TODO in protc/base qualifiers are probably a subset of control flow
+  #:datum-literals (qualifier protc:qualifier)
+  (pattern ((~or* qualifier protc:qualifier)
+            (~or* "must" "should" "when" "unless"
+                  "seems to work better when"
+                  "you can not do this")
+            prov:sc-cur-hyp
+            child:sc-cur-qualifiable ...)))
+
 (define-syntax-class sc-cur-input
   #:datum-literals (input protc:input protc:implied-input)
   (pattern ((~or* input protc:input protc:implied-input)
-            name:str prov:sc-cur-hyp body:expr ...)))
-
-(define-syntax-class sc-cur-adjective
-  ; TODO warn when this is encountered?
-  #:datum-literals (~or* adjective protc:adjective)
-  (pattern ((~or* adjective protc:adjective)
-            name:str prov:sc-cur-hyp body:expr ...)))
+            (~or* name:str term:sc-cur-term)
+            prov:sc-cur-hyp
+            body:expr ...)))
 
 (module+ test
   ; FIXME this works for a datum but fails hard when syntax occurs
