@@ -19,52 +19,6 @@
                      [rdf-top #%top])
          (all-from-out "direct-model.rkt"))
 
-;;;
-
-(define-syntax (TODO stx)
-  (syntax-parse stx
-    [section:sc-cur-todo
-     #:with (errors ...)
-     (make-errors [#f
-                   stx
-                   (format "WARNING: TODO ~a at ~a ~a ~a"
-                           #'section.text
-                           ; FIXME section.term.label ...
-                           (let ([src (syntax-source #'section)])
-                             (if (not (or (path-string? src) (path-for-some-system? src)))
-                                 'stdin
-                                 (file-name-from-path src)))
-                           (syntax-line #'section)
-                           (syntax-column #'section))
-                   #:kind protc-warning  ; TODO
-                   #:fix #f])
-     #'(begin errors ...)]))
-(module+ test
-  (TODO "I have no idea what this means." (hyp: 'very-todo)))
-
-(define-syntax (circular-link stx)
-  (syntax-parse stx
-    [section:sc-cur-circular-link
-     ;#:do ((println #'section.warning))
-     #:with (errors ...)
-     (make-errors [#f
-                   stx
-                   (format "~a at ~a ~a ~a"
-                           #'section.warning
-                           ; FIXME section.term.label ...
-                           (let ([src (syntax-source #'section)])
-                             (if (not (or (path-string? src) (path-for-some-system? src)))
-                                 'stdin
-                                 (file-name-from-path src)))
-                           (syntax-line #'section)
-                           (syntax-column #'section))
-                   #:kind protc-warning  ; TODO
-                   #:fix #f])
-     ;(println #'(errors ...))
-     #'(begin errors ...)]))
-(module+ test
-  (circular-link no-type (cycle 'lol1 'lol2)))
-
 ; aspect and input are the only 2 that need to lift units out
 
 (define-syntax (actualize stx)
@@ -176,7 +130,7 @@
                                        stx
                                        ;#'name
                                        (format "WARNING: Aspect missing body in ~a at ~a ~a ~a"
-                                               #'section
+                                               (syntax->datum #'section)
                                                ; FIXME section.term.label ...
                                                (let ([src (syntax-source #'(~? section.name section.term))])
                                                  (if (not (or (path-string? src) (path-for-some-system? src)))
@@ -187,10 +141,10 @@
                                        #:kind protc-missing-section
                                        #:fix #t  ; TODO
                                        ]
-                                      [(attribute section.warning)
+                                      [(not (attribute section.warning))
                                        stx
                                        (format "WARNING: ~a at ~a ~a ~a"
-                                               #'(~? section.warning "There is no warning.")
+                                               (syntax->datum #'(~? section.warning "There is no warning."))
                                                ; FIXME section.term.label ...
                                                (let ([src (syntax-source #'(~? section.name section.term))])
                                                  (if (not (or (path-string? src) (path-for-some-system? src)))

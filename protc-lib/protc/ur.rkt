@@ -3,9 +3,12 @@
 ;;; the the target language for protcur
 
 (require protc/private/kernel
-         protc/private/curation #;base)
+         protc/private/curation
+         protc/private/curation-unprefixed
+         #;base)
 
-(provide (all-from-out protc/private/kernel)
+(provide (all-from-out protc/private/kernel
+                       protc/private/curation-unprefixed)
          (prefix-out protc: (all-from-out protc/private/curation)))
 
 (module reader syntax/module-reader protc/ur
