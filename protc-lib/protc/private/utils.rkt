@@ -47,17 +47,18 @@
 
 (define-syntax (make-errors stx)
   (syntax-parse stx
-    [(_ [error:expr syntax-for-locate
-                    message:expr
-                    (~optional (~seq #:kind kind:id)
-                               #:defaults ([kind #'protc-warning]))
-                    (~optional (~seq #:fix fix)
-                               #:defaults ([fix #'#f]))] ...)
+    [(_ [error:expr  ; NOTE triggers when #f
+         syntax-for-locate
+         message:expr
+         (~optional (~seq #:kind kind:id)
+                    #:defaults ([kind #'protc-warning]))
+         (~optional (~seq #:fix fix)
+                    #:defaults ([fix #'#f]))] ...)
      ;#:do (println (map syntax-local-eval (syntax->list #'(message ...))))
      ;#:with (msgs ...) (datum->syntax #'(message ...) (map syntax-local-eval (syntax->list #'(message ...))))
      ;(println (syntax->datum #'(msgs ...)))
      #'(for/list ([ok? (list error ...)]
-                #:unless ok?
+                #:unless ok?  ; NOTE triggers when ok? -> #f
                 [msg (list message ...) #;(list msgs ...)]
                 [sfl (list syntax-for-locate ...)]
                 [kind-1 (list kind ...)]

@@ -77,6 +77,7 @@ All actualize sections should specify a variable name that will be used in inher
                      protc/units/si-units-data
                      protc/units/si-units-extras
                      protc/units/units-dimensionless
+                     protc/units/imperial-units-data
                      protc/units/si-prefixes-data)
          (for-meta -1 'prims (only-in racket/base quote))  ; OH MY GOD FINALLY
          "identifier-functions.rkt"
@@ -378,12 +379,13 @@ All actualize sections should specify a variable name that will be used in inher
 ;;; units syntax classes
 ; ideally these should be drawn from aspect definitions at syntax time
 
-(define-syntax (flerp stx)
+(define-syntax (define-literal-set-from-units stx)
   (syntax-parse stx
     [(_ name)
      (define units
        (remove-duplicates (flatten (append
                                     units-si
+                                    units-imp
                                     units-extra
                                     units-extra-prefix
                                     units-dimensionless
@@ -393,18 +395,21 @@ All actualize sections should specify a variable name that will be used in inher
          ; expand units-si to pull in additional units at runtime
          #,(datum->syntax this-syntax units) ())]))
 
-(flerp funits)
+(define-literal-set-from-units funits)
 
 (define unit? (literal-set->predicate funits))
 
-(define-syntax (derp stx)
+(define-syntax (define-literal-set-from-prefixes stx)
+  ; TODO make it possible pass prefixes-si in at syntax time?
+  ; i think this requires one more macro to tell racket to look for
+  ; the name prefixes-si at macro compile time?
   (syntax-parse stx
     [(_ name)
      #`(define-literal-set name
          #:datum-literals
          #,(datum->syntax this-syntax (remove-duplicates (flatten prefixes-si))) ())]))
 
-(derp fprefixes)
+(define-literal-set-from-prefixes fprefixes)
 
 (define prefix? (literal-set->predicate fprefixes))
 
@@ -513,10 +518,9 @@ All actualize sections should specify a variable name that will be used in inher
 
 (define-syntax-class sc-quantity
   #:datum-literals (quantity param:quantity
-                             fuzzy-quantity protc:fuzzy-quantity
-                             dimensions param:dimensions
-                             expr param:expr
-                             )
+                    fuzzy-quantity protc:fuzzy-quantity
+                    dimensions param:dimensions
+                    expr param:expr)
   #:local-conventions ([body expr])
   (pattern ((~or* param:quantity quantity) value:number (~optional (~or* unit:sc-unit unit-expr:sc-unit-expr)))
            ; FIXME we do not want units to be optional, this is a bug in param:dimensions
@@ -543,6 +547,9 @@ All actualize sections should specify a variable name that will be used in inher
   )
 (module+ test
   (check-true
+   (syntax-parse #'(quantity 10)
+     [expr:sc-quantity #t]))
+  (check-true
    (syntax-parse #'(quantity 10 (unit seconds))
      [expr:sc-quantity #t]))
   (check-true
@@ -556,7 +563,7 @@ All actualize sections should specify a variable name that will be used in inher
   (pattern (oper:id (~or* expr:sc-cur-oper quant:sc-quantity) ...)))
 
 (define-syntax-class sc-cur-expr
-  #:datum-literals (param:expr expr)
+  #:datum-literals (expr param:expr)
   (pattern ((~or* expr param:expr) oper-expr:sc-cur-oper)))
 
 
@@ -564,16 +571,24 @@ All actualize sections should specify a variable name that will be used in inher
 
 (define-syntax-class sc-cur-term
   #:datum-literals (term)
-  (pattern (term curie:identifier label:str #:original value:str)))
+  (pattern (term curie:identifier label:string #:original value:str)))
 
 (define-syntax-class sc-cur-hyp
   #:datum-literals (hyp: quote)
   ; add additional valid prov identifiers here
+  ; FIXME somehow this didn't error on (hyp: 5) instead of (hyp: '5) ???
   (pattern (hyp: (quote hypothesis-urlsafe-uuid))))
 
 (define-syntax-class sc-cur-fail
   #:datum-literals (param:parse-failure)
   (pattern (param:parse-failure)))
+
+(define-syntax-class sc-cur-circular-link
+  #:datum-literals (circular-link cycle)
+  (pattern (circular-link type (cycle id-1 id-2))
+           #:attr warning (datum->syntax this-syntax
+                                         (apply format "WARNING: circular link ~a (cycle ~a ~a)"
+                                                 (map syntax->datum (list #'type #'id-1 #'id-2))))))
 
 (define-syntax-class sc-cur-todo
   #:datum-literals (TODO)
@@ -612,6 +627,43 @@ All actualize sections should specify a variable name that will be used in inher
 
 (define-sc-aspect-lift sc-cur-invariant invariant protc:invariant)
 
+(module+ test
+  ; FIXME this works for a datum but fails hard when syntax occurs
+  (check-equal? (syntax-parse #'(invariant (quantity 10 (unit meters)) (hyp: '0))
+                  [thing:sc-cur-invariant (syntax->datum #'thing.lifted)])
+                '(aspect-lifted "length" (hyp: '0) (invariant 'lifted (quantity 10 (unit meters)))))
+
+  (check-equal? 
+   (syntax-parse #'(invariant (fuzzy-quantity "room temperature" "temperature") (hyp: '0.5))
+     [thing:sc-cur-invariant (syntax->datum #'thing.lifted)])
+   '(aspect-lifted "temperature" (hyp: '0.5) (invariant 'lifted (fuzzy-quantity "room temperature" "temperature"))))
+
+  (check-equal? (syntax-parse #'(parameter* (quantity 10 (unit meters)) (hyp: '0))
+                  [thing:sc-cur-parameter* (syntax->datum #'thing.lifted)])
+                '(aspect-lifted "length" (hyp: '0) (parameter* 'lifted (quantity 10 (unit meters)))))
+
+  (check-equal? (syntax-parse #'(parameter* (bool #t) (hyp: '0))
+                  [thing:sc-cur-parameter* (syntax->datum #'thing.lifted)])
+                '(aspect-lifted #t (hyp: '0) (parameter* 'lifted (bool #t))))
+
+  (check-true
+   (syntax-parse #'(parameter* (quantity 10
+                                         (unit-expr (/ (unit meters)
+                                                       (unit seconds))))
+                               (hyp: '0))
+     [thing:sc-cur-parameter* #'thing.lifted #t]))
+
+  (define-syntax (testthing stx)
+    ; ~? testing
+    (syntax-parse stx
+      [(_ (~optional a)
+          (~optional (~seq #:b b))
+          (~optional (~seq #:c c))
+          )
+       #'(~? a (~? b (~? c "d")))
+       #; ; well, this works other than I thought it did
+       #'(~? a b c "d")])))
+
 ;(define-sc-aspect-lift sc-cur-*measure *measure protc:*measure)  ; TODO structure is different?
 ; fun thing about this is that it is now very clear how to use *measure
 ; to let people specify the structure of the result that is going to come
@@ -645,16 +697,113 @@ All actualize sections should specify a variable name that will be used in inher
 ; TODO lift results to *measure or calculate specs
 
 (define-syntax-class sc-cur-bbc
-  #:datum-literals (black-box-component protc:black-box-component)
-  (pattern ((~or black-box-component protc:black-box-component) body ...)) ; TODO
+  #:datum-literals (bbc black-box-component protc:black-box-component)
+  (pattern ((~or* bbc black-box-component protc:black-box-component)
+            (~or* name:str term:sc-cur-term)
+            prov:sc-cur-hyp
+            ; TODO I think we only allow nested bbcs which are
+            ; implicitly interpreted as a part-of hierarchy
+            ; and I think that might be able to act as inputs
+            ; to other steps? or do we not want to support that
+            ; since you could specify a step that has a brain slice
+            ; as an input with a parameter attached to a bbc cell-body
+            ; EXAMPLE make my-special-sandwich has input bread
+            ; which has-part holes and seeds, and then you could say
+            ; that the cateogry aspect of the seed should be one of a list
+            ; probably better to use something like (any-of seasme flax pumpkin)
+            ; which would be done via a qualifier on the black box
+            ; on the other hand one might also want to specify
+            ; "bread with holes that are less than .5 cm in diameter"
+            ; with a telos "so that the jelly doesn't leak through"
+            (~alt child:sc-cur-bbc
+                  asp:sc-cur-aspect
+                  ; FIXME do we restrict the aspect structure here?
+                  ; OR should we only allow aspects to have bbcs as context?
+                  ; in other words, we need a way to know whether the bbc has
+                  ; a parent that is the primary input, or whether it is the
+                  ; black box complement (environment)
+                  ; TODO require non-recursive definition of bbcs in this
+                  ; hierarchy so that a location aspect can use previously
+                  ; definted components that are local to the context without
+                  ; risk of collision
+                  par:sc-cur-parameter*
+                  inv:sc-cur-invariant
+                  ) ...))
+  )
+
+(module+ test
+  (check-true
+   (syntax-parse
+       #`(bbc (term ilxtr:lol "lol" #:original "lul") (hyp: '-1))
+     [expr:sc-cur-bbc #t]))
+  ; TODO categorical values require that the measure function
+  ; return only one of the set of values, so something like, or a cond
+  ; (define-aspect (crust hardness) (if (hard? crust) 'hard 'soft))
+
+  ; NOTE that in protc/base that sometimes the units can be specified outside the expression
+  ; we also support units inside the expression as here so that unit conversions can be
+  ; applied automatically and so that we can trace the provenance of the actual raw measures
+  (check-true
+   (syntax-parse
+       #'(black-box-component "bread" (hyp: '-1)
+                              (black-box-component "crust" (hyp: '0)
+                                                   (aspect "soft?" (hyp: '1)
+                                                           (parameter* (bool #t)
+                                                                       (hyp: '2))))
+                              (black-box-component "holes" (hyp: '3)
+                                                   (aspect "diameter" (hyp: '4)
+                                                           (parameter*
+                                                            (expr (< (quantity 0.5 (unit 'meters 'centi))))
+                                                            (hyp: '5)))))
+     [expr:sc-cur-bbc #t]))
+  ; NOTE nesting aspects is not something we want to do
+  ; however, it does mean that we need to figure out how to
+  ; express projection vectors
+  (define cell-1-aspect
+    ; this seems like it will require overloading of the location aspect type ...
+    ; the operational definition of this would be "500um +/- 30um from the surface of the brain"
+    ; which we can work since it implies that the missing how is a contextual definition for what
+    ; layer 5 means and that it returns true, we also know that inside it is a spatial-3
+    ; but in this case we just have it as a categorical location ... HRM I think we can manage that
+    ; by lifting the type of the parameter (bool, quantity, etc.)
+    #'(aspect "location" (hyp: '0)
+              (context "in" (hyp: '1) (bbc "layer 5" (hyp: '0.5)))  ; "in" optional tagged this way before
+              (parameter* (bool #t) (hyp: '2)))
+    #; ; this is retained as an example of a bad aspect definition that does not work
+    #'(aspect "location" (hyp: '1)  ; FIXME categorical aspects? no?
+              (aspect "in?" (hyp: '1.5)
+                      ; better to have l5 a context than allow categories?
+                      ; what about classification functions that really do
+                      ; return string values? well, that is some hefty context
+                      ; that would probably have to be defined as a special
+                      ; categorical unit or something like that?
+                      (context "layer 5" (hyp: '1.6))
+                      (parameter* (bool #t) ;(category "layer 5")
+                                  (hyp: '2)))))
+  (check-true (syntax-parse cell-1-aspect [expr:sc-cur-aspect #t]))
+  (check-true
+   (syntax-parse
+       #`(bbc "some brain region" (hyp: '-1)
+              ; implicit let* here?
+              (bbc "cell 1" (hyp: 'cell-1-anno)
+                   #,cell-1-aspect
+                   )
+              (bbc "cell 2" (hyp: '3)
+                   (aspect "connected?" (hyp: '4)
+                           (context (hyp: 'cell-1-anno))  ; FIXME by reference
+                           (parameter* (bool #t) (hyp: '5)))))
+     [expr:sc-cur-bbc #t]))
+
   )
 
 (define-syntax-class sc-cur-vary
   #:datum-literals (vary protc:vary protc:implied-vary)
   (pattern  ((~or* vary protc:vary protc:implied-vary)
-             name:str prov:sc-cur-hyp (~alt unconv:str
-                                            inv:sc-cur-invariant
-                                            par:sc-cur-parameter*) ...)))
+             name:str
+             prov:sc-cur-hyp
+             (~alt unconv:str
+                   inv:sc-cur-invariant
+                   par:sc-cur-parameter*) ...)))
 
 (define-syntax-class sc-cur-aspect
   #:datum-literals (aspect protc:aspect implied-aspect protc:implied-aspect)
@@ -671,7 +820,8 @@ All actualize sections should specify a variable name that will be used in inher
                           mes:sc-cur-*measure
                           cal:sc-cur-calculate
                           res:sc-cur-result
-                          var:sc-cur-vary))) ...
+                          var:sc-cur-vary
+                          ))) ...
             ;(~or* cnt-0:sc-cur-context bbc-0:sc-cur-bbc) ...  ; allow multiple context sections for now, all will be merge into one
             ; TODO for bbc-0 and bbc-1 if they are present lift them to context
             ; TODO we probably need a way to specify the expected context for aspects ...
@@ -693,7 +843,22 @@ All actualize sections should specify a variable name that will be used in inher
                    var:sc-cur-vary))
             ;more-asp:sc-cur-aspect ...  ; FIXME need better expression for max-1 vs allow many
             ;(~or* cnt-1:sc-cur-context bbc-1:sc-cur-bbc) ...  ; easy way to allow before or after the main content
-            ))
+            )
+           #:attr warning #f)
+
+  (pattern ((~or* aspect protc:aspect implied-aspect protc:implied-aspect)
+            (~or* name:str term:sc-cur-term)
+            prov:sc-cur-hyp
+            (~between (~or* asp:sc-cur-aspect
+                            cnt:sc-cur-context
+                            bbc:sc-cur-bbc) 0 +inf.0) ...)
+           #:attr inv #f
+           #:attr par #f
+           #:attr mes #f
+           #:attr cal #f
+           #:attr res #f
+           #:attr var #f
+           #:attr warning #'"Aspect has no body section!")
   #;
   (pattern ((~or* aspect protc:aspect protc:implied-aspect)
             ; TODO figure out the right way to handle these
@@ -705,16 +870,42 @@ All actualize sections should specify a variable name that will be used in inher
                                            multi-par:sc-cur-parameter*) ...)))
 
 (module+ test
-  (syntax-parse #'(aspect "length"
-                          (hyp: 'some-prov)
-                          #; ; fails as expected
-                          (parameter* (quantity 10 (unit 'meters 'milli)) (hyp: 'p0))
-                          (parameter* (quantity 20 (unit 'meters 'milli)) (hyp: 'p1)))
-    [thing:sc-cur-aspect #'thing])
-  (syntax-parse #'(aspect "predicate?"
-                          (hyp: 'some-other-prov)
-                          (parameter* (bool #t) (hyp: 'p2)))
-    [thing:sc-cur-aspect #'thing])
+  (check-true
+   (syntax-parse #'(aspect "length"
+                           (hyp: 'some-prov)
+                           #; ; fails as expected
+                           (parameter* (quantity 10 (unit 'meters 'milli)) (hyp: 'p0))
+                           (parameter* (quantity 20 (unit 'meters 'milli)) (hyp: 'p1)))
+     [thing:sc-cur-aspect #t]))
+
+  (check-true
+   (syntax-parse #'(aspect "predicate?"
+                           (hyp: 'some-other-prov)
+                           (parameter* (bool #t) (hyp: 'p2)))
+     [thing:sc-cur-aspect #t]))
+
+  (check-true (syntax-parse #'(aspect "dangling"
+                                      (hyp: 'some-other-prov))
+                [thing:sc-cur-aspect #t]))
+
+  (define (bool value) value)  ; temp
+  (define (quantity value . rest) (cons value rest))  ; temp
+  (check-exn exn:fail:syntax?
+             (thunk (syntax-parse #'(aspect "too many"
+                                            (hyp: 'some-other-prov)
+                                            (invariant (bool #t) (hyp: 'p2))
+                                            (parameter* (bool #t) (hyp: 'p2))
+                                            (parameter* (bool #t) (hyp: 'p3)))
+                      [thing:sc-cur-aspect #t])))
+
+  ; can we tell if an aspect is a predicate? if we can then we can
+  ; automatically interpret these as the positive #t version by default
+  ; can we really trust the question mark at the end though?
+  ; probably for protc/base we can, maybe for protc/ur
+  #; ; TODO this fails right now, enable once predicate detection happens
+  (check-true
+   (syntax-parse #'(aspect "predicate-default-behavior?" (hyp: 'prov))
+     [thing:sc-cur-aspect #t]))
   )
 (define-syntax-class sc-cur-aspect-bad
   #:datum-literals (aspect protc:aspect protc:implied-aspect)
@@ -740,8 +931,8 @@ All actualize sections should specify a variable name that will be used in inher
   ; and also have multiple context participants with their own aspects
   #:datum-literals (context protc:context protc:implied-context)
   (pattern ((~or* context protc:context protc:implied-context)
-            (~or* name:str term:sc-cur-term)
-            prov:sc-cur-hyp
+            (~optional (~or* name:str term:sc-cur-term))
+            prov:sc-cur-hyp  ; for context can just have the link if child is input or bbc
             (~or* unconv:str
                   bbc:sc-cur-bbc
                   ; TODO determine what else can go as context
@@ -764,7 +955,8 @@ All actualize sections should specify a variable name that will be used in inher
                   ; previous results are likely to be used here
                   ; will uncomment when it is clear we need them
                   ; res:sc-cur-result
-                  ))))
+                  ) ...  ; FIXME ~optional ?
+            )))
 
 (define-syntax-class sc-cur-executor-verb
   #:datum-literals (executor-verb protc:executor-verb)
@@ -794,7 +986,7 @@ All actualize sections should specify a variable name that will be used in inher
   ; does it make sense to use this as a way to couple other parameters?
   ; what if there are multiple children that all have the same reason?
 
-  (pattern (~or* tel:sc-cur-telos qal:sc-cur-qualifier)))
+  (pattern (~or* tel:sc-cur-telos man:sc-cur-many qal:sc-cur-qualifier)))
 
 (define-syntax-class sc-cur-telos
   #:datum-literals (telos protc:telos)
@@ -802,6 +994,35 @@ All actualize sections should specify a variable name that will be used in inher
             text:str
             prov:sc-cur-hyp
             child:sc-cur-qualifiable ...)))
+
+(define-syntax-class sc-cur-many
+  ; FIXME use this as syntactic sugar for constructing a population
+  ; and parameterizing it? (many 10 thing) -> (bbc things (bbc thing) (count (-> things thing) 10))
+  ; there is no sane way to deal with the fact that the number of times a thing appears cannot
+  ; be an aspect of an individual member :/
+  ; maybe (many thing 10) -> (bbc things (aspect count (bbc thing) 10)) ; also bad
+  ; -> (bbc things (only (made-up-of (many (bbc thing)))) (aspect amount 10))
+  ; -> (bbc things (only (made-up-of (many (bbc thing)))) (aspect number-of-members 10))
+  ; it is possible to use amount/count with composite entities such as salt, or water, or spoons
+  ; it doesn't work so well for mice, you need the composite population there-of which is
+  ; quite different, if know that a black box is a homogenous composite then we can allow ammount
+  ; as an aspect (individual->homogenous-composite thing), alternately if we _know_ that a thing
+  ; is _not_ composite then we could just lift count the other way
+  ; namely (input thing (aspect count (param 10)) (aspect grams (param 1)))
+  ; -> (many (thing (aspect grams (param 1))) 10) which seems reasonable, but
+  ; maybe we want to use (aspect count-lift 10) or something to distingish?
+  ; otherwise we have to find a way to infer composite homogenous ... vs signular
+  ; this can help us prevent a proliferation of plural forms unless absolutely needed
+  ; obviously if you have a situation where you need 10 individuals that have a specific
+  ; relational structure between them (such as multi-generation parent/offspring)
+  ; you can't use many and describe everything as parameters on a single individual
+  ; FIXME call this count?
+  #:datum-literals (many protc:many)
+  (pattern ((~or* many protc:many)
+            (~or* inp:sc-cur-input bbc:sc-cur-bbc)  ; one at a time here
+            prov:sc-cur-hyp
+            (~optional par:sc-cur-parameter*)
+            )))
 
 (define-syntax-class sc-cur-qualifier
   ; TODO in protc/base qualifiers are probably a subset of control flow
@@ -818,44 +1039,91 @@ All actualize sections should specify a variable name that will be used in inher
   (pattern ((~or* input protc:input protc:implied-input)
             (~or* name:str term:sc-cur-term)
             prov:sc-cur-hyp
-            body:expr ...)))
+            (~alt ;inv/par:sc-cur-inv/par
+             unconv:str
+             crc:sc-cur-circular-link  ; FIXME need to deal with this properly
+             inp:sc-cur-input  ; allow nested inputs, will probably need to split spec vs impl here
+             bbc:sc-cur-bbc
+             qal:sc-cur-any-qualifier
+             exv:sc-cur-executor-verb
+             asp:sc-cur-aspect
+             inv:sc-cur-invariant
+             par:sc-cur-parameter*
+             tod:sc-cur-todo
+             ; TODO tighter restrictions needed here
+             #;body:expr) ...
+            )
+           #:attr prov-id (attribute prov.hypothesis-urlsafe-uuid)
+           #:attr term-label (attribute term.label)
+           #:attr (inv-lifted 1) (attribute inv.lifted)
+           #:attr (par-lifted 1) (attribute par.lifted)
+           ))
 
 (module+ test
-  ; FIXME this works for a datum but fails hard when syntax occurs
-  (check-equal? (syntax-parse #'(invariant (quantity 10 (unit meters)) (hyp: '0))
-                  [thing:sc-cur-invariant (syntax->datum #'thing.lifted)])
-                '(aspect-lifted "length" (hyp: '0) (invariant 'lifted (quantity 10 (unit meters)))))
+  ; TODO counting and allocation, singular vs collectivty entities
+  ; number of members of a collective vs occurances of a single thing
+  ; it seems that we want the behavior of count to differ depending
+  ; on whether we are referring to the input or the output but this
+  ; seems like it is a bad design ...
+  ; (input toothpick (aspect allocation (parameter 10)))
+  ; still has the issue because the input is singular and
+  ; we will only define toothpick once, do we really have
+  ; to force people to define box-of-toothpicks?
+  ; maybe another operation that will automatically lift
+  ; an individual definition to a population, and then we
+  ; can parameterize the population? have member be a function?
+  ; but then we still need a way to pluralize ...
+  ; (input [toothpicks (many toothpick)] (bbc (member toothpicks) (aspect count (param 10))))
+  ; local binding for for inputs? many expand to > 1
+  ; the real question is which approach is going to be the most transparent
+  ; and can we prevent people from using more confusing approaches, or at least
+  ; can we detect and transform equivalent ways to say the same thing into the
+  ; preferred format? which one will require the least amount of writing custom functions
+  ; to check that an aspect was populated correctly?
 
-  (check-equal? 
-   (syntax-parse #'(invariant (fuzzy-quantity "room temperature" "temperature") (hyp: '0.5))
-     [thing:sc-cur-invariant (syntax->datum #'thing.lifted)])
-   '(aspect-lifted "temperature" (hyp: '0.5) (invariant 'lifted (fuzzy-quantity "room temperature" "temperature"))))
+  ; I really think that count should be able to have a type ...
+  ; it would make building the defining tower for all units much easier ...
 
-  (check-equal? (syntax-parse #'(parameter* (quantity 10 (unit meters)) (hyp: '0))
-                  [thing:sc-cur-parameter* (syntax->datum #'thing.lifted)])
-                '(aspect-lifted "length" (hyp: '0) (parameter* 'lifted (quantity 10 (unit meters)))))
+  ; dealing with count ambiguity if the aspect is count
+  ; then do we ever allow a being to show up in the unit
+  ; technically the "count of thing" is of a different type
+  ; or putatively different type, then other counts and by
+  ; carrying it along as a unit we can do fun things like
+  ; express 5000 sailors / 20 ships -> 250 sailors/ship
+  ; which is much less ambiguous than trying to interpret
+  ; (aspect count (bbc ships) (parameter 10)) vs
+  ; (thing ships (aspect count (parameter 10))) which really should be
+  ; (thing ships (aspect count (bbc member) (parameter 10)))
+  ; basically, how do we express that I need 10 toothpicks?
+  ; how do I express to report that we counted 20 birds?
+  (check-true (syntax-parse #'(parameter* (quantity 10) (hyp: '2)) [expr:sc-cur-parameter* #t]))
+  (check-true
+   (syntax-parse
+       #'(input "thing" (hyp: '0)
+                (aspect "count" (hyp: '1)
+                        (parameter* (quantity 10) (hyp: '2))))
+     [expr:sc-cur-input #t]))
 
-  (check-equal? (syntax-parse #'(parameter* (bool #t) (hyp: '0))
-                  [thing:sc-cur-parameter* (syntax->datum #'thing.lifted)])
-                '(aspect-lifted #t (hyp: '0) (parameter* 'lifted (bool #t))))
-
-  (syntax-parse #'(parameter* (quantity 10
-                                        (unit-expr (/ (unit meters)
-                                                      (unit seconds))))
-                              (hyp: '0))
-    [thing:sc-cur-parameter* #'thing.lifted])
-
-  (define-syntax (testthing stx)
-    ; ~? testing
-    (syntax-parse stx
-      [(_ (~optional a)
-          (~optional (~seq #:b b))
-          (~optional (~seq #:c c))
-          )
-       #'(~? a (~? b (~? c "d")))
-       #; ; well, this works other than I thought it did
-       #'(~? a b c "d")])))
-
-
-
-
+  ; this seems like it would need to be a complex aspect
+  ; has-part-count
+  (check-true
+   ; bad way to do it
+   (syntax-parse
+       #'(input "thing" (hyp: '0)
+                (aspect "count" (hyp: '1)
+                        (parameter* (quantity 10 #;(unit 'part-of-thing)) (hyp: '2))))
+     [expr:sc-cur-input #t]))
+  (check-true
+   (syntax-parse
+       #'(input "thing" (hyp: '0)
+                (aspect "has-part-count" (hyp: '1)
+                        (bbc "part of thing" (hyp: '2))
+                        (parameter* (quantity 10) #;(unit 'part-of-thing) (hyp: '3))))
+     [expr:sc-cur-input #t]))
+  ; (count-type "part-of-thing") instead of (unit 'part-of-thing) ?
+  ; this would allow smarter lifting of counts maybe and provide a shorthand
+  ; for (input thing (bbc part-of-thing) (count part-of-thing 10))
+  ; or something like that, since part of thing is not constrained by how many of it there are
+  ; maybe we use (input thing (many (quantity 10) (bbc part-of-thing))) with many as a qualifier?
+  ; this seems much more reasonable and much more compositional
+  )

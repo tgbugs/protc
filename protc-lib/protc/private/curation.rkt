@@ -2,8 +2,10 @@
 
 (require
  "direct-model.rkt"
+ rdf/utils
  (for-syntax
   racket/base
+  racket/path
   racket/syntax
   syntax/parse
   "utils.rkt"
@@ -12,10 +14,53 @@
   "syntax-classes.rkt"))
 
 (provide (all-defined-out)
-         (rename-out [input implied-input])  ; this does not prevent the export of input as input
+         (rename-out [input implied-input]  ; this does not prevent the export of input as input
+                     #; ; not entirely clear how we want to deal with this
+                     [rdf-top #%top])
          (all-from-out "direct-model.rkt"))
 
 ;;;
+
+(define-syntax (TODO stx)
+  (syntax-parse stx
+    [section:sc-cur-todo
+     #:with (errors ...)
+     (make-errors [#f
+                   stx
+                   (format "WARNING: TODO ~a at ~a ~a ~a"
+                           #'section.text
+                           ; FIXME section.term.label ...
+                           (file-name-from-path (syntax-source #'section))
+                           (syntax-line #'section)
+                           (syntax-column #'section))
+                   #:kind protc-warning  ; TODO
+                   #:fix #f])
+     #'(begin errors ...)]))
+(module+ test
+  (TODO "I have no idea what this means." (hyp: 'very-todo)))
+
+(define-syntax (circular-link stx)
+  (syntax-parse stx
+    [section:sc-cur-circular-link
+     ;#:do ((println #'section.warning))
+     #:with (errors ...)
+     (make-errors [#f
+                   stx
+                   (format "~a at ~a ~a ~a"
+                           #'section.warning
+                           ; FIXME section.term.label ...
+                           (let ([src (syntax-source #'section)])
+                                                 (if (eq? src 'stdin)
+                                                     'stdin
+                                                     (file-name-from-path src)))
+                           (syntax-line #'section)
+                           (syntax-column #'section))
+                   #:kind protc-warning  ; TODO
+                   #:fix #f])
+     ;(println #'(errors ...))
+     #'(begin errors ...)]))
+(module+ test
+  (circular-link no-type (cycle 'lol1 'lol2)))
 
 ; aspect and input are the only 2 that need to lift units out
 
@@ -26,35 +71,26 @@
 
 (define-syntax (input stx)
   (syntax-parse stx
-    #:datum-literals (hyp:)
+    ;#:datum-literals (hyp:)
     #;
     (aspect protc:aspct
             input protc:input
             parameter* protc:parameter*
             invariant protc:invariant)
-    [(_ (~or* name:str term:sc-cur-term)
-        (hyp: (quote id))
-        (~alt ;inv/par:sc-cur-inv/par
-         unconv:str
-         inp:sc-cur-input  ; allow nested inputs, will probably need to split spec vs impl here
-         qal:sc-cur-any-qualifier
-         exv:sc-cur-executor-verb
-         asp:sc-cur-aspect
-         inv:sc-cur-invariant
-         par:sc-cur-parameter*
-         tod:sc-cur-todo
-         ; TODO tighter restrictions needed here
-         #;body:expr) ...)
-     #:with black-box (if (attribute name)
-                          (datum->syntax #'name (string->symbol (syntax-e #'name)))
+    [sec:sc-cur-input
+     ; FIXME is there a way to reference down two dots?
+     ; no, you have to do the renaming inside the syntax class
+     ; which is a good thing, it provides an enforced abstraction boundary
+     #:with black-box (if (attribute sec.name)
+                          (datum->syntax #'sec.name (string->symbol (syntax-e #'sec.name)))
                           ; FIXME type vs token ...
                           ; FIXME spaces!?
-                          (datum->syntax #'term (string->symbol (syntax-e #'term.label)))
+                          (datum->syntax #'sec.term (string->symbol (syntax-e #'sec.term-label)))
                           )
-     #'(actualize black-box #:prov (hyp: 'id)
-                  (~? inv.lifted) ...
-                  (~? par.lifted) ...
-                  (~? asp (raise-syntax-error "HOW?!")) ...
+     #'(actualize black-box #:prov (hyp: 'sec.prov-id)
+                  (~? sec.inv-lifted) ...
+                  (~? sec.par-lifted) ...
+                  (~? sec.asp (raise-syntax-error "HOW?!")) ...
                   ;(~? body (raise-syntax-error "HOW?!")) ...
                )
      ]))
@@ -127,16 +163,54 @@
   (syntax-parse stx
     #:datum-literals (hyp: quote)
     [section:sc-cur-aspect
-     #:do ((when (not (or (attribute section.asp)
-                          (attribute section.inv)
-                          (attribute section.par)
-                          (attribute section.mes)
-                          (attribute section.cal)
-                          (attribute section.res)
-                          (attribute section.var)))
-             ; TODO actually create a warning object
-             (displayln (format "WARNING: Aspect missing body in\n~a"
-                                (syntax/loc stx #'section)))))
+     #:with (errors ...) (make-errors [(or (attribute section.asp)
+                                           (attribute section.inv)
+                                           (attribute section.par)
+                                           (attribute section.mes)
+                                           (attribute section.cal)
+                                           (attribute section.res)
+                                           (attribute section.var))
+                                       stx
+                                       ;#'name
+                                       (format "WARNING: Aspect missing body in ~a at ~a ~a ~a"
+                                               #'section
+                                               ; FIXME section.term.label ...
+                                               (let ([src (syntax-source #'(~? section.name section.term))])
+                                                 (if (eq? src 'stdin)
+                                                     'stdin
+                                                     (file-name-from-path src)))
+                                               (syntax-line #'(~? section.name section.term))
+                                               (syntax-column #'(~? section.name section.term)))
+                                       #:kind protc-missing-section
+                                       #:fix #t  ; TODO
+                                       ]
+                                      [(attribute section.warning)
+                                       stx
+                                       (format "WARNING: ~a at ~a ~a ~a"
+                                               #'(~? section.warning "There is no warning.")
+                                               ; FIXME section.term.label ...
+                                               (let ([src (syntax-source #'(~? section.name section.term))])
+                                                 (if (eq? src 'stdin)
+                                                     'stdin
+                                                     (file-name-from-path src)))
+                                               (syntax-line #'(~? section.name section.term))
+                                               (syntax-column #'(~? section.name section.term))
+                                               )
+                                       #:kind protc-missing-section
+                                       ])
+     #;
+     #:do
+     #;
+     ((when (not (or (attribute section.asp)
+                     (attribute section.inv)
+                     (attribute section.par)
+                     (attribute section.mes)
+                     (attribute section.cal)
+                     (attribute section.res)
+                     (attribute section.var)))
+        ; TODO actually create a warning object
+        (displayln (format "WARNING: Aspect missing body in\n~a"
+                           (syntax/loc stx #'section)))))
      #;
      (_ (~or* name:str term:sc-cur-term)
         (hyp: (quote id))
@@ -150,11 +224,27 @@
                res:sc-cur-result
                var:sc-cur-vary)))
      ; TODO check that the given unit matches
-     #`(quote #,stx)]
+     #`(begin errors ... (quote #,stx))]
     [section:sc-cur-aspect-bad
-     #:do ((displayln (format "WARNING: Aspect has zero or multiple entries in\n~a"
-                              (syntax/loc stx #'section))))
-     #'(void)]))
+     #:with (errors ...) (make-errors [#f
+                                       stx
+                                       (format "WARNING: Aspect has zero or multiple entries in\n~a at ~a ~a ~a"
+                                               #'section
+                                               ; FIXME section.term.label ...
+                                               (let ([src (syntax-source #'(~? section.name section.term))])
+                                                 (if (eq? src 'stdin)
+                                                     'stdin
+                                                     (file-name-from-path src)))
+                                               (syntax-line #'(~? section.name section.term))
+                                               (syntax-column #'(~? section.name section.term)))
+                                       #:kind protc-warning  ; TODO
+                                       #:fix #t])
+     #;
+     #:do
+     #;
+     ((displayln (format "WARNING: Aspect has zero or multiple entries in\n~a"
+                         (syntax/loc stx #'section))))
+     #'(begin errors ...)]))
 (module+ test
   (aspect "mass" (hyp: '0))
   (aspect "test-unconv" (hyp: 'lol) "unconverted")
@@ -206,6 +296,7 @@
   (aspect "will fail multibody" (hyp: 'asdf)
           (parameter* (quantity 1) (hyp: '1))
           (parameter* (quantity 2) (hyp: '2)))
+  (aspect (term ilxtr:lol "lol" #:original "laugh out loud") (hyp: '0))
   #;
   (aspect "some aspect" (hyp: 'asdf)
           (no-how-error)))

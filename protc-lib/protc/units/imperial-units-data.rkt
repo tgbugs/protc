@@ -10,6 +10,7 @@
   (◦F . degrees-fahrenheit) ; b'\xe2\x97\xa6' white dot
   (lb . pounds)  ; FIXME normalization
   (lbs . pounds)
+  (RCF . relative-centrifugal-force)
   (Fr . french-gauge)  ; also Fg and F but F has many collisions with degrees-fahrenheit
   (G . birmingham-gauge))
 )
