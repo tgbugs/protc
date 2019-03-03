@@ -30,7 +30,10 @@
                    (format "WARNING: TODO ~a at ~a ~a ~a"
                            #'section.text
                            ; FIXME section.term.label ...
-                           (file-name-from-path (syntax-source #'section))
+                           (let ([src (syntax-source #'section)])
+                             (if (not (or (path-string? src) (path-for-some-system? src)))
+                                 'stdin
+                                 (file-name-from-path src)))
                            (syntax-line #'section)
                            (syntax-column #'section))
                    #:kind protc-warning  ; TODO
@@ -50,9 +53,9 @@
                            #'section.warning
                            ; FIXME section.term.label ...
                            (let ([src (syntax-source #'section)])
-                                                 (if (eq? src 'stdin)
-                                                     'stdin
-                                                     (file-name-from-path src)))
+                             (if (not (or (path-string? src) (path-for-some-system? src)))
+                                 'stdin
+                                 (file-name-from-path src)))
                            (syntax-line #'section)
                            (syntax-column #'section))
                    #:kind protc-warning  ; TODO
@@ -67,7 +70,7 @@
 (define-syntax (actualize stx)
   (syntax-parse stx
     [thing #;(_ wut:id (~optional (~seq #:prov prov)) rest:expr ...)
-     #''thing]))
+           #''thing]))
 
 (define-syntax (input stx)
   (syntax-parse stx
@@ -92,7 +95,7 @@
                   (~? sec.par-lifted) ...
                   (~? sec.asp (raise-syntax-error "HOW?!")) ...
                   ;(~? body (raise-syntax-error "HOW?!")) ...
-               )
+                  )
      ]))
 (module+ test
   ; default interpretation of nested inputs is a make spec that only lists inputs
@@ -176,7 +179,7 @@
                                                #'section
                                                ; FIXME section.term.label ...
                                                (let ([src (syntax-source #'(~? section.name section.term))])
-                                                 (if (eq? src 'stdin)
+                                                 (if (not (or (path-string? src) (path-for-some-system? src)))
                                                      'stdin
                                                      (file-name-from-path src)))
                                                (syntax-line #'(~? section.name section.term))
@@ -190,7 +193,7 @@
                                                #'(~? section.warning "There is no warning.")
                                                ; FIXME section.term.label ...
                                                (let ([src (syntax-source #'(~? section.name section.term))])
-                                                 (if (eq? src 'stdin)
+                                                 (if (not (or (path-string? src) (path-for-some-system? src)))
                                                      'stdin
                                                      (file-name-from-path src)))
                                                (syntax-line #'(~? section.name section.term))
@@ -232,7 +235,7 @@
                                                #'section
                                                ; FIXME section.term.label ...
                                                (let ([src (syntax-source #'(~? section.name section.term))])
-                                                 (if (eq? src 'stdin)
+                                                 (if (not (or (path-string? src) (path-for-some-system? src)))
                                                      'stdin
                                                      (file-name-from-path src)))
                                                (syntax-line #'(~? section.name section.term))
@@ -260,12 +263,12 @@
   (aspect "holding potential"
           (hyp: '3)
           (vary "holding-potential" (hyp: '3.5)
-           (parameter*
-            (quantity -70 (unit 'volts 'milli))
-            (hyp: '4))
-           (parameter*
-            (quantity -50 (unit 'volts 'milli))
-            (hyp: '5))))
+                (parameter*
+                 (quantity -70 (unit 'volts 'milli))
+                 (hyp: '4))
+                (parameter*
+                 (quantity -50 (unit 'volts 'milli))
+                 (hyp: '5))))
   (aspect "angle"
           (hyp: 'yes)
           (black-box-component "start from here thing" (hyp: 'asdf))  ; TODO auto lift?
@@ -291,8 +294,8 @@
           ; e.g. sagittal is (plane-normal-to medial-lateral-axis) or (plane-coplanar-with a-p d-v)
           ; if our black box is known to be a plane (which it might not) then we only need (a-p d-v)
           (aspect "thick" (hyp: 'fdsa)
-                          (parameter*
-                           (quantity 8 (unit 'meters 'micro)) (hyp: 'a))))
+                  (parameter*
+                   (quantity 8 (unit 'meters 'micro)) (hyp: 'a))))
   (aspect "will fail multibody" (hyp: 'asdf)
           (parameter* (quantity 1) (hyp: '1))
           (parameter* (quantity 2) (hyp: '2)))
