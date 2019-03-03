@@ -87,3 +87,30 @@
    [#f #'here (format "~a test expressions" "hello!")]
    [#f #'here "oops"])
   )
+
+;;; macro testing
+
+(module+ test
+  (require racket/function)
+  (require syntax/macro-testing)
+  (define-syntax (wants-a-string stx)
+    (syntax-parse stx
+      [(_ a-string:string)
+       #'(void)]))
+
+  (wants-a-string "string")  ; no fail
+  (check-exn exn:fail?
+             ; should fail and does
+             (thunk
+              ; this fails because
+              (check-exn exn:fail:syntax?
+                         (thunk
+                          ; this succeeds which we do not want
+                          (convert-syntax-error (wants-a-string "string"))))))
+
+  ; example of how to do a proper negative test for a syntax error
+  (check-exn exn:fail:syntax? (thunk (convert-syntax-error (wants-a-string 3))))
+  ; convert-compile-time-error converts more than syntax errors
+  ; which we probably don't want but is included here as an example
+  (check-exn exn:fail:syntax? (thunk (convert-compile-time-error (wants-a-string 3))))
+  )

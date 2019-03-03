@@ -19,6 +19,15 @@
                      [rdf-top #%top])
          (all-from-out "direct-model.rkt"))
 
+(module+ test
+  (require rackunit
+          "utils.rkt"
+          "syntax-classes.rkt"
+          syntax/parse
+          racket/function
+          syntax/macro-testing
+          (for-syntax racket/function)))
+
 ; aspect and input are the only 2 that need to lift units out
 
 (define-syntax (actualize stx)
@@ -291,8 +300,9 @@
   (parameter* (quantity 100 (unit 'meters 'milli)) (hyp: 'prov-0))
   (output "thing" (hyp: 'prov-1)
           (parameter* (quantity 100 (unit 'meters 'milli)) (hyp: 'prov-2)))
-  #; ; I think these are failing because I need a syntax level thunk not a normal thunk
-  (check-exn exn:fail:syntax? (thunk (parameter* 100 (unit 'meters 'milli) (hyp: 'prov-1)))))
+  (check-exn exn:fail:syntax? (thunk
+                               (convert-syntax-error
+                                (parameter* 100 (unit 'meters 'milli) (hyp: 'prov-1))))))
 
 (define (objective* text prov) #f)
 (define (telos text prov) #f)
@@ -332,7 +342,13 @@
   #''TODO)
 
 (module+ test
-
+  ; pretty sure that this does not do what I thought it did?
+  ; what I think I wanted this to do is to take the value of the
+  ; expression returned by one or two if it passed the match
+  ; what it is doing instead is returning a syntacitic form that
+  ; matches one if it exists at all (which it must) and thus
+  ; never gets to two even though they presence of the keyword
+  ; in the pattern means that in theory one could bind #f if #:1 is absent
   (define-syntax (test?-2 stx)
     (syntax-parse stx
       [(_ name:id one:expr two:expr)
@@ -345,17 +361,29 @@
               #'(~? one two)]
              )
            )
-
        ]))
 
   (test?-2 all-opt
-           one
-           two)
+           three
+           four)
 
   (all-opt #:1 1 #:2 2)
+  #;
+  ; broken because only the syntax for one (aka three) shows up
+  (all-opt #:2 2)
+
+  (test?-2 hrm? (~var thing number) (~var gniht string))
+  #;
+  ; none of the below work
+  (hrm? #:1 12312)
+  #;
+  (hrm? #:1 "thing")
+  #;
+  (hrm? #:2 "thing")
   )
 
-#;; also dones't work :/
+#;
+; also dones't work :/
 (module+ test
   ; all the other variants just don't work :/ ~optional and ~seq complain
   ; maybe there is a way to use with-syntax?
@@ -363,51 +391,55 @@
                 [seq (datum->syntax #f '~seq)]
                 )
     (test?-2 all-opt-??
+             #'(opt (seq #:1 one))
+             #'(opt (seq #:2 two)))
+    #;
+    (test?-2 all-opt-??
              (#'opt (#'seq #:1 one))
              (#'opt (#'seq #:2 two))))
 
+
   (all-opt-?? 1 2))
 
-#;; this fails because ~? cannot take 3 arguments
+; this fails because ~? cannot take 3 arguments
+; but I have no idea what I was trying to do here
+; whatever it was I'm fairly certain it didnt' do
+; what I thought I was supposed to do
+#;
 (module+ test
   (define-syntax (test?-3 stx)
     (syntax-parse stx
       [(_ name:id one:expr two:expr three:expr)
-       #'(define-syntax (name stx)
-           (syntax-parse stx
-             [(_
-               one two three
-               )
-              #'(~? one two three)]))]))
-  (test?-3 all-opt
+       (ppstx 
+        #'(define-syntax (name stx)
+            (syntax-parse stx
+              [(_
+                one two three
+                )
+               #'(~? one (~? two three))])))]))
+
+  (test?-3 all-opt-2
            (~optional (~seq #:1 one))
            (~optional (~seq #:2 two))
            (~optional (~seq #:3 three)))
 
-  (all-opt #:1 '1)
-  (all-opt #:2 '2)
-  (all-opt #:3 '3)
+  (all-opt-2 #:1 '1)
+  (all-opt-2 #:2 '2)
+  (all-opt-2 #:3 '3)
 
   )
 
 
 (module+ test
-  (require rackunit
-           "utils.rkt"
-           "syntax-classes.rkt"
-           syntax/parse
-           racket/function)
   (define-syntax (test stx)
     (syntax-parse stx
       [(_ thing:sc-cur-invariant)
        #''thing.lifted]))
 
-  #;
-  (define-syntax (thunk stx)
-    #`(λ () #,(cdr (syntax->list stx))))
-
-  #; ; i have no idea why this doesn't work
-  (check-exn exn:fail:syntax? (thunk (test (parameter* (hyp: '0) (quantity 10 (unit 'meters))))))
+  ; i have no idea why this doesn't work ; ANSWER: you need convert-syntax-error to wrap the failing expr
+  (check-exn exn:fail:syntax? (thunk
+                               (convert-syntax-error
+                                (test (parameter* (hyp: '0) (quantity 10 (unit 'meters)))))))
 
   (test (invariant (quantity 10 (unit meters)) (hyp: '0)))
 
@@ -422,21 +454,36 @@
       ))
 
   (define (runtime-unit name prefix)
+    "Check whether a unit is valid at runtime using the unit syntax-class"
     (with-syntax ([n name]
                   [p prefix])
       (syntax-parse #'(unit n p)
         [thing:sc-unit
          (syntax->datum #'thing)])))
 
+  (define-values (indirect-meters indirect-milli) (values 'meters 'milli))
+
   (unit meters milli)
   (unit 'meters 'milli)  ; not entirely sure if we want this ... but ok
+  ;(unit indirect-meters indirect-milli)  ; fails ...
   (unit-> 'meters 'milli)
-  #; ; another cases where I think I need to trap the error as I do in rrid-metadata
+  ;(unit-> indirect-meters indirect-milli)  ; fails ...
+
+  #;
+  ; this works now, but it is not clear that it was ever a good approach
+  ; another cases where I think I need to trap the error as I do in rrid-metadata
   ; however, the fact that syntax-local-eval fails to find thunk and (unit a b) needs
   ; identifiers means that the runtime-unit implementation is vastly preferable
-  (check-exn exn:fail:syntax:unbound? (thunk (unit-> ((thunk 'meters)) ((thunk 'milli)))))
+  (check-exn exn:fail:syntax? #;exn:fail:syntax:unbound?
+             (thunk
+              (convert-syntax-error
+               (unit-> 'nota 'unit)
+               #;
+               (unit-> ((thunk 'meters)) ((thunk 'milli))))))
+  (runtime-unit 'meters 'milli)
   (runtime-unit ((thunk 'meters)) ((thunk 'milli)))
   (check-exn exn:fail:syntax? (thunk (runtime-unit 'nota 'unit)))
+  (runtime-unit indirect-meters indirect-milli)  ; this works
   (let ([m 'meters]
         [_m 'milli])
     (runtime-unit m _m)))
