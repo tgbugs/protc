@@ -5,5 +5,7 @@
 (define deps '("base"
                "brag"
                "debug"  ; XXX remove when no longer needed!
-               "rosette"))
+               "parsack"
+               "rosette"
+               "syntax-warn"))
 (define build-deps '())

@@ -1,12 +1,13 @@
 #lang racket/base
 (require (rename-in racket/base [string char->string]))
-(require parsack racket/string)
-(require parsack racket/set)
-(require "../../../ni/protocols/rkt/units/si-prefixes-data.rkt")
-(require "../../../ni/protocols/rkt/units/si-prefixes-exp-data.rkt")
-(require "../../../ni/protocols/rkt/units/si-units-data.rkt")
-(require "../../../ni/protocols/rkt/units/si-units-extras.rkt")
-(require "../../../ni/protocols/rkt/test-params.rkt")
+(require parsack
+         racket/string
+         racket/set)
+(require "../../../protc-lib/protc/units/si-prefixes-data.rkt")
+(require "../../../protc-lib/protc/units/si-prefixes-exp-data.rkt")
+(require "../../../protc-lib/protc/units/si-units-data.rkt")
+(require "../../../protc-lib/protc/units/si-units-extras.rkt")
+(require "../../../../../prot/rkt/test-params.rkt")
 
 (define (include-all-cdrs alist)
   (append alist
@@ -27,7 +28,7 @@
     (let ((match (car pair))
           (return-value (cdr pair)))
       (>> (parser match) (return return-value)))))
-  ;(for/list ([pair sorted]) (list '>> (list 'string (car pair)) (list 'return (cdr pair)))))
+;(for/list ([pair sorted]) (list '>> (list 'string (car pair)) (list 'return (cdr pair)))))
 
 (define (make-with-string-return alist)
   (make-with-parser-generator-return string alist))
@@ -116,16 +117,16 @@
 (define digits1 (many1 $digit))
 (define point (string "."))
 (define int-string (parser-seq (AT-MOST-ONE dash-thing) digits1))
-                        ;(lambda (asdf) (return-char->string (apply append asdf) ))))
+;(lambda (asdf) (return-char->string (apply append asdf) ))))
 (define int int-string);(>>= int-string return-string->number))
 (define (join . rest)
   ;(println rest)
   (apply append rest))
 (define float-string ;(>>=
-                      (parser-seq (AT-MOST-ONE dash-thing)
-                                      (<or> (parser-seq digits1 point digits); #:combine-with join)
-                                            (parser-seq digits point digits1)))); #:combine-with join)) #:combine-with append))
-                     ;     return-char->string))
+  (parser-seq (AT-MOST-ONE dash-thing)
+              (<or> (parser-seq digits1 point digits); #:combine-with join)
+                    (parser-seq digits point digits1)))); #:combine-with join)) #:combine-with append))
+;     return-char->string))
 (define float float-string);(>>= float-string return-string->number))
 (define E (string "E"))
 (define scientific-notation (>>= (parser-compose (<or> float-string int-string) E int-string) return-string->number))
@@ -214,7 +215,7 @@
                                           (return 'FAILURE)))
                               #:combine-with append))
 
-(define (test)
+(module+ test
   (define tests (list "1 daL" "300 mOsm" "0.5 mM" "7 mM" "0.1 Hz." "-50 pA"
                       "200–500mm" "0.3%–0.5%" "1:500" "4%" "10 U/ml"
                       "–20°C" "<10 mV" "–70 ± 1 mV" "30 to 150 pA"
@@ -305,7 +306,7 @@
   (println (pacman parameter-expression " 500mV"))
   (println (pacman parameter-expression "than 500mV"))
   (println (pacman parameter-expression "zz 500mV"))
-  (println (pacman quantity " z 500mV"))
+  ;(println (pacman quantity " z 500mV"))  ; fails
   (println (pacman parameter-expression " z 500mV"))
   ;(println (pacman parameter-expression " than 500mV"))
   ;(println (pacman parameter-expression "s than 500mV"))
@@ -315,10 +316,10 @@
 
   (define (filter-failure alist)
     (list (set->list (for/set ([pair alist])
-      (when ;(or (equal? (cdr pair) (Empty (Ok 'FAILURE)))
-                (equal? (cdr pair) (Consumed (Ok 'FAILURE)));)
-        (println pair))))))
-        ;(car pair))))))
+                       (when ;(or (equal? (cdr pair) (Empty (Ok 'FAILURE)))
+                           (equal? (cdr pair) (Consumed (Ok 'FAILURE)));)
+                         (println pair))))))
+  ;(car pair))))))
   ;(for ([t tests]) (begin (print t) (println (parse parameter-expression t))))
   ;(for ([t param-test-strings]) (begin (print t) (println (pacman parameter-expression t))))
   (define (time-with-return function)
@@ -327,14 +328,11 @@
       (set! collector (function)))
     (time (to-time))
     collector)
-  #|
+
   (define data
     (time-with-return
      (lambda () (for/list ([t param-test-strings]) (cons t (pacman parameter-expression t))))))
+  #;
   (for ((d data)) (println d))
-  (filter-failure data)
-  |#
-  'nop
-  )
-
-(test)
+  #; ; big output
+  (filter-failure data))
