@@ -19,7 +19,7 @@ from pyontutils.htmlfun import htmldoc, atag, deltag, titletag, render_table, ze
 from pyontutils.htmlfun import monospace_body_style, table_style, details_style, ttl_html_style, emacs_style
 from protcur.analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid
 from protcur.analysis import citation_tree, papers, statistics, ast_statistics
-from protcur.analysis import readTagDocs, justTags, addDocLinks, Hybrid, protc, SparcMI
+from protcur.analysis import readTagDocs, justTags, addDocLinks, Hybrid, protc
 from IPython import embed
 from flask import Flask, url_for, redirect, request, render_template, render_template_string, make_response, abort 
 
@@ -171,6 +171,25 @@ def star_annos(ast, funcname, search_by):
         return abort(404)
 
 
+def make_ast(sort=False):
+        #return '<pre>' + protc.parentless() + '</pre>'
+        ast = protc
+        join = ast._repr_join.replace('\n', '<br>\n').join
+        everything = (o for o in ast if o is not None and o.isAstNode and not o.hasAstParent)
+        if sort:
+            everything = sorted(everything)
+
+        return htmldoc(join(
+            [a.__repr__(html=True, number=n + 1)
+             for n, a in enumerate(everything)]),
+                       title=f'EVERYTHING',
+                       styles=(table_style, monospace_body_style, details_style,
+                               ttl_html_style, emacs_style,
+                               (f'.{ast.namespace} '
+                                'a:link { text-decoration: none; } '
+                                'body { white-space: nowrap; }')))
+
+
 def make_app(annos):
     app = Flask('protc curation id service')
 
@@ -187,19 +206,11 @@ def make_app(annos):
 
     @app.route('/curation/ast', methods=['GET'])
     def route_ast():
-        #return '<pre>' + protc.parentless() + '</pre>'
-        ast = protc
-        join = ast._repr_join.replace('\n', '<br>\n').join
-        everything = (o for o in ast if o is not None and o.isAstNode and not o.hasAstParent)
-        return htmldoc(join(
-            [a.__repr__(html=True, number=n + 1)
-             for n, a in enumerate(sorted(everything))]),
-                       title=f'EVERYTHING',
-                       styles=(table_style, monospace_body_style, details_style,
-                               ttl_html_style, emacs_style,
-                               (f'.{ast.namespace} '
-                                'a:link { text-decoration: none; } '
-                                'body { white-space: nowrap; }')))
+        return make_ast(sort=True)
+
+    @app.route('/curation/fast', methods=['GET'])
+    def route_fast():
+        return make_ast()
 
     @app.route('/curation/papers', methods=['GET'])
     @app.route('/curation/papers/', methods=['GET'])
@@ -317,8 +328,7 @@ def make_app(annos):
 
 
 def make_sparc(app=Flask('sparc curation services'), debug=False, comments=True):
-    import ontquery as oq
-    from protcur.analysis import oqsetup
+    from protcur.sparc import SparcMI, oqsetup
     from scibot.papers import KeyAccessor  # TODO
     OntTerm, ghq = oqsetup()
     SparcMI.graph = ghq.graph
@@ -559,7 +569,7 @@ def make_sparc(app=Flask('sparc curation services'), debug=False, comments=True)
 def make_server_app(memfile=None, comments=True):
     import atexit
     from protcur.core import annoSync
-    helpers = Hybrid, protc, SparcMI
+    helpers = Hybrid, protc
     get_annos, annos, stream_thread, exit_loop = annoSync(memfile,
                                                           helpers=helpers)
     stream_thread.start()
@@ -593,7 +603,7 @@ def main():
     comments = not args['--no-comment']
     _, ghash = group_to_memfile(group).rsplit('-', 1)
     ghashshort = ghash[:10]
-    app = make_server_app(f'/tmp/protcur-{UID}-{port}-{ghashshort}-server-annos.pickle', comments)
+    app = make_server_app(f'/tmp/protcur-{UID}-{port}-{ghashshort}-server-annos.json', comments)
     app.debug = False
     app.run(host='localhost', port=port, threaded=True)
     app.exit_loop()
@@ -601,7 +611,7 @@ def main():
 
 def sparc_main():
     from core import annoSync
-    get_annos, annos, stream_thread, exit_loop = annoSync('/tmp/sparc-server-annos.pickle',
+    get_annos, annos, stream_thread, exit_loop = annoSync('/tmp/sparc-server-annos.json',
                                                           #tags=('sparc:',),
                                                           helpers=(SparcMI,))
     stream_thread.start()
