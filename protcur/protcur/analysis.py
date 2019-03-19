@@ -867,7 +867,7 @@ class AstGeneric(Hybrid):
     lang_line = ''
     #indentDepth = 2
     #objects = {}
-    #_tagIndex = {}
+    _tagIndex = {}  # this needs to be here to prevent accidental leaks through to Hybrid (I think)?
     #_order = tuple()
     #_topLevel = tuple()
     linePreLen = 0
