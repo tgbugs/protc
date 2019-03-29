@@ -15,8 +15,8 @@ from pathlib import Path
 from datetime import date
 from markdown import markdown
 from hyputils.hypothesis import HypothesisUtils, makeSimpleLogger, UID
-from pyontutils.htmlfun import htmldoc, atag, deltag, titletag, render_table, zerotag, zeronotetag, h1tag
-from pyontutils.htmlfun import monospace_body_style, table_style, details_style, ttl_html_style, emacs_style
+from htmlfn import htmldoc, atag, deltag, titletag, render_table, zerotag, zeronotetag, h1tag
+from htmlfn import monospace_body_style, table_style, details_style, ttl_html_style, emacs_style
 from protcur.analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid
 from protcur.analysis import citation_tree, papers, statistics, ast_statistics
 from protcur.analysis import readTagDocs, justTags, addDocLinks, Hybrid, protc

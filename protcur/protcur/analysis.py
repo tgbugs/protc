@@ -23,7 +23,7 @@ from pyontutils import combinators as cmb
 from pyontutils.core import makeGraph, makePrefixes, OntId
 from pyontutils.utils import async_getter, noneMembers, allMembers, anyMembers
 from pyontutils.utils import TermColors as tc, byCol
-from pyontutils.htmlfun import atag
+from htmlfn import atag
 from pyontutils.hierarchies import creatTree
 from pyontutils.scigraph_client import Vocabulary
 from pyontutils.closed_namespaces import rdf, rdfs, owl
