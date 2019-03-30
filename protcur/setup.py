@@ -20,6 +20,7 @@ setup(name='protcur',
       python_requires='>=3.6',
       install_requires=[
           'flask',
+          'htmlfn',
           'hyputils',
           'Markdown',
           'pyontutils',
@@ -28,7 +29,8 @@ setup(name='protcur',
       extras_require={'dev':[]},
       entry_points={
           'console_scripts': [
-              'protcur-server=protcur.server:main'
+              'protcur-server=protcur.server:main',
+              'protcur-analysis=protcur.analysis:main',
           ],
       },
      )
