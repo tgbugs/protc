@@ -47,3 +47,72 @@ def linewrap(text, start, end=80, sep='|', space=' ', nl='\n', ind=4, depth=0):
 
     out = f'{nl}{t}'.join(output)
     return out
+
+def color_pda(string, OPEN, CLOSE,
+              space=' ',
+              STRING='<span class="string">',
+              QUOTE='<span class="quote">',
+              NUMBER='<span class="number">',
+              KEYWORD='<span class="keyword">',
+              count=0):
+    """ state machine for adding spans to code """
+    STOP = ' ()'  # always keep ' ' around for insurance
+    if space not in STOP: STOP += space
+    lsm1 = len(string) - 1
+    STATE = None
+    for i, char in enumerate(string):
+        if char == '"':  # TODO escape
+            if STATE == 'STRING':
+                yield char + '</span>'
+                STATE = None
+            elif STATE == 'STRING-ESCAPE':
+                yield char  # FIXME TODO multiple escapes
+                STATE = 'STRING'
+            else:
+                yield STRING + char
+                STATE = 'STRING'
+        elif STATE == 'STRING':
+            if char == '\\':
+                STATE = 'STRING-ESCAPE'
+            yield char
+        elif char == "'":
+            yield QUOTE
+            STATE = 'QUOTE'
+            yield char
+        elif char == "#":
+            # have to use lookahead here since we are yielding
+            if string[i + 1] == ':':
+                yield KEYWORD
+                STATE = 'KEYWORD'
+            yield char
+        else:
+            if STATE == 'STRING-ESCAPE':
+                STATE = 'STRING'
+
+            if char in STOP:
+                if STATE in ('QUOTE', 'KEYWORD', 'NUMBER'):
+                    yield '</span>'
+                    STATE = None
+                # lookahead
+                if i < lsm1:
+                    nchar = string[i + 1]
+                    if nchar in '0123456789':
+                        yield char
+                        STATE = 'NUMBER'
+                        yield NUMBER
+                        continue
+
+            if char == '(':
+                yield OPEN(count)
+                count += 1
+            elif char == ')':
+                yield CLOSE
+                count -= 1
+            else:
+                yield char
+
+    if STATE is not None:
+        # we get to the end and the state is not None
+        # terminate the current state because nothing else can
+        yield '</span>'
+
