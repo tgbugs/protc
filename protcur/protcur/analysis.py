@@ -7,7 +7,6 @@ Options:
     -s --sync   sync
 """
 
-import os
 import re
 import ast
 import csv
@@ -32,6 +31,7 @@ from pysercomb.pyr import units as units_pyr
 #from pysercomb import parsing_parsec
 from hyputils.hypothesis import HypothesisAnnotation, HypothesisHelper, idFromShareLink
 from protcur.core import linewrap, color_pda
+from protcur.config import __script_folder__
 from IPython import embed
 
 try:
@@ -46,7 +46,6 @@ except ImportError:
 
 sgv = Vocabulary(cache=True)
 RFU = 'protc:references-for-use'
-__script_folder__ = os.path.dirname(os.path.realpath(__file__))
 parameter_expression, *_ = units.make_unit_parser(Path(__script_folder__,
                                                        '../../protc-lib/protc/units'))
 error_output = []
@@ -1683,7 +1682,7 @@ def _more_main():
 
     test_inputs = sorted(set(test_input))
     def check_inputs():
-        with open(os.path.expanduser('~/files/bioportal_api_keys'), 'rt') as f:
+        with open(Path('~/files/bioportal_api_keys').expanduser().as_posix(), 'rt') as f:
             bioportal_api_key = f.read().strip()
         def getBiop(term):
             #url = f'http://data.bioontology.org/search?q={term}&ontologies=CHEBI&apikey={bioportal_api_key}'
