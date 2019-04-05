@@ -291,8 +291,8 @@ def make_app(annos):
         return htmldoc(render_table(sorted(tags),
                                     f'Tags n={len(tags)}',
                                     #f'Count n={sum(int(v.split(">",1)[1].split("<")[0]) for _, v in tags)}'
-                                    f'Count n={total}',
-                                    f'Count n={ptotal}'),
+                                    f'Raw Anno Count n={total}',
+                                    f'Protc Count n={ptotal}'),
                        title='Tags',
                        styles=(table_style,))
 
