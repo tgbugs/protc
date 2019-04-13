@@ -19,6 +19,8 @@
                                      (#%module-begin
                                       ; fun stuff here?
                                       (provide (all-defined-out))
+                                      ;(require (for-syntax racket/base))
+                                      ;(define-for-syntax protc-for-export-data null) ; doesnt work
                                       form ...))))
                       this-syntax
                       this-syntax)])))

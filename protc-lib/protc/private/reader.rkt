@@ -19,16 +19,22 @@
   (syntax->datum
    (protc-read-syntax #f in-port)))
 
+(define (read-syntax-all source-name in-port)
+  (let ([next (read-syntax source-name in-port)])
+    (if (eof-object? next)
+        '()
+        (cons next (read-syntax-all source-name in-port)))))
+
 (define (protc-read-syntax source-name in-port)
   (displayln 'we-ar-working)
   (define output-syntax
-    (with-syntax ([syntaaaaaax (read-syntax source-name in-port)])
+    (with-syntax ([(syntaaaaaax ...) (read-syntax-all source-name in-port)])
       ;(displayln (datum->syntax #f eof))
       ;(displayln (strip-context #'syntaaaaaax))
       ;(if (eq? (datum->syntax #f eof) (strip-context #'syntaaaaaax))
           ;(strip-context #'syntaaaaaax)
       (strip-context  ; required to avoid issues with #%app for reasons I don't understand at the moment
-       #`(module protc-base-module protc/private/expander
+       #'(module protc-base-module protc/private/expander
            (module configure-runtime racket/base
              (require protc/private/export)  ; TODO name consistent with the controller/overseer/evaluator
              ; protc/export/html protc/export/pdf
@@ -42,7 +48,7 @@
              (protc-export-type 's-exp))
            (require protc/private/export)
            ;(provide protocol)  ; TODO allow tighter control of provides
-           ,syntaaaaaax
+           syntaaaaaax ...
            (protc-export 'protocol)  ; more like ,syntaaaaaax
            )
        )));)

@@ -63,22 +63,23 @@
 ;; FIXME move to module definitions
 (define-for-syntax protc-for-export-data '())
 (define-syntax (protc-for-export stx)
-  (if (null? protc-for-export-data)
-      #''() ; FIXME I think the issue here is that we need protc-for-export to be defined per module, so can't do it here
-      #`(list #,@protc-for-export-data)))
+  (define (failure) (raise-syntax-error #f "not defined" stx))
+  (with-syntax ([something (syntax-local-value #'protc-for-export-data)])
+    #'something))
 
 (define-provide-syntax (for-export stx)
   (syntax-parse stx
     [(_ id:id ...)
      ; FIXME not working, need to expand at run time if we want to do it this way
      (set! protc-for-export-data (append (syntax->list #'(id ...)) protc-for-export-data))
-     ;(println protc-for-export)
+     (println protc-for-export-data)
      ; FIXME this isn't what we want ...
      ;#`(for-meta 0 #,@protc-for-export-data)  ; this is just regular old provide
      #'protc-for-export]))
 
 (module+ test
-  (provide (for-export spec/something-else)))
+  (provide (for-export spec/something-else))
+  protc-for-export)
 
 ;;; the protc phase model
 ;;; 0. writing time
