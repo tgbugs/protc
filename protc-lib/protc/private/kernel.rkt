@@ -21,7 +21,7 @@
                                       (provide (all-defined-out))
 
                                       ; attempt to cooperate with protc-out, but of course never works
-                                      ;(define protc-exports '())
+                                      (define protc-exports '())
 
                                       ;(require (for-syntax racket/base))
                                       ;(define-for-syntax protc-for-export-data null) ; doesnt work

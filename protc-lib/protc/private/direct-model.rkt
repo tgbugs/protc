@@ -57,81 +57,6 @@
          (rename-out [rdf-top #%top]  ; from rdf/utils
                      ))
 
-#;
-(define-syntax (my-provide stx)
-  (syntax-parse stx
-    [(_ (~or* ex:sc-provide-for-export form) ...)
-     (syntax/loc stx
-       (begin
-         (~? (set! protc-for-export (append '(ex.provide-spec ... ...) protc-for-export)))
-         #;
-         (println "lol this is silly")
-         ; FIXME hygene screws this up ?
-         (~? (#%provide form ... (export-out ex.provide-spec ... ...) ))))]))
-
-(module+ test
-  
-  
-  #;
-  (provide (protc-out (all-defined-out))))
-
-#;
-(define protc-for-export-data (box '(lolwut)))
-#;
-(define-syntax protc-for-export
-  (make-variable-like-transformer
-   #'(unbox protc-for-export-data)
-   #'(λ (v) (set-box! protc-for-export-data v))))
-
-#;
-(module+ test
-  protc-for-export
-  (set! protc-for-export (append '(hahahha) protc-for-export)))
-
-#;
-(define-syntax (protc-for-export stx)
-  (syntax-parse stx
-    [_
-     ; unfortunately this approach doesn't quite work :/
-     ;#:do [(define (failure) (raise-syntax-error #f "not defined" stx))]
-     ;#:with hrm (syntax-local-value #'protc-for-export-data failure)
-     #;
-     (syntax/loc stx protc-for-export-data)
-     #;
-     (syntax/loc stx hrm)
-     (lookup stx)
-
-     ])
-  #;
-  (with-syntax ([something (syntax-local-value #'protc-for-export-data)])
-    #'something))
-
-#;
-(define-for-syntax (lookup stx)
-  (define (failure) (raise-syntax-error #f "protc-for-export-data not defined" stx))
-  (datum->syntax #f (syntax-local-value #'protc-for-export-data failure)))
-
-#;
-(define-provide-syntax (for-export stx)
-  (syntax-parse stx
-    [(_ id:id ...)  ; FIXME to make use of all-defined-out this will need more ...
-     ; FIXME not working, need to expand at run time if we want to do it this way
-     #;
-     (set-box! protc-for-export-data (append (syntax->list #'(id ...)) protc-for-export-data))
-     #;
-     (println protc-for-export-data)
-     ; FIXME this isn't what we want ...
-     ;#`(for-meta 0 #,@protc-for-export-data)  ; this is just regular old provide
-     (syntax/loc stx (combine-out id ...))]))
-
-
-#;
-(provide (all-defined-out))
-#;
-(begin-for-syntax
-  (displayln (list 'syntax-time: protc-for-export-data)))
-
-
 ;;; the protc phase model
 ;;; 0. writing time
 ;;; 0.5 naming time (each successive phase up to impl returns a macro that the next phase uses to add more information)
@@ -1005,7 +930,7 @@ should be considered to be completely hocus pocus IF they are stored
                      (define-syntax aspect-stx  ; FIXME still needed for some reason ...
                        #'export-stx)
                      ;(provide spec/aspect*)
-                     (define spec/aspect*
+                     (define spec/aspect*  ; FIXME this does not account for the type of name over which this spec applies
                        `export-stx)
                      (define-for-syntax aspect*-impls-data '())
                      (define-syntax (aspect*-impls-add stx)
@@ -1037,6 +962,21 @@ should be considered to be completely hocus pocus IF they are stored
 
 ;;; more scheme-like syntax for spec and impl functions
 
+(define-syntax [:: stx]
+  "aspect-chain in principle this seems like a good idea, unfortunately
+since it doesn't play well with define it can only be used in specific syntax
+sturctures and in a stand-alone case, which is rare"
+  ; FIXME distinct from aspect-vector in that chains aren't used to
+  ; resovle aspects by projecting them into counting (scalar) space
+  ; FIXME (define [:: a b c] overwrites the syntax here, so have to work around that)
+  (syntax-parse stx
+    [[_ aspect:id ...]
+     ; FIXME aspects probably have a partial order for chaining ...
+     #:with id (format-id #'(aspect ...)
+                          #:source #'(aspect ...)
+                          (string-append "::->" (string-join (map symbol->string (syntax->datum #'(aspect ...))) "->")))
+     #'id]))
+
 (define-syntax (define-measure stx)
   ; it is amusing how easy this was to implement ...
   (syntax-parse stx
@@ -1052,8 +992,8 @@ should be considered to be completely hocus pocus IF they are stored
     #:datum-literals (::)
     [(_ (aspect:id name:id ...+) body ...)
      #'(spec (actualize name ... aspect) body ...)]
-    [(_ ([:: aspect:id ...] name:id ...+) body ...)
-     #''TODO]  ; FIXME aspect chain syntax :/
+    [(_ ([:: aspect:id ...] name:id) body ...)  ; I think we can only actualize one type at a time?
+     #'(spec (actualize name [aspect ...]) body ...)]  ; FIXME aspect chain syntax :/
     ))
 (module+ test
   (define-measure (part-of? child parent)
@@ -1357,9 +1297,6 @@ should be considered to be completely hocus pocus IF they are stored
         )
   )
 
-
-
-#;
 (module+ test
 
   ;(spec (measure ok ya) "yes?")
@@ -1424,7 +1361,7 @@ should be considered to be completely hocus pocus IF they are stored
   (spec (make novars)
         "body")
 
-  (spec (make thing);(protocol sinput1 sinput2 sinput3)
+  (spec (make some-other-thing);(protocol sinput1 sinput2 sinput3)
         (.vars sinput1 sinput2 sinput3)
 
         ; XXX NOTE this is somewhat misleading, because other export time inputs
@@ -1438,7 +1375,7 @@ should be considered to be completely hocus pocus IF they are stored
         )
   ; this is really an imple that has no explicit spec
   ; probably should have protocol reserved for implementing ?
-  (spec (measure thing aspect)
+  (spec (measure some-other-thing aspect)
         "body")
 
   (spec (measure circuit potential)
@@ -1553,27 +1490,33 @@ should be considered to be completely hocus pocus IF they are stored
         )
 
 
-  (require #;"export.rkt"
-           "export-server.rkt"
-           rdf/utils
-           NIF-Ontology/rkt/ttl/methods
-           )
+  
   ; (take store 100)
   ;(require racket/pretty)
   ;(pretty-write my-protocol-ast)
 
-  #;
+  )
+
+#;
+(module+ test
+  (require #;"export.rkt"
+           (file "~/prot/rkt/export-server.rkt")
+           rdf/utils
+           NIF-Ontology/rkt/ttl/methods
+           )
   (export cell:membrane-potential 'html 'pdf)  ; FIXME why does this fail
 
   (parameterize ([runtime-executor (get-user)])
     ; TODO we will need a good way to manage
     ; parameterizing when protocols have multiple executors
+    (((brain-slice) '100um '150mg/kg 'why-are-there-two?-because-body-has-a-fake-var))
+    #;
     (((my-protocol) '100um '150mg/kg 'why-are-there-two?-because-body-has-a-fake-var))
     (parameterize ([runtime-executor "not tom"])
-      (((thing:aspect))))
+      (((cell:membrane-potential))))
     )
 
-  (let-values ([(name scrib) (protc->scribble my-protocol-ast #:user (get-user))])
+  (let-values ([(name scrib) (protc->scribble spec/brain-slice #:user (get-user))])
     (scribble->html scrib #:name name)
     (scribble->tex scrib #:name name)
     (scribble->pdf scrib #:name name)

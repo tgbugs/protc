@@ -4,7 +4,6 @@
 (provide (protc-out a b c d e f))
 (define something 100)
 (define something-else 200)
-;'asdf
 (define-values
   (a b c d e f)
   (values 1 2 3 4 5 6))

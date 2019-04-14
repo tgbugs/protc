@@ -5,6 +5,7 @@
 ; see https://docs.racket-lang.org/guide/language-collection.html
 
 (require protc/private/kernel
+         protc/private/provide
          protc/private/direct-model #;base
          )
 #;
