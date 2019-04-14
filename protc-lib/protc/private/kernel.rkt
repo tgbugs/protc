@@ -7,24 +7,24 @@
          (rename-out [version racket-version]))
 
 (module module-wrapper racket/base
-  (require syntax/parse syntax/strip-context)
+  (require racket/syntax syntax/parse syntax/strip-context)
   (provide protc-module-wrapper)
   (define (protc-module-wrapper read-module)
     (syntax-parse (read-module)
       [(module mod-name mod-path
          (#%module-begin form ...))
+       #:with mod-name-out (format-id #'mod-name
+                                      #:source #'mod-name
+                                      "protc-export-~a" (syntax-e #'mod-name))
        (datum->syntax this-syntax
                       (syntax-e (strip-context
                                  #'(module mod-name mod-path
                                      (#%module-begin
                                       ; fun stuff here?
-                                      (provide (all-defined-out))
-
-                                      ; attempt to cooperate with protc-out, but of course never works
-                                      (define protc-exports '())
-
-                                      ;(require (for-syntax racket/base))
-                                      ;(define-for-syntax protc-for-export-data null) ; doesnt work
-                                      form ...))))
+                                      (provide (all-defined-out)
+                                               (rename-out [protc-module-out mod-name-out]))
+                                      protc-module-end  ; implicit from provide.rkt
+                                      form ...
+                                      ))))
                       this-syntax
                       this-syntax)])))
