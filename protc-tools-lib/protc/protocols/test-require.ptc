@@ -1,0 +1,5 @@
+#lang protc/base
+(require "core.rkt")
+"asdf"
+(module+ test
+  (module->exports "core.rkt"))

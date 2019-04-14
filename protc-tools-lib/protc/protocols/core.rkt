@@ -2,7 +2,7 @@
 ; TODO consider making this main.rkt so that it is
 ; what shows up from (require protc/protocols)
 
-(provide (for-export has-part?))
+(provide (protc-out has-part?))
 
 (spec (black-box thing thing)
       "Any nameable subset of physical reality existing at a single point in time")

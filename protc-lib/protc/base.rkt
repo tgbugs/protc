@@ -7,9 +7,14 @@
 (require protc/private/kernel
          protc/private/direct-model #;base
          )
-(provide (all-from-out protc/private/kernel)
-         (all-from-out protc/private/direct-model #;base)
+#;
+(provide (except-out (all-from-out protc/private/kernel) provide)
+         (except-out (all-from-out protc/private/direct-model #;base) my-provide)
+         (rename-out [my-provide provide])
          )
+(provide (all-from-out protc/private/kernel)
+         (all-from-out protc/private/provide)
+         (all-from-out protc/private/direct-model))
 
 (module reader syntax/module-reader protc/base
         ; read and read-syntax are currently not enabled
@@ -24,5 +29,6 @@
                                     (default-filter default key)
                                     )))
         #:module-wrapper protc-module-wrapper
-        (require protc/private/reader
+        (require ; protc/private/reader  ; if the reader require is included
+                                         ; the reader module will be used instead of module wrapper
                  (submod protc/private/kernel module-wrapper)))

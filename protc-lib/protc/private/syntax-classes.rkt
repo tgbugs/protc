@@ -1080,3 +1080,7 @@ All actualize sections should specify a variable name that will be used in inher
   ; maybe we use (input thing (many (quantity 10) (bbc part-of-thing))) with many as a qualifier?
   ; this seems much more reasonable and much more compositional
   )
+
+(define-syntax-class sc-provide-for-export
+  #:datum-literals (for-export)  ; FIXME
+  (pattern (for-export provide-spec ...)))

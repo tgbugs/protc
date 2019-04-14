@@ -1,13 +1,12 @@
 #lang racket/base
 (require debug/repl (for-syntax debug/repl))
-(require ;scribble/srcdoc
+(require racket/contract
+         ;scribble/srcdoc
          ;(for-doc scribble/base scribble/manual)
          protc/export
          ;protc/utils  ; this is private ...
          rdf/utils
          protc/private/utils
-         racket/contract
-         racket/provide-syntax
          "aspects.rkt"
          "identifier-functions.rkt"
          ;(for-meta -1 racket/base)  ; needed for docstringf?
@@ -23,6 +22,7 @@
                      syntax/parse
                      syntax/warn
                      syntax/strip-context
+                     syntax/transformer
                      "syntax-classes.rkt"
                      "utils.rkt"))
 
@@ -35,8 +35,6 @@
          define-aspect
          export
          invariant
-
-         for-export
 
          lookup
 
@@ -56,30 +54,83 @@
          define-id-funcs
          qname
 
-         (rename-out [rdf-top #%top])  ; from rdf/utils
-         )
+         (rename-out [rdf-top #%top]  ; from rdf/utils
+                     ))
 
-;;; provide machinery
-;; FIXME move to module definitions
-(define-for-syntax protc-for-export-data '())
+#;
+(define-syntax (my-provide stx)
+  (syntax-parse stx
+    [(_ (~or* ex:sc-provide-for-export form) ...)
+     (syntax/loc stx
+       (begin
+         (~? (set! protc-for-export (append '(ex.provide-spec ... ...) protc-for-export)))
+         #;
+         (println "lol this is silly")
+         ; FIXME hygene screws this up ?
+         (~? (#%provide form ... (export-out ex.provide-spec ... ...) ))))]))
+
+(module+ test
+  
+  
+  #;
+  (provide (protc-out (all-defined-out))))
+
+#;
+(define protc-for-export-data (box '(lolwut)))
+#;
+(define-syntax protc-for-export
+  (make-variable-like-transformer
+   #'(unbox protc-for-export-data)
+   #'(λ (v) (set-box! protc-for-export-data v))))
+
+#;
+(module+ test
+  protc-for-export
+  (set! protc-for-export (append '(hahahha) protc-for-export)))
+
+#;
 (define-syntax (protc-for-export stx)
-  (define (failure) (raise-syntax-error #f "not defined" stx))
+  (syntax-parse stx
+    [_
+     ; unfortunately this approach doesn't quite work :/
+     ;#:do [(define (failure) (raise-syntax-error #f "not defined" stx))]
+     ;#:with hrm (syntax-local-value #'protc-for-export-data failure)
+     #;
+     (syntax/loc stx protc-for-export-data)
+     #;
+     (syntax/loc stx hrm)
+     (lookup stx)
+
+     ])
+  #;
   (with-syntax ([something (syntax-local-value #'protc-for-export-data)])
     #'something))
 
+#;
+(define-for-syntax (lookup stx)
+  (define (failure) (raise-syntax-error #f "protc-for-export-data not defined" stx))
+  (datum->syntax #f (syntax-local-value #'protc-for-export-data failure)))
+
+#;
 (define-provide-syntax (for-export stx)
   (syntax-parse stx
-    [(_ id:id ...)
+    [(_ id:id ...)  ; FIXME to make use of all-defined-out this will need more ...
      ; FIXME not working, need to expand at run time if we want to do it this way
-     (set! protc-for-export-data (append (syntax->list #'(id ...)) protc-for-export-data))
+     #;
+     (set-box! protc-for-export-data (append (syntax->list #'(id ...)) protc-for-export-data))
+     #;
      (println protc-for-export-data)
      ; FIXME this isn't what we want ...
      ;#`(for-meta 0 #,@protc-for-export-data)  ; this is just regular old provide
-     #'protc-for-export]))
+     (syntax/loc stx (combine-out id ...))]))
 
-(module+ test
-  (provide (for-export spec/something-else))
-  protc-for-export)
+
+#;
+(provide (all-defined-out))
+#;
+(begin-for-syntax
+  (displayln (list 'syntax-time: protc-for-export-data)))
+
 
 ;;; the protc phase model
 ;;; 0. writing time
@@ -242,12 +293,12 @@ should be considered to be completely hocus pocus IF they are stored
 
 (define-syntax (validate/being stx)
   (syntax-parse stx
-      [(_ being/symbol ...)
-       #'(map being/symbol->defining-funcs '(being/symbol ...))
-       ; this gives us the set of all the individual measurement functions + their values
-       ; or rather it should ... it means that being/symbol->defining-funcs should return
-       ; both the measurement functions and the expected/asccepted values from their evaluation
-       ])
+    [(_ being/symbol ...)
+     #'(map being/symbol->defining-funcs '(being/symbol ...))
+     ; this gives us the set of all the individual measurement functions + their values
+     ; or rather it should ... it means that being/symbol->defining-funcs should return
+     ; both the measurement functions and the expected/asccepted values from their evaluation
+     ])
   )
 
 #;
@@ -286,10 +337,10 @@ should be considered to be completely hocus pocus IF they are stored
      ; TODO add export-time-lookup (or whatever depending on the being) to a list
      ; that will be executed at export time to fill in as much information as possible
      #'(define (export-time-lookup)  ; possibly define-syntax?
-        (let ([maybe-result (match-triples #:s being #:p aspect)])
-          (if (null? maybe-result)
-              (measure being aspect)  ; FIXME we do need to warn if this doesn't exist
-              maybe-result)))]))
+         (let ([maybe-result (match-triples #:s being #:p aspect)])
+           (if (null? maybe-result)
+               (measure being aspect)  ; FIXME we do need to warn if this doesn't exist
+               maybe-result)))]))
 
 (define-syntax (define-participant stx)
   ; black boxes or participants
@@ -347,28 +398,28 @@ should be considered to be completely hocus pocus IF they are stored
 (define-values (add-triple add-triples get-triples match-triples) (make-store))
 
 #;(define (has-part parent . children)
-  ; TODO in spec context has-part needs to also define all the part names in local scope ...
-  (set! triples (append (for/list ([child children]) (triple has-part parent child)) triples))
-  )
+    ; TODO in spec context has-part needs to also define all the part names in local scope ...
+    (set! triples (append (for/list ([child children]) (triple has-part parent child)) triples))
+    )
 
 (define (part-tree tree)
   ; TODO local binding and pull out the has part relation
   tree)
 
 #;(define-syntax (has-part stx)
-                (syntax-parse stx
-                  [(_ subject objects ...+)
-                   #'(begin
-                       subject  ; sanity to make sure it is bound, it should be
-                       (set! triples (append (list (triple 'has-part subject 'objects) ...) triples))
-                       ; TODO if-defined HRM hard to work with in this context ...
-                       ; maybe easier to ignore or simply remove .config-vars
-                       ; if there is a relationship in the body that defines these for us?
-                       (define-values (objects ...) (bind/symbol->being objects ...))
-                       )
-                   ]
-                  )
-                )
+    (syntax-parse stx
+      [(_ subject objects ...+)
+       #'(begin
+           subject  ; sanity to make sure it is bound, it should be
+           (set! triples (append (list (triple 'has-part subject 'objects) ...) triples))
+           ; TODO if-defined HRM hard to work with in this context ...
+           ; maybe easier to ignore or simply remove .config-vars
+           ; if there is a relationship in the body that defines these for us?
+           (define-values (objects ...) (bind/symbol->being objects ...))
+           )
+       ]
+      )
+    )
 
 (define-syntax (define-relation stx)
   ; FIXME -> telos, goal, expected state, required state, where (has-part? a b) needs to have a full measure spec and impl
@@ -385,7 +436,8 @@ should be considered to be completely hocus pocus IF they are stored
     ;#:datum-literals (|.|) ; breaks the meaning of . since it is ...+ not ... FIXME
     [(_ (relation-name:id parent:id rest:id)  ; . is dangerous ... #;. does not comment
         docstring:string)
-     #;#'(define (relation-name subject . objects)
+     #;
+     #'(define (relation-name subject . objects)
          (set! triples (append (for/list ([object objects]) (triple relation-name subject object)) triples)))
      #:with elip (datum->syntax this-syntax '...)
      #:with elip+ (datum->syntax this-syntax '...+)
@@ -402,7 +454,8 @@ should be considered to be completely hocus pocus IF they are stored
                        ; relationship-name, subject, and objects all need to be assigned ids
 
                        (add-triples (list (triple 'relation-name 'subject 'objects) elip))
-                       #;(set! int-triples (append (list (triple 'relation-name 'subject 'objects) elip)
+                       #;
+                       (set! int-triples (append (list (triple 'relation-name 'subject 'objects) elip)
                                                  int-triples))
 
                        ; TODO if-defined HRM hard to work with in this context ...
@@ -413,10 +466,12 @@ should be considered to be completely hocus pocus IF they are stored
                    ]
                   )
                 )])
-       #;(pretty-print (syntax->datum out))
+       #;
+       (pretty-print (syntax->datum out))
        out)
      ]
-    #;[(relation-name:id parent:id child:id)
+    #;
+    [(relation-name:id parent:id child:id)
      #'(define (relation-name subject object)
          (set! triples (cons (triple relation-name subject object) triples)))
      ]))
@@ -549,15 +604,15 @@ should be considered to be completely hocus pocus IF they are stored
   (syntax-parse stx
     #:disable-colon-notation
     #:datum-literals (:> make
-                      *: >^> measure
-                      :* v> actualize ; does >v> even really exist? lots-of-salt v some-salt ? type preserving but not amount?
-                      ;>v>' modify  ; ' could expand to include % conservative subsetting of amount, for composite black boxes
-                      ; leaving modify out since it technically is a specialization of make and the functionality
-                      ; that we want is the ability to continue to refer to the mouse by its original name while
-                      ; carrying the information that it has been modified
+                         *: >^> measure
+                         :* v> actualize ; does >v> even really exist? lots-of-salt v some-salt ? type preserving but not amount?
+                         ;>v>' modify  ; ' could expand to include % conservative subsetting of amount, for composite black boxes
+                         ; leaving modify out since it technically is a specialization of make and the functionality
+                         ; that we want is the ability to continue to refer to the mouse by its original name while
+                         ; carrying the information that it has been modified
 
-                      black-box participant being
-                      order)
+                         black-box participant being
+                         order)
     #:literal-sets (protc-fields identifier-functions)
     #:local-conventions ([name id]
                          [spec-name id]
@@ -625,8 +680,8 @@ should be considered to be completely hocus pocus IF they are stored
      ; TODO spec/name needs to be a syntax value with a set/get that
      ; collects all the full names for a given name
      #:with spec/name (format-id #'specific-name
-                                #:source #'specific-name
-                                "spec/~a" (syntax-e #'specific-name))
+                                 #:source #'specific-name
+                                 "spec/~a" (syntax-e #'specific-name))
      #:with specialize-name #`(define (specific-name)
                                 "provide the existing information bound to a black-box"
                                 `((.type . black-box)
@@ -658,31 +713,31 @@ should be considered to be completely hocus pocus IF they are stored
         ; since that is essentially (begin (+ male-mouse female-mouse food water territory) (wait)) -> mice
         (~optional docstring)
         (~alt
-          (~optional (~seq #:inputs ((~alt
-                                      input
-                                      [oper constrained-input aspect* ...]
-                                      cur-input
-                                      other-input
-                                      ) ...
-                                     ;other-input ...
-                                     )))
-          (~optional (~seq #:constraints (constraint ...)))  ; these are implicitly on the output
+         (~optional (~seq #:inputs ((~alt
+                                     input
+                                     [oper constrained-input aspect* ...]
+                                     cur-input
+                                     other-input
+                                     ) ...
+                                    ;other-input ...
+                                    )))
+         (~optional (~seq #:constraints (constraint ...)))  ; these are implicitly on the output
 
-          #;
-          (~optional (.inputs (~alt input [oper constrained-input aspect* ...]
-                                    cur-input
-                                    ) ...))
-          #;
-          (~optional (.constraints constraint ...))  ; these are implicitly on the output
-          (~optional (~seq #:id identifier))  ; FIXME does this work? is it useful?
-          (~optional (~seq #:prov prov))  ; TODO do we need more than one?
-          (~optional (.uses import ...))  ; subProtocolOf ???
-          #;
-          (~optional (.vars var ...))
-          (~optional (~seq #:vars (var ...)))
-          ;(~optional (.inputs inputs ...))
-          ;(.outputs outputs ...)  ; technically these should be extra-outputs?
-          (~optional (~seq #:steps (step ...)))) ...
+         #;
+         (~optional (.inputs (~alt input [oper constrained-input aspect* ...]
+                                   cur-input
+                                   ) ...))
+         #;
+         (~optional (.constraints constraint ...))  ; these are implicitly on the output
+         (~optional (~seq #:id identifier))  ; FIXME does this work? is it useful?
+         (~optional (~seq #:prov prov))  ; TODO do we need more than one?
+         (~optional (.uses import ...))  ; subProtocolOf ???
+         #;
+         (~optional (.vars var ...))
+         (~optional (~seq #:vars (var ...)))
+         ;(~optional (.inputs inputs ...))
+         ;(.outputs outputs ...)  ; technically these should be extra-outputs?
+         (~optional (~seq #:steps (step ...)))) ...
         body ...
         ;return-being  ; all we have is the name, the defining measures probably should return implicitly...
         )
@@ -702,7 +757,7 @@ should be considered to be completely hocus pocus IF they are stored
      ;#:do ((define-values (add get) (make-spec/name)))
      ;#:with name-impls-stx #`(define-syntax name-impls (cons #,add #,get))
      #:with spec/name (fmtid "spec/~a" #'(~? spec-name name))
-                               ; FIXME need to support diversity under a single name with identifiers
+     ; FIXME need to support diversity under a single name with identifiers
      #:with name-ast (format-id #'name
                                 #:source #'name
                                 "~a-ast" (syntax-e #'name))
@@ -736,7 +791,7 @@ should be considered to be completely hocus pocus IF they are stored
                           (other body ...)
                           ; FIXME this fall through means that fail-unless syle errors
                           ; just keep parsing and we end up with name errors
-                     )
+                          )
      #:with name-binding (let* ([-name #'name]
                                 [-name-stx #'name-stx])
                            (if (identifier-binding #'name)
@@ -781,22 +836,22 @@ should be considered to be completely hocus pocus IF they are stored
              )
         ; FIXME TODO arbitrary ordering ...
         (~alt
-        (~optional (.uses import ...))  ; the reason we do this is to keep the relevant names under control
-        (~optional docstring)
-        (~optional (.vars var ...))
-        (~optional (.config-vars cvar ...))  ; TODO naming ...
-        (~optional (.inputs (~or input [oper constrained-input aspect* ...])...)) ; FIXME
-        ;(~optional (.outputs outputs ...))    ; unused?
-        (~optional (.measures -measure ...))  ; FIXME remove this!
-        (~optional (.steps step ...))
-        (~optional (.symret predicate))
-        ; NOTE: we may not need this, it could be _either_ an aspect or a predicate
-        ; where predicates represent a simple threshold function
-        ; but then we also have category functions aka classifiers ...
-        ; we could detect on predicate? :aspect or aspect and category% (% is nice because class ...)
-        ; TODO naming, this is really a type restriction ... also (values ...)
-        ; but... how to spec data structure and binding for more complex cases
-        ; also contracts...
+         (~optional (.uses import ...))  ; the reason we do this is to keep the relevant names under control
+         (~optional docstring)
+         (~optional (.vars var ...))
+         (~optional (.config-vars cvar ...))  ; TODO naming ...
+         (~optional (.inputs (~or input [oper constrained-input aspect* ...])...)) ; FIXME
+         ;(~optional (.outputs outputs ...))    ; unused?
+         (~optional (.measures -measure ...))  ; FIXME remove this!
+         (~optional (.steps step ...))
+         (~optional (.symret predicate))
+         ; NOTE: we may not need this, it could be _either_ an aspect or a predicate
+         ; where predicates represent a simple threshold function
+         ; but then we also have category functions aka classifiers ...
+         ; we could detect on predicate? :aspect or aspect and category% (% is nice because class ...)
+         ; TODO naming, this is really a type restriction ... also (values ...)
+         ; but... how to spec data structure and binding for more complex cases
+         ; also contracts...
          ) ...
 
         body ...
@@ -889,12 +944,12 @@ should be considered to be completely hocus pocus IF they are stored
                         #'aspect
                         (let ([sc (car (syntax->list #'(aspect-multi ...)))])
                           (apply format-id sc
-                                     #:source sc
-                                     (string-join (make-list
-                                                   ; FIXME does order matter?
-                                                   (length (syntax-e #'(aspect-multi ...))) "~a")
-                                                  "-")
-                                     (syntax->datum #'(aspect-multi ...))))
+                                 #:source sc
+                                 (string-join (make-list
+                                               ; FIXME does order matter?
+                                               (length (syntax-e #'(aspect-multi ...))) "~a")
+                                              "-")
+                                 (syntax->datum #'(aspect-multi ...))))
                         #;
                         (fmtid
                          (string-join (make-list
@@ -1103,7 +1158,7 @@ should be considered to be completely hocus pocus IF they are stored
      #'(define impl-name (list body ...))  ; TODO need to deal with if-defined
      ]
     [(_ #;(~or (spec-name (~optional impl-name))
-             (impl-name (~seq #:type type)))  ; FIXME the 2nd option feels like a big ol' mistake...
+               (impl-name (~seq #:type type)))  ; FIXME the 2nd option feels like a big ol' mistake...
         (~optional impl-name) ((~optional type)
                                (~optional (~seq top-input ...))
                                ; FIXME currently if spec-name is the only thing defined
@@ -1174,11 +1229,11 @@ should be considered to be completely hocus pocus IF they are stored
                                        ; which is weird :/ I think because of how it is sourced
                                        #:fix maybefix
                                        #;(quasisyntax/loc stx (begin (spec (apparently you cant template anything in this fix
-                                                                                section for reasons that make zero sense to me :/
-                                                                                           #;(~? type make) #;(~? spec-name))
-                                                                               "Create this spec section and fill it in.")
-                                                                         #;
-                                                                         #,stx))]
+                                                                                       section for reasons that make zero sense to me :/
+                                                                                       #;(~? type make) #;(~? spec-name))
+                                                                           "Create this spec section and fill it in.")
+                                                                     #;
+                                                                     #,stx))]
                                       )
      #:with export-stx #'((.type . (~? type make))
                           (.name . (~? impl-name name))
@@ -1227,21 +1282,21 @@ should be considered to be completely hocus pocus IF they are stored
   )
 
 #;(define-syntax (measure stx)
-  (syntax-parse stx
-    [(_ thing aspect ...)
-     #''TODO])
-  )
+    (syntax-parse stx
+      [(_ thing aspect ...)
+       #''TODO])
+    )
 
 ;;; literal sets
 (require syntax/parse)
 (provide protc-ops)
 (define-literal-set protc-ops
   (define-make
-   define-measure
-   define-actualize
-   impl-make
-   impl-measure
-   impl-actualize
+    define-measure
+    define-actualize
+    impl-make
+    impl-measure
+    impl-actualize
     )
   )
 
@@ -1280,27 +1335,27 @@ should be considered to be completely hocus pocus IF they are stored
                  ....))
 
   #;(spec (actualize pulse)
-        (.vars duration
-               duration-units
-               step-size
-               step-units)
-        (.inputs [setting pulse-maker
-                          ([step-units step-size]
-                           [duration-units duration])]
-                 ....))
+          (.vars duration
+                 duration-units
+                 step-size
+                 step-units)
+          (.inputs [setting pulse-maker
+                            ([step-units step-size]
+                             [duration-units duration])]
+                   ....))
 
   (spec (make loose-patched-cell)
-          (.inputs brain-slice
-                   internal-solution
-                   (: patch-pippette ([MOhms (range 6 10)])))  ; ERROR: don't know how to measure
-          (part-of brain-slice cell)
-          ;(.output (loose-patch cell patch-pipette))
-          )
+        (.inputs brain-slice
+                 internal-solution
+                 (: patch-pippette ([MOhms (range 6 10)])))  ; ERROR: don't know how to measure
+        (part-of brain-slice cell)
+        ;(.output (loose-patch cell patch-pipette))
+        )
 
   (impl (loose-patched-cell)
         (put-a-in-b internal-solution patch-pippette)
         )
-)
+  )
 
 
 
@@ -1394,7 +1449,8 @@ should be considered to be completely hocus pocus IF they are stored
         (has-part circuit reference ground)
         ; FIXME reference and ground are the same!
         (invariant (= potential (* I R)))
-        #;"In order to measure the potential difference between two points
+        #;
+        "In order to measure the potential difference between two points
        one needs to have a known resistor, and inject a small amount of
        current into the system."
 
@@ -1419,73 +1475,82 @@ should be considered to be completely hocus pocus IF they are stored
 
   ;(spec (protocol si1 si2 [i1 i2 i3]))
 
-  #;(spec (protocol number-of-batches si2 si3)
-          ; this is not how we want bodies to work because
-          ; we are not going to RUN these sections direclty
-          ; the evaluation model for the export time information is different
-          ; if I call (repeate protocol 100) i need to be able to distingish the
-          ; (repeate-with-inputs) from (repeate) where an names are bound but
-          ; I will reuse the same inputs... hrm... maybe simply marking things
-          ; as consumed or not? we have our full transition states specced out already
-          ; in
-          (spec (inner-protocol-0 final-volume)
-                (.inputs [: volumetric-flask [volume final-volume]]
-                         ; this is super akward and not at all it should be implemented since it is not composable
-                         ; and the inner protocol spec doesn't actually depend on that information at all
-                         [: solvent [> volume (* final-volume number-of-batches)]]
-                         )
-                )
-          (spec (inner-protocol)
-                (.inputs mouse)  ; (inputs [*: mouse weight])  TODO is there a simple way to allow [: mouse param1] [*: mouse mes2] in 1 exp?
-                ;(inputs [*:* mouse (*: weight) (: age)])
-                (.measures weight)
-                (measure weight mouse)
-                ; this is not a good example?
-                )
+  #;
+  (spec (protocol number-of-batches si2 si3)
+        ; this is not how we want bodies to work because
+        ; we are not going to RUN these sections direclty
+        ; the evaluation model for the export time information is different
+        ; if I call (repeate protocol 100) i need to be able to distingish the
+        ; (repeate-with-inputs) from (repeate) where an names are bound but
+        ; I will reuse the same inputs... hrm... maybe simply marking things
+        ; as consumed or not? we have our full transition states specced out already
+        ; in
+        (spec (inner-protocol-0 final-volume)
+              (.inputs [: volumetric-flask [volume final-volume]]
+                       ; this is super akward and not at all it should be implemented since it is not composable
+                       ; and the inner protocol spec doesn't actually depend on that information at all
+                       [: solvent [> volume (* final-volume number-of-batches)]]
+                       )
+              )
+        (spec (inner-protocol)
+              (.inputs mouse)  ; (inputs [*: mouse weight])  TODO is there a simple way to allow [: mouse param1] [*: mouse mes2] in 1 exp?
+              ;(inputs [*:* mouse (*: weight) (: age)])
+              (.measures weight)
+              (measure weight mouse)
+              ; this is not a good example?
+              )
 
-          (inner-protocol)
-          (inner-protocol-0)
-          )
+        (inner-protocol)
+        (inner-protocol-0)
+        )
 
-  #;(spec (process)
-          ; I do not think we need (make asdf) (measure asdf) to be explicit?
-          ; however (make-thing) and thing seem ambiguous, because thing implies measurement
-          ; to _verify_ or define something, but then it is hard to define something based
-          ; on the process that makes it, which was the original point
-          "body")
+  #;
+  (spec (process)
+        ; I do not think we need (make asdf) (measure asdf) to be explicit?
+        ; however (make-thing) and thing seem ambiguous, because thing implies measurement
+        ; to _verify_ or define something, but then it is hard to define something based
+        ; on the process that makes it, which was the original point
+        "body")
 
-  #;(spec thing
-          ; no inputs in this spec? this seems to be pure symbols here aspects + values
-          "definition")
+  #;
+  (spec thing
+        ; no inputs in this spec? this seems to be pure symbols here aspects + values
+        "definition")
 
-  #;(spec thing-2
-          ; this is also a technically valid way to specify something...?
-          ; and I think it makes it clear that all the values that are present
-          ; are invariant which is nice... this is where we could bind prov as well
-          (my-make-thing))
+  #;
+  (spec thing-2
+        ; this is also a technically valid way to specify something...?
+        ; and I think it makes it clear that all the values that are present
+        ; are invariant which is nice... this is where we could bind prov as well
+        (my-make-thing))
 
-  #;(spec (make thing)
-          ; this breaks the (process) meaning, but it allows us to dissociate
-          )
+  #;
+  (spec (make thing)
+        ; this breaks the (process) meaning, but it allows us to dissociate
+        )
 
-  #;(spec some-salt  ; the issue how to nicely bind the name of the output when a function is run, without forcing the user to rename...
-          (.vars amount)
-          (.inputs [: salt [g amount]])
-          #;(spec (_ amount)
-                  (.inputs scale)  ; but this is now IMPL damn it
-                  )
-          )
+  #;
+  (spec some-salt  ; the issue how to nicely bind the name of the output when a function is run, without forcing the user to rename...
+        (.vars amount)
+        (.inputs [: salt [g amount]])
+        #;
+        (spec (_ amount)
+              (.inputs scale)  ; but this is now IMPL damn it
+              )
+        )
 
 
-  #;(spec (weigh-with-scale)
-          (.inputs scale thing-to-weight ....)
-          (.measures weight)
-          (put-a-on-b thing-to-weight scale))
-  #;(impl some-salt my-some-salt
-          ; FIXME this doesn't seem like it is really an impl section
-          (.uses [->: g weigh-with-scale])  ; (bind-aspect g weight-with-scale)
-          ; we can intelligently bind an invariant that the scale must be able to weigh in grams
-          )
+  #;
+  (spec (weigh-with-scale)
+        (.inputs scale thing-to-weight ....)
+        (.measures weight)
+        (put-a-on-b thing-to-weight scale))
+  #;
+  (impl some-salt my-some-salt
+        ; FIXME this doesn't seem like it is really an impl section
+        (.uses [->: g weigh-with-scale])  ; (bind-aspect g weight-with-scale)
+        ; we can intelligently bind an invariant that the scale must be able to weigh in grams
+        )
 
 
   (require #;"export.rkt"
@@ -1497,7 +1562,8 @@ should be considered to be completely hocus pocus IF they are stored
   ;(require racket/pretty)
   ;(pretty-write my-protocol-ast)
 
-  #;(export cell:membrane-potential 'html 'pdf)  ; FIXME why does this fail
+  #;
+  (export cell:membrane-potential 'html 'pdf)  ; FIXME why does this fail
 
   (parameterize ([runtime-executor (get-user)])
     ; TODO we will need a good way to manage

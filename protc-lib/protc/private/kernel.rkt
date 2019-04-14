@@ -19,6 +19,10 @@
                                      (#%module-begin
                                       ; fun stuff here?
                                       (provide (all-defined-out))
+
+                                      ; attempt to cooperate with protc-out, but of course never works
+                                      ;(define protc-exports '())
+
                                       ;(require (for-syntax racket/base))
                                       ;(define-for-syntax protc-for-export-data null) ; doesnt work
                                       form ...))))
