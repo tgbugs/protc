@@ -21,7 +21,8 @@
                                  #'(module mod-name mod-path
                                      (#%module-begin
                                       ; fun stuff here?
-                                      (provide (all-defined-out)
+                                      (provide (except-out (all-defined-out)
+                                                           protc-module-out)
                                                (rename-out [protc-module-out mod-name-out]))
                                       protc-module-end  ; implicit from provide.rkt
                                       form ...

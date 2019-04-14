@@ -1,4 +1,8 @@
 #lang protc/base
-(require "core.rkt")
+(require "core.rkt"
+         "test-provide.ptc")
 (module+ test
-  (module->exports "core.rkt"))
+  (module->exports "core.rkt")
+  (module->exports "test-provide.ptc")
+  protc-export-core
+  protc-export-test-provide)
