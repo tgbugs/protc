@@ -1,0 +1,8 @@
+#lang protc/base
+(require "../core.rkt"
+         "provide.ptc")
+(module+ test
+  (module->exports "../core.rkt")
+  (module->exports "provide.ptc")
+  protc-export-core
+  protc-export-provide)
