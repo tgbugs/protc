@@ -54,7 +54,7 @@
          define-id-funcs
          qname
 
-         (rename-out [rdf-top #%top]  ; from rdf/utils
+         (rename-out [rdf-top #%top]  ; from rdf/utils FIXME move this import into base directly?
                      ))
 
 ;;; the protc phase model
