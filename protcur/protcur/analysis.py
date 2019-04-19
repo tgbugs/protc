@@ -9,19 +9,14 @@ Options:
 
 import re
 import ast
-import csv
 import json
 import inspect
-from io import StringIO
 from pathlib import PurePath, Path
 from datetime import datetime
 from itertools import chain
-from collections import Counter, defaultdict
-from urllib.parse import quote
-from pyontutils import combinators as cmb
 from pyontutils.core import makeGraph, makePrefixes, OntId
 from pyontutils.utils import async_getter, noneMembers, allMembers, anyMembers
-from pyontutils.utils import TermColors as tc, byCol
+from pyontutils.utils import TermColors as tc, makeSimpleLogger
 from htmlfn import atag
 from pyontutils.hierarchies import creatTree
 from pyontutils.scigraph_client import Vocabulary
@@ -33,6 +28,8 @@ from hyputils.hypothesis import HypothesisAnnotation, HypothesisHelper, idFromSh
 from protcur.core import linewrap, color_pda
 from protcur.config import __script_folder__
 from IPython import embed
+
+log = makeSimpleLogger('protcur.analysis')
 
 try:
     from misc.debug import TDB
@@ -84,54 +81,6 @@ def extract_links_from_markdown(text):
         url = doline(line)
         if url:
             yield url.rstrip().rstrip(')')
-
-def url_doi(doi):
-    return 'https://doi.org/' + doi
-
-def url_pmid(pmid):
-    return 'https://www.ncbi.nlm.nih.gov/pubmed/' + pmid.split(':')[-1]
-
-#
-# docs
-
-class TagDoc:
-    _depflags = 'ilxtr:deprecatedTag', 'typo'
-    def __init__(self, doc, parents, types=tuple(), **kwargs):
-        self.types = types
-        self.parents = parents if isinstance(parents, tuple) else (parents,)
-        for k, v in kwargs.items():
-            setattr(self, k, v)
-
-        if anyMembers(self.parents, *self._depflags):
-            self.doc = '**DEPRECATED** ' + doc
-            self.deprecated = True
-        else:
-            self.doc = doc
-            self.deprecated = False
-
-
-def readTagDocs():
-    with open(f'{__script_folder__}/../../protc-tags.rkt', 'rt') as f:
-        text = f.read()
-    with open(f'{__script_folder__}/../../anno-tags.rkt', 'rt') as f:
-        text += f.read()
-    success, docs, rest = racket.tag_docs(text)
-    if rest:
-        raise SyntaxError(f'tag docs did not parse everything!\n{rest}')
-    tag_lookup = {tag:TagDoc(doc, parent) for _, tag, parent, doc in docs}
-    return tag_lookup
-
-tag_prefixes = 'ilxtr:', 'protc:', 'mo:', 'annotation-'
-def justTags(tag_lookup=None):
-    if tag_lookup is None:
-        tag_lookup = readTagDocs()
-    for tag, doc in sorted(tag_lookup.items()):
-        if anyMembers(tag, *tag_prefixes) and not doc.deprecated:
-            yield tag
-
-def addDocLinks(base_url, doc):
-    prefix = base_url + '/'
-    return re.sub(r'`((?:protc|mo|sparc):[^\s]+)`', rf'[\1]({prefix}\1)', doc)
 
 # stats
 
@@ -249,6 +198,7 @@ class Hybrid(HypothesisHelper):
         from hypothes.is annotations. """
     control_tags = tuple()  # tags controlling how tags from a reply affect the parent's tags
     prefix_skip_tags = tuple()  # pattern for tags that should not be exported to the ast
+    prefix_ignore_unless_mapped = tuple()  # pattern for tags that should be ignored unless mapped
     text_tags = tuple()  # tags controlling how the text of the current affects the parent's text
     children_tags = tuple()  # tags controlling how links in the text of the parent annotation are affected
     CURATOR_NOTE_TAG = 'ilxtr:curatorNote'  # FIXME
@@ -275,7 +225,7 @@ class Hybrid(HypothesisHelper):
         super().__init__(anno, annos)
         if len(self.objects) == len(self._annos):  # all loaded
             # populate annotation links from the text field to catch issues early
-            printD(f'populating children {anno.id}')  # share link many not exist
+            log.debug(f'populating children {anno.id}')  # share link many not exist
             [c for p in self.objects.values() for c in p.children]
             [p._addAstParent() for p in self.objects.values() if tuple(p.children)]  # handles updates
             # TODO deletes still an issue as always
@@ -458,15 +408,18 @@ class Hybrid(HypothesisHelper):
 
     @property
     def _cleaned_tags(self):
+        prefixes_to_skip = self.prefix_skip_tags + self.prefix_ignore_unless_mapped 
+        ok_tags = self.additional_tags
         for tag in self.tags:
-            #print(self.prefix_skip_tags, self.tags)
-            if not any(tag.startswith(prefix) for prefix in self.prefix_skip_tags):
+            if not any(tag.startswith(prefix) for prefix in prefixes_to_skip) or tag in ok_tags:
                 yield tag
 
     @property
     def _cleaned__tags(self):
+        prefixes_to_skip = self.prefix_skip_tags + self.prefix_ignore_unless_mapped 
+        ok_tags = self.additional_tags
         for tag in self._tags:
-            if not any(tag.startswith(prefix) for prefix in self.prefix_skip_tags):
+            if not any(tag.startswith(prefix) for prefix in prefixes_to_skip) or tag in ok_tags:
                 yield tag
 
     def _translate_tags(self, tags):
@@ -789,6 +742,7 @@ class AstGeneric(Hybrid):
     generic_tags = 'TODO',
     control_tags = 'annotation-correction', 'annotation-tags:replace', 'annotation-tags:add', 'annotation-tags:delete'
     prefix_skip_tags = 'PROTCUR:', 'annotation-'  # reminder that these zap the anno from the ast
+    prefix_ignore_unless_mapped = 'sparc:',
     text_tags = ('annotation-text:exact',
                  'annotation-text:text',
                  'annotation-text:value',
@@ -811,6 +765,10 @@ class AstGeneric(Hybrid):
         type_ = self.astType
         if type_ is None:
             if isinstance(self, HypothesisHelper):
+                # it would seem that this happens sporadically because
+                # of the set ordering of tags
+                print('===========================================================')
+                embed()
                 raise TypeError(f'Cannot dispatch on NoneType!\n{super()!r}')
             else:
                 raise TypeError('Cannot dispatch on NoneType!\n'
@@ -818,6 +776,7 @@ class AstGeneric(Hybrid):
 
         if ':' in type_:
             namespace, dispatch_on = type_.split(':', 1)
+
         else:  # generic
             return self.additional_namespaces[None](self).astValue
 
@@ -900,7 +859,7 @@ class AstGeneric(Hybrid):
                 return next(t for t in tags if t != 'TODO')
             else:
                 tl = ' '.join(f"'{t}" for t in sorted(tags))
-                printD(f'Warning: something weird is going on with (annotation-tags {tl}) and self._order {self._order}')
+                log.warning(f'something weird is going on with (annotation-tags {tl}) and self._order {self._order}')
 
     @property
     def astValue(self):
@@ -960,7 +919,7 @@ class AstGeneric(Hybrid):
                 out = f"{OPEN()}circular-link no-type {OPEN(1)}cycle {cyc}{CLOSE}{CLOSE}" + CLOSE * nparens + debug
                 return out
             else:
-                printD(tc.red('WARNING:'), f'unhandled type for {self._repr} {self.tags}')
+                log.warning(f'unhandled type for {self._repr} {self.tags}')
                 close = CLOSE * (nparens - 1)
                 out = super().__repr__(html=html, number=number, depth=depth, nparens=0)
                 mnl = '\n' if depth == 1 else ''
@@ -1021,7 +980,7 @@ class AstGeneric(Hybrid):
                               f"{cyc}{CLOSE}{CLOSE}") + CLOSE * nparens + debug + f'  {i} lol')
                         #s = f"'(circular-link {cycle[0].id})" + ')' * nparens
                     else:
-                        printD(tc.red('WARNING:'), f'duplicate cycles in {self._repr}')
+                        log.warning(f'duplicate cycles in {self._repr}')
                         continue
                 except TypeError as e:
                     # do not remove or bypass this error, it means that one of your
@@ -1071,6 +1030,7 @@ class AstGeneric(Hybrid):
 
 class protc(AstGeneric):
     namespace = 'protc'
+    translators = {}
     tag_translators = {}
     additional_namespaces = {}  # filled in by the child classes
     lang_line = '#lang protc/ur'
@@ -1149,17 +1109,7 @@ class protc(AstGeneric):
 
     @property
     def tags(self):
-        return super().tags  # | set(self.mapped_tags)
-
-    @property
-    def mapped_tags(self):  # FIXME skipping due to circular import ...
-        if self._done_loading and SparcMI._done_loading:
-            try:
-                s = SparcMI.byId(self.id)
-                if s.protc_unit_mapping:
-                    yield 'protc:parameter*'
-            except Warning:
-                pass
+        return super().tags
 
     def objective(self):
         if self.value in (' room  temperature'):
@@ -1297,193 +1247,6 @@ class protc(AstGeneric):
     #def measure(self): return self.value
     #def symbolic_measure(self): return self.value
 
-
-class NamespaceAstValueTranslator:
-    """ Base class for defining translators that operate on the astValue of
-        some other namespace. These cannot be used 
-    """
-
-
-class RegNVT(type):
-    def __init__(self, *args, **kwargs):
-        self.target_type.additional_namespaces[self.namespace] = self
-        super().__init__(*args, **kwargs)
-
-
-class NamespaceValueTranslator:
-    """ Base class used to translate naming convetions from one namespace
-        into another at the raw value stage rather than the astValue stage.
-
-        Subclasses of this class should never access the astValue of
-        self.base since these classes are used to generate self.base.astValue
-        and this will cause a recursion error.
-
-        NamespaceHelper.target_type should be set to the class that implements
-        the semantics that this namespace should translate into.
-
-    """
-
-    class BaseNamespaceMismatchError:
-        pass
-
-    target_type = None
-    classn  = HypothesisHelper.classn
-    _value_escape = AstGeneric._value_escape
-    _dispatch = AstGeneric._dispatch
-    astValue = AstGeneric.astValue
-    namespace = None
-    _order = tuple()
-    isAstNode = True
-    additional_namespaces = tuple()  # intentionally not a dict because dont want this
-
-    def __init__(self, target_instance):
-        if not hasattr(self, 'prefix_ast'):
-            self.prefix_ast = None if self.namespace is None else self.namespace + ':'
-        self.target_instance = target_instance
-        if not isinstance(self.target_instance, self.target_type):
-            raise self.TargetNamespaceMismatchError('{type(self.target_instance)} is not a {self.targt_type}')
-
-    @property
-    def supported_tags(self):
-        for suffix in self._order:
-            yield self.prefix_ast + suffix
-
-    @property
-    def value(self):
-        return self.target_instance.value
-
-    @property
-    def tags(self):
-        return set(t for t in self.target_instance.tags if t.startswith(self.prefix_ast))
-
-    @property
-    def astType(self):
-        tags = self.tags
-        for suffix in self._order:
-            tag = self.prefix_ast + suffix
-            if tag in tags:
-                return tag
-
-    def _default_astValue(self):
-        #type_ = self.astType
-        #predicate = type_ if type_ is not None else '/'.join(self.tags)
-        return self.target_instance._default_astValue()
-        #return f'({predicate} {self.target_instance._default_astValue()})'
-        # we don't have to set the prefix here because
-        # in order to get this far the parent has to know about this
-        # tag, otherwise it will abort
-
-
-class order_deco:  # FIXME make it so we dont' have to init every time
-    """ define functions in order to get order! """
-    def __init__(self):
-        self.order = tuple()
-
-    def mark(self, cls):
-        if not hasattr(cls, '_order'):
-            cls._order = self.order
-        else:
-            cls._order += self.order
-
-        return cls
-
-    def __call__(self, function):
-        self.order += function.__name__,
-        return function
-
-
-od = order_deco()
-@od.mark
-class protc_generic(NamespaceValueTranslator, metaclass=RegNVT):
-    """ tags without namespaces """
-    target_type = protc
-    namespace = None
-    prefix_ast = ''  # hack to fool dispatch, these are NO namespace, not empty namespace
-    _order = 'TODO',
-    #target_type.additional_namespaces[namespace] = protc_generic  # FIXME
-
-    def __init__(self, generic_instance):
-        self.namespace = ''  # hack so we can reuse _dispatch
-        super().__init__(generic_instance)
-
-    @property
-    def tags(self):
-        return set(t for t in self.target_instance.tags if ':' not in t)
-
-    @property
-    def astType(self):
-        for tag in self._order:
-            if tag in self.target_instance.tags:
-                return ':' + tag  # hack to fool _dispatch into thinking there is an empty namespace
-
-    #def TODO(self):
-        #return '(TODO {self.target_instace._default_astValue())})'
-    
-
-od = order_deco()
-@od.mark
-class protc_ilxtr(NamespaceValueTranslator, metaclass=RegNVT):
-    target_type = protc
-    namespace = 'ilxtr'
-    def __init__(self, protc_instance):
-        super().__init__(protc_instance)
-
-    @od
-    def technique(self):
-        # techniques lacking sections are converted to impls
-        # since they are likely to involve many steps and impl
-        # is the correct place holder for things with just words
-        return f'(protc:impl {json.dumps(self.value)})'
-
-    @od
-    def participant(self):
-        # FIXME ambiguous
-        return f'(protc:input {json.dumps(self.value)})'
-
-
-class RegTT(type):
-    def __init__(self, *args, **kwargs):
-        for target_type in self.target_types:
-            target_type.tag_translators[self.namespace] = self
-
-        super().__init__(*args, **kwargs)
-
-
-class TagTranslator:
-    """ Use for pre ast translation of tags """
-
-    _tag_lookup = readTagDocs()
-    order_ = tuple(t for t in justTags(_tag_lookup) if t.startswith('mo:'))
-    namespace = None
-    target_namespace = None
-
-    def __init__(self, tag):
-        self.tag = tag
-
-    @property
-    def translation(self):
-        if self.tag in self._tag_lookup:
-            tagdoc = self._tag_lookup[self.tag]
-            return next(t for t in tagdoc.parents if t.startswith(self.target_namespace + ':'))
-        else:
-            return self.tag
-
-
-class mo_to_ilxtr(TagTranslator, metaclass=RegTT):
-    target_types = protc,
-    namespace = 'mo'
-    target_namespace = 'ilxtr'
-
-
-# sparc translation
-
-
-class protcur_to_technique:
-    """ protocolExecution, techniqueExecution, as well as high level techinques """
-    def __init__(self):
-        pass
-
-
 #
 # utility
 
@@ -1572,13 +1335,16 @@ def test_annos(annos):
                                        'tags':['protc:parameter*']}))
 
 def main():
-    from pprint import pformat
     from time import sleep, time
-    from protcur.core import annoSync
-    from docopt import docopt
+    from pprint import pformat
     import requests
-    from desc.prof import profile_me
     from hyputils.hypothesis import group, group_to_memfile
+    from protcur.analysis import protc, Hybrid, HypothesisHelper  # __main__ bug hack
+    from protcur.core import annoSync
+    from protcur import namespace_mappings as nm
+
+    from desc.prof import profile_me
+    from docopt import docopt
     args = docopt(__doc__)
 
     global annos  # this is now only used for making embed sane to use

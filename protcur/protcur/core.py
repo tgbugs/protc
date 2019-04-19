@@ -1,6 +1,19 @@
+import re
 from hyputils.hypothesis import Memoizer, group, UID
 from hyputils.subscribe import preFilter, AnnotationStream
 from hyputils.handlers import helperSyncHandler, filterHandler
+from pysercomb.parsers import racket
+from pyontutils.utils import anyMembers
+from protcur.config import __script_folder__
+
+
+def url_doi(doi):
+    return 'https://doi.org/' + doi
+
+
+def url_pmid(pmid):
+    return 'https://www.ncbi.nlm.nih.gov/pubmed/' + pmid.split(':')[-1]
+
 
 def annoSync(memoization_file=None, helpers=tuple(), tags=tuple(), group=group):
     if group == '__world__':
@@ -19,6 +32,7 @@ def annoSync(memoization_file=None, helpers=tuple(), tags=tuple(), group=group):
     stream_thread, exit_loop = AnnotationStream(annos, prefilter, helperSyncHandler)()
     yield stream_thread
     yield exit_loop
+
 
 def linewrap(text, start, end=80, sep='|', space=' ', nl='\n', ind=4, depth=0):
     text = text.replace('\n', ' ')
@@ -115,4 +129,47 @@ def color_pda(string, OPEN, CLOSE,
         # we get to the end and the state is not None
         # terminate the current state because nothing else can
         yield '</span>'
+
+#
+# docs
+
+class TagDoc:
+    _depflags = 'ilxtr:deprecatedTag', 'typo'
+    def __init__(self, doc, parents, types=tuple(), **kwargs):
+        self.types = types
+        self.parents = parents if isinstance(parents, tuple) else (parents,)
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+        if anyMembers(self.parents, *self._depflags):
+            self.doc = '**DEPRECATED** ' + doc
+            self.deprecated = True
+        else:
+            self.doc = doc
+            self.deprecated = False
+
+
+def addDocLinks(base_url, doc):
+    prefix = base_url + '/'
+    return re.sub(r'`((?:protc|mo|sparc):[^\s]+)`', rf'[\1]({prefix}\1)', doc)
+
+
+def readTagDocs():
+    with open(f'{__script_folder__}/../../protc-tags.rkt', 'rt') as f:
+        text = f.read()
+    with open(f'{__script_folder__}/../../anno-tags.rkt', 'rt') as f:
+        text += f.read()
+    success, docs, rest = racket.tag_docs(text)
+    if rest:
+        raise SyntaxError(f'tag docs did not parse everything!\n{rest}')
+    tag_lookup = {tag:TagDoc(doc, parent) for _, tag, parent, doc in docs}
+    return tag_lookup
+
+tag_prefixes = 'ilxtr:', 'protc:', 'mo:', 'annotation-'
+def justTags(tag_lookup=None):
+    if tag_lookup is None:
+        tag_lookup = readTagDocs()
+    for tag, doc in sorted(tag_lookup.items()):
+        if anyMembers(tag, *tag_prefixes) and not doc.deprecated:
+            yield tag
 

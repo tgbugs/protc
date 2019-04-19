@@ -4,9 +4,9 @@ Usage:
     protcur-server [options]
 
 Options:
-    -p --port=PORT   tcp port for server [default: 7000]
+    -p --port=PORT    tcp port for server [default: 7000]
     -n --no-comment   do not render comments
-    -s --sync        sync
+    -s --sync         sync
 """
 import os
 import re
@@ -17,11 +17,14 @@ from markdown import markdown
 from hyputils.hypothesis import HypothesisUtils, makeSimpleLogger, UID
 from htmlfn import htmldoc, atag, deltag, titletag, render_table, zerotag, zeronotetag, h1tag
 from htmlfn import monospace_body_style, table_style, details_style, ttl_html_style, emacs_style
-from protcur.analysis import hypothesis_local, get_hypothesis_local, url_doi, url_pmid
+from protcur.core import url_doi, url_pmid
+from protcur.core import readTagDocs, justTags, addDocLinks
+from protcur.sparc import SparcMI
+from protcur.analysis import Hybrid, protc
+from protcur.analysis import hypothesis_local, get_hypothesis_local
 from protcur.analysis import citation_tree, papers, statistics, ast_statistics
-from protcur.analysis import readTagDocs, justTags, addDocLinks, Hybrid, protc
 from IPython import embed
-from flask import Flask, url_for, redirect, request, render_template, render_template_string, make_response, abort 
+from flask import Flask, request, abort 
 
 log = makeSimpleLogger('protcur.server')
 PID = os.getpid()
@@ -328,7 +331,7 @@ def make_app(annos):
 
 
 def make_sparc(app=Flask('sparc curation services'), debug=False, comments=True):
-    from protcur.sparc import SparcMI, oqsetup
+    from protcur.sparc import oqsetup
     from scibot.papers import KeyAccessor  # TODO
     OntTerm, ghq = oqsetup()
     SparcMI.graph = ghq.graph
@@ -569,7 +572,7 @@ def make_sparc(app=Flask('sparc curation services'), debug=False, comments=True)
 def make_server_app(memfile=None, comments=True):
     import atexit
     from protcur.core import annoSync
-    helpers = Hybrid, protc
+    helpers = Hybrid, protc, SparcMI
     get_annos, annos, stream_thread, exit_loop = annoSync(memfile,
                                                           helpers=helpers)
     stream_thread.start()
@@ -609,7 +612,7 @@ def main():
     app.exit_loop()
 
 
-def sparc_main():
+def sparc_main(port=7001):
     from core import annoSync
     get_annos, annos, stream_thread, exit_loop = annoSync('/tmp/sparc-server-annos.json',
                                                           #tags=('sparc:',),
@@ -621,7 +624,7 @@ def sparc_main():
     SparcMI.byTags('sparc:lastName')
     app = make_sparc()
     app.debug = False
-    app.run(host='localhost', port=7001, threaded=True)  # nginxwoo
+    app.run(host='localhost', port=port, threaded=True)  # nginxwoo
 
 
 if __name__ == '__main__':

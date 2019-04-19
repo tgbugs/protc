@@ -1,13 +1,25 @@
+import csv
+from io import StringIO
 from pathlib import Path
+from datetime import datetime
+from collections import defaultdict
+from urllib.parse import quote
 import rdflib
 import ontquery as oq
+from pyontutils import combinators as cmb
 from pyontutils.core import OntId, simpleOnt
+from pyontutils.utils import byCol, anyMembers, makeSimpleLogger
 from pyontutils.config import devconfig
 from pyontutils.sheets import get_sheet_values
 from pyontutils.annotation import AnnotationMixin
+from pyontutils.namespaces import TEMP, ilxtr, editorNote, definition
+from pyontutils.closed_namespaces import rdf, rdfs, owl
 from hyputils.hypothesis import iterclass
-from protcur.analysis import AstGeneric, Hybrid, protc
+from protcur.analysis import AstGeneric
+from protcur.core import TagDoc
 from IPython import embed
+
+log = makeSimpleLogger('protcur.sparc')
 
 
 def oqsetup():
@@ -18,7 +30,6 @@ def oqsetup():
              'ttl/methods.ttl')
     ghq = oq.plugin.get('GitHub')('SciCrunch', 'NIF-Ontology',
                                   *paths, branch='sparc')
-    SparcMI.graph = ghq.graph  # FIXME
     pns = (
         # FIXME decl in class
         ('hyp', 'https://hyp.is/'),
@@ -28,7 +39,7 @@ def oqsetup():
         ('bidsf', 'http://uri.interlex.org/temp/uris/sparc/bids/'),
         ('bf-sun', 'https://app.blackfynn.io/N:organization:4827d4ca-6f51-4a4e-b9c5-80c7bf8e5730/datasets/'),
         ('bf-mvp', 'https://app.blackfynn.io/N:organization:89dfbdad-a451-4941-ad97-4b8479ed3de4/datasets/'))
-    [SparcMI.graph.bind(p, n) for p, n in pns]
+    [ghq.graph.bind(p, n) for p, n in pns]
     query = oq.OntQuery(ghq)
     oq.OntCuries(ghq.curies)
     oq.OntCuries(PREFIXES)
@@ -324,6 +335,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
     prefix_skip_tags = 'PROTCUR:', 'annotation-'
 
     generic_tags = tuple()
+    translators = {}
     tag_translators = {}
 
     indentDepth = 2
@@ -375,10 +387,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
     def class_extra_triples(cls):
         """ GraphOutputClass check this function for class level extra triples """
         for t in cls.registry():
-            #printD(t)
             yield t
-        return
-        yield from cls.registry()
 
     @classmethod
     def registry(cls):
@@ -579,7 +588,6 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
 
         return dict(out)
 
-
     @classmethod
     def domain_properties(cls):
         out = defaultdict(set)
@@ -607,7 +615,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         range = sorted(ranges)[0]  # FIXME better logic
         if domain is None:
             if OntId(tag) in cls.all_properties():
-                print(f'WARNING: no domain for {cls.astType}')
+                log.warning(f'no domain for {cls.astType}')
             return None
 
         dmodality = cls.domain_mapping[OntId(domain)]
@@ -619,7 +627,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
             rmodality = cls.range_mapping[OntId(range)]
         except KeyError:
             if tag != range:
-                print('WARNING: mapping for range', tag, range)
+                log.warning('mapping for range', tag, range)
             return dmodality
 
         if rmodality is None:
@@ -631,7 +639,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         elif rmodality in ('general', 'various'):
             return dmodality
         elif rmodality != dmodality:
-            print(f'WARNING: Modality mismatch! {dmodality} {rmodality} {domain} {range} {tag}')
+            log.warning(f'Modality mismatch! {dmodality} {rmodality} {domain} {range} {tag}')
             return rmodality  # assume that the range gives more specifcity
         else:
             return dmodality
@@ -652,7 +660,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
     @property
     def range(self):
         r = set(self._range(self.graph, self.astType))
-        print('aaaaaaaaaaaa', r)
+        log.debug(f'aaaaaaaaaaaa {r}')
         if not r:
             r.add(None)
 
@@ -796,30 +804,6 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
             raise BaseException('why are you erroring here?')
 
     @property
-    def protc_unit_mapping(self):
-        return self.astType in self.um()
-
-    @classmethod
-    def um(cls):  # FIXME this needs to be class level
-        substrings = (
-            'Weight',
-            'temperature',
-            'Age',
-            'concentration',
-            'Dose',
-            'Frequency',
-            'Rate',
-            'CStim',   # FIXME may not work in long run
-        )
-        if cls.graph is not None:
-            if not hasattr(cls, '_um'):
-                cls._um = set(t for t in cls.all_properties() if anyMembers(t, *substrings))
-
-            return cls._um
-        else:
-            return tuple()
-
-    @property
     def value(self):
         v = super().value
         # FIXME TODO
@@ -849,11 +833,13 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
                         self._subject = child.subject
                         return self._subject
                 else:
-                    printD([OntId(d).curie for d in domain],
+                    msg = ' '.join(('{}' for _ in range(5)))
+                    args =([OntId(d).curie for d in domain],
                            child.type_object,
                            list(self.tags),
                            self.value,
                            self._repr)
+                    log.error(msg.format(*args))
                     #embed()
 
             self._subject = rdflib.BNode()
@@ -891,7 +877,9 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
         if self.isClass and not self.isProperty:
             return owl.NamedIndividual
         else:
-            if self.astType in self.um():
+            if (self.astType and 'protc' in self.translators and
+                self.astType.split(':', 1)[-1] in self.translators['protc']._order):
+                log.debug(protc.byId(self.id))
                 v = protc.byId(self.id).astValue
                 if '(rest' in v:
                     v, junk = v.rsplit('(rest', 1)
@@ -976,7 +964,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
 class technique_to_sparc(AnnotationMixin):
     # we have 3 options for how to do this, neurons style, methods style, or parcellation style
     def __init__(self):
-        olr = Path(devconfig.ontology_local_repo)
+        olr = Path(devconfig.git_local_base) / 'duplicates' / 'sparc-NIF-Ontology'
         g = (rdflib.Graph()
             .parse((olr / 'ttl/sparc-methods.ttl').as_posix(),
                     format='turtle')
@@ -1023,7 +1011,6 @@ class technique_to_sparc(AnnotationMixin):
         measure = [p for p in protocol if p.astType == 'protc:*measure' or p.astType == 'protc:symbolic-measure']
         telos = [p for p in protocol if p.astType == 'protc:telos']
 
-
     @property
     def onts(self):
         #self.onts = rq.onts  # FIXME this is obscure and indirect sort the imports so it is clear
@@ -1059,18 +1046,54 @@ def sparc_mapping():
 
     embed()
 
+    @property
+    def protc_unit_mapping(self):
+        return self.astType in self._protc_tag_mapping['protc:parameter*']
+
+    @classmethod
+    def make_protc_tag_mapping(cls):
+        substrings = (
+            'Weight',
+            'temperature',
+            'Age',
+            'concentration',
+            'Dose',
+            'Frequency',
+            'Rate',
+            'CStim',   # FIXME may not work in long run
+        )
+        if cls.graph is not None:
+            if not hasattr(cls, '_protc_tag_mapping'):
+                cls._protc_tag_mapping = {}
+                cls._protc_tag_mapping['protc:parameter*'] = set(t for t in cls.all_properties()
+                                                                if anyMembers(t, *substrings))
+
+            return cls._protc_tag_mapping
+        else:
+            return tuple()
+
 
 def main():
-    #sparc_mapping()
-    from protcur.core import annoSync
     from hyputils.hypothesis import group, group_to_memfile, HypothesisHelper
+    from protcur import namespace_mappings as nm
+    from protcur.core import annoSync
+    from protcur.sparc import SparcMI  # oh no ... this is so much easier than what I had been doing >_<
+    from protcur.analysis import Hybrid, protc
     get_annos, annos, stream_thread, exit_loop = annoSync(group_to_memfile(group),
                                                           helpers=(HypothesisHelper, Hybrid, protc, SparcMI))
     OntTerm, ghq = oqsetup()
     SparcMI.graph = ghq.graph
-    smi = [SparcMI(a, annos) for a in annos]
-           #if any(t.startswith('sparc:') for t in a.tags)]
+    p = [protc(a, annos) for a in annos]
+    _smi = [SparcMI(a, annos) for a in annos]
+            #if any(t.startswith('sparc:') for t in a.tags)]
+    smi = [s for s in _smi if s.isAstNode]
     s = smi[0]
+    _ = [repr(s) for s in smi]
+    sparc_tags_from_protc = [_ for _ in [SparcMI.translators['protc'](p).tags for p in protc] if _]
+    trouble = protc.byId('tkkziO-mEei0Xze-UL2X8g')
+    wat = SparcMI.byId('tkkziO-mEei0Xze-UL2X8g')
+    embed()
+    return
     sparc_mapping()
 
 
