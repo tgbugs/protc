@@ -200,12 +200,15 @@ def make_app(annos):
 
     @app.route('/curation/citations', methods=['GET'])
     def route_citations():
-        #tree, extra = citation_tree(annos)
+        title = 'citation tree'
         all = request.args.get('all', False)
         if all:
             all = True if all.lower() == 'true' else False
-        tree, extra = citation_tree(protc, html_head=(titletag('citation tree'),), all=all)
-        return extra.html
+        tree, extra = citation_tree(protc, html_head=(titletag(title),), all=all)
+        if extra:
+            return extra.html
+        else:
+            return htmldoc('No citations yet!', title=title)
 
     @app.route('/curation/ast', methods=['GET'])
     def route_ast():
