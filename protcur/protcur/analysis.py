@@ -230,6 +230,20 @@ class Hybrid(HypothesisHelper):
             [p._addAstParent() for p in self.objects.values() if tuple(p.children)]  # handles updates
             # TODO deletes still an issue as always
 
+    @property
+    def document(self):
+        cls = self.__class__
+        class Document:
+            def __init__(self, inst):
+                self.inst = inst
+            @property
+            def otherVersionUri(self):
+                for a in cls.byIri(self.inst.uri):
+                    if 'ilxtr:otherVersionUri' in a._anno.tags:
+                        return a.text.strip()
+
+        return Document(self)
+
     def ontLookup(self, value, rank=('NCBITaxon', 'CHEBI', 'GO', 'UBERON', 'ilxtr', 'PATO')):
 
         # TODO OntTerm
