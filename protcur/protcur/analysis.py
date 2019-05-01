@@ -816,7 +816,7 @@ class AstGeneric(Hybrid):
         return self._value_escape(self.value)
 
     @classmethod
-    def parsed(cls, ):
+    def parsed(cls):
         return (cls.lang_line + '\n' +
                 ''.join(sorted(repr(o)
                                for o in cls.objects.values()
@@ -828,7 +828,7 @@ class AstGeneric(Hybrid):
         return (cls.lang_line + '\n' +
                 ''.join(sorted(repr(o)
                                for o in cls.objects.values()
-                               if o is not None and o.isAstNode)))
+                               if o is not None and o.isAstNode and not o.hasAstParent)))
 
     @classmethod
     def topLevel(cls):
@@ -840,10 +840,10 @@ class AstGeneric(Hybrid):
                                o.astType in cls._topLevel)))
 
     @classmethod
-    def parentless(cls):
+    def flatall(cls):
         return (cls.lang_line + '\n' +
                 ''.join(sorted(repr(o) for o in cls.objects.values()
-                               if o is not None and o.isAstNode and not o.hasAstParent)))
+                               if o is not None and o.isAstNode)))
 
     @classmethod
     def parentneed(cls):

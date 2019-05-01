@@ -174,17 +174,11 @@ def star_annos(ast, funcname, search_by):
         return abort(404)
 
 
-def make_ast(sort=False):
-        #return '<pre>' + protc.parentless() + '</pre>'
-        ast = protc
+def make_ast(nodes_to_render, ast):
         join = ast._repr_join.replace('\n', '<br>\n').join
-        everything = (o for o in ast if o is not None and o.isAstNode and not o.hasAstParent)
-        if sort:
-            everything = sorted(everything)
-
         return htmldoc(join(
             [a.__repr__(html=True, number=n + 1)
-             for n, a in enumerate(everything)]),
+             for n, a in enumerate(nodes_to_render)]),
                        title=f'EVERYTHING',
                        styles=(table_style, monospace_body_style, details_style,
                                ttl_html_style, emacs_style,
@@ -212,11 +206,15 @@ def make_app(annos):
 
     @app.route('/curation/ast', methods=['GET'])
     def route_ast():
-        return make_ast(sort=True)
+        ast = protc
+        everything = sorted((o for o in ast if o is not None and o.isAstNode and not o.hasAstParent))
+        return make_ast(everything, ast)
 
     @app.route('/curation/fast', methods=['GET'])
     def route_fast():
-        return make_ast()
+        ast = protc
+        everything = (o for o in ast if o is not None and o.isAstNode and not o.hasAstParent)
+        return make_ast(everything, ast)
 
     @app.route('/curation/papers', methods=['GET'])
     @app.route('/curation/papers/', methods=['GET'])
