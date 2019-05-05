@@ -29,17 +29,7 @@ from protcur.core import linewrap, color_pda
 from protcur.config import __script_folder__
 from IPython import embed
 
-log = makeSimpleLogger('protcur.analysis')
-
-try:
-    from misc.debug import TDB
-    tdb=TDB()
-    printD=tdb.printD
-    #printFuncDict=tdb.printFuncDict
-    #tdbOff=tdb.tdbOff
-except ImportError:
-    print('WARNING: you do not have tgbugs misc on this system')
-    printD = print
+log = makeSimpleLogger('protcur')
 
 sgv = Vocabulary(cache=True)
 RFU = 'protc:references-for-use'
@@ -572,7 +562,7 @@ class Hybrid(HypothesisHelper):
             if self.parent is not None:
                 yield self.parent
             else:
-                print(f"WARNING: protc:implied-aspect not used in a reply! {self.htmlLink}")
+                log.warning(f'protc:implied-aspect not used in a reply! {self.htmlLink}')
 
         else:
             yield from self.direct_children
@@ -583,7 +573,7 @@ class Hybrid(HypothesisHelper):
             child = self.getObjectById(id_)
             if child is None:
                 if 'annotation-children:delete' not in self._tags:
-                    print(f"WARNING: child of {self._repr} {id_} does not exist!")
+                    log.warning(f'child of {self._repr} {id_} does not exist!')
                 continue
             for reply in child.replies:  # because we cannot reference replies directly in the client >_<
                 if 'protc:implied-aspect' in reply.tags:# or 'protc:implied-context' in reply.tags:
@@ -630,7 +620,7 @@ class Hybrid(HypothesisHelper):
         SPACE = '\xA0' if html else ' '
         NL = '<br>\n' if html else '\n'
         if self in cycle:
-            print(tc.red('CYCLE DETECTED'), self.shareLink, self._repr)
+            log.warning('CYCLE DETECTED {self.shareLink} {self._repr}')
             return f'{NL}{SPACE * ind * (depth + 1)}* {cycle[0].id} has a circular reference with this node {self.id}'
             return ''  # prevent loops
         else:
@@ -929,7 +919,7 @@ class AstGeneric(Hybrid):
         if self.astType is None:
             if self in cycle:
                 cyc = ' '.join(c.id for c in cycle)
-                print('Circular link in', self._repr, 'cycle', cyc)
+                log.warning('Circular link in {self._repr} cycle {cyc}')
                 out = f"{OPEN()}circular-link no-type {OPEN(1)}cycle {cyc}{CLOSE}{CLOSE}" + CLOSE * nparens + debug
                 return out
             else:
@@ -988,7 +978,7 @@ class AstGeneric(Hybrid):
                         _cycles.append(cycle)
                         #print('Circular link in', self.shareLink)
                         cyc = f'{SPACE}'.join(c.id for c in cycle)
-                        print('Circular link in', self._repr, 'cycle', cyc)
+                        log.warning('Circular link in {self._repr} cycle {cyc}')
                         s = ((f"{OPEN(1)}circular-link{SPACE}"
                               f"no-type{SPACE}{OPEN(2)}cycle{SPACE}"
                               f"{cyc}{CLOSE}{CLOSE}") + CLOSE * nparens + debug + f'  {i} lol')
@@ -1385,7 +1375,7 @@ def main():
     perftest()
     pc = protc.byId(problem_child)
     stop = time()
-    print('BAD TIME', stop - start)
+    log.debug(f'BAD TIME {stop - start}')
 
     @profile_me
     def perfsort():
@@ -1402,17 +1392,17 @@ def main():
     start = time()
     perflist()
     stop = time()
-    print('List BAD TIME', stop - start)
+    log.debug(f'List BAD TIME {stop - start}')
 
     start = time()
     perfhtml()
     stop = time()
-    print('HTML BAD TIME', stop - start)
+    log.debug(f'HTML BAD TIME {stop - start}')
 
     start = time()
     perfsort()
     stop = time()
-    print('Sort BAD TIME', stop - start)
+    log.debug(f'Sort BAD TIME {stop - start}')
 
     #@profile_me  # a note that trying ot get pref data when there are lots of function calls nearly doubles actual time...
     def text():
@@ -1425,7 +1415,7 @@ def main():
     start = time()
     text()
     stop = time()
-    print('BAD TIME', stop - start)
+    log.debug(f'BAD TIME {stop - start}')
     def more():
         tl = protc.topLevel()
         with open('/tmp/top-protcur.rkt', 'wt') as f: f.write(tl)
