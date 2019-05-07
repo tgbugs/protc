@@ -25,11 +25,20 @@ from pysercomb.parsers import racket, units
 from pysercomb.pyr import units as units_pyr
 #from pysercomb import parsing_parsec
 from hyputils.hypothesis import HypothesisAnnotation, HypothesisHelper, idFromShareLink
+from hyputils.hypothesis import log as _hlog, logd as _hlogd
 from protcur.core import linewrap, color_pda
 from protcur.config import __script_folder__
 from IPython import embed
 
 log = makeSimpleLogger('protcur')
+logd = makeSimpleLogger('protcur-data')
+
+# set hlog to conform to pyontutils logging conventions
+_hlog.removeHandler(_hlog.handlers[0])
+_hlog.addHandler(log.handlers[0])
+
+_hlogd.removeHandler(_hlogd.handlers[0])
+_hlogd.addHandler(logd.handlers[0])
 
 sgv = Vocabulary(cache=True)
 RFU = 'protc:references-for-use'
@@ -562,7 +571,7 @@ class Hybrid(HypothesisHelper):
             if self.parent is not None:
                 yield self.parent
             else:
-                log.warning(f'protc:implied-aspect not used in a reply! {self.htmlLink}')
+                logd.warning(f'protc:implied-aspect not used in a reply! {self.htmlLink}')
 
         else:
             yield from self.direct_children
@@ -573,7 +582,7 @@ class Hybrid(HypothesisHelper):
             child = self.getObjectById(id_)
             if child is None:
                 if 'annotation-children:delete' not in self._tags:
-                    log.warning(f'child of {self._repr} {id_} does not exist!')
+                    logd.warning(f'child of {self._repr} {id_} does not exist!')
                 continue
             for reply in child.replies:  # because we cannot reference replies directly in the client >_<
                 if 'protc:implied-aspect' in reply.tags:# or 'protc:implied-context' in reply.tags:
@@ -620,7 +629,7 @@ class Hybrid(HypothesisHelper):
         SPACE = '\xA0' if html else ' '
         NL = '<br>\n' if html else '\n'
         if self in cycle:
-            log.warning('CYCLE DETECTED {self.shareLink} {self._repr}')
+            logd.warning('CYCLE DETECTED {self.shareLink} {self._repr}')
             return f'{NL}{SPACE * ind * (depth + 1)}* {cycle[0].id} has a circular reference with this node {self.id}'
             return ''  # prevent loops
         else:
@@ -863,7 +872,7 @@ class AstGeneric(Hybrid):
                 return next(t for t in tags if t != 'TODO')
             else:
                 tl = ' '.join(f"'{t}" for t in sorted(tags))
-                log.warning(f'something weird is going on with (annotation-tags {tl}) and self._order {self._order}')
+                logd.warning(f'something weird is going on with (annotation-tags {tl}) and self._order {self._order}')
 
     @property
     def astValue(self):
@@ -919,7 +928,7 @@ class AstGeneric(Hybrid):
         if self.astType is None:
             if self in cycle:
                 cyc = ' '.join(c.id for c in cycle)
-                log.warning('Circular link in {self._repr} cycle {cyc}')
+                logd.warning('Circular link in {self._repr} cycle {cyc}')
                 out = f"{OPEN()}circular-link no-type {OPEN(1)}cycle {cyc}{CLOSE}{CLOSE}" + CLOSE * nparens + debug
                 return out
             else:
@@ -978,13 +987,13 @@ class AstGeneric(Hybrid):
                         _cycles.append(cycle)
                         #print('Circular link in', self.shareLink)
                         cyc = f'{SPACE}'.join(c.id for c in cycle)
-                        log.warning('Circular link in {self._repr} cycle {cyc}')
+                        logd.warning('Circular link in {self._repr} cycle {cyc}')
                         s = ((f"{OPEN(1)}circular-link{SPACE}"
                               f"no-type{SPACE}{OPEN(2)}cycle{SPACE}"
                               f"{cyc}{CLOSE}{CLOSE}") + CLOSE * nparens + debug + f'  {i} lol')
                         #s = f"'(circular-link {cycle[0].id})" + ')' * nparens
                     else:
-                        log.warning(f'duplicate cycles in {self._repr}')
+                        logd.warning(f'duplicate cycles in {self._repr}')
                         continue
                 except TypeError as e:
                     # do not remove or bypass this error, it means that one of your
