@@ -629,7 +629,7 @@ class Hybrid(HypothesisHelper):
         SPACE = '\xA0' if html else ' '
         NL = '<br>\n' if html else '\n'
         if self in cycle:
-            logd.warning('CYCLE DETECTED {self.shareLink} {self._repr}')
+            log.warning(f'CYCLE DETECTED {self.shareLink} {self._repr}')
             return f'{NL}{SPACE * ind * (depth + 1)}* {cycle[0].id} has a circular reference with this node {self.id}'
             return ''  # prevent loops
         else:
@@ -928,7 +928,7 @@ class AstGeneric(Hybrid):
         if self.astType is None:
             if self in cycle:
                 cyc = ' '.join(c.id for c in cycle)
-                logd.warning('Circular link in {self._repr} cycle {cyc}')
+                log.warning(f'Circular link in {self._repr} cycle {cyc}')
                 out = f"{OPEN()}circular-link no-type {OPEN(1)}cycle {cyc}{CLOSE}{CLOSE}" + CLOSE * nparens + debug
                 return out
             else:
@@ -987,7 +987,7 @@ class AstGeneric(Hybrid):
                         _cycles.append(cycle)
                         #print('Circular link in', self.shareLink)
                         cyc = f'{SPACE}'.join(c.id for c in cycle)
-                        logd.warning('Circular link in {self._repr} cycle {cyc}')
+                        log.warning(f'Circular link in {self._repr} cycle {cyc}')
                         s = ((f"{OPEN(1)}circular-link{SPACE}"
                               f"no-type{SPACE}{OPEN(2)}cycle{SPACE}"
                               f"{cyc}{CLOSE}{CLOSE}") + CLOSE * nparens + debug + f'  {i} lol')
