@@ -3,8 +3,8 @@
 (define units-dimensionless
 '((% . percent) ; mass fraction vs mole fraction
   (NA . numerical-aperture)
-  (x . fold)
-  (× . fold) ; b'\xc3\x97'
+  ;(x . fold)
+  ;(× . fold) ; b'\xc3\x97'
   )
 )
 (define units-dimensionless-prefix
