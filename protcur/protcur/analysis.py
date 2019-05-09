@@ -22,7 +22,7 @@ from pyontutils.hierarchies import creatTree
 from pyontutils.scigraph_client import Vocabulary
 from pyontutils.closed_namespaces import rdf, rdfs, owl
 from pysercomb.parsers import racket, units
-from pysercomb.pyr import units as units_pyr
+from pysercomb.pyr import units as pyru
 #from pysercomb import parsing_parsec
 from hyputils.hypothesis import HypothesisAnnotation, HypothesisHelper, idFromShareLink
 from hyputils.hypothesis import log as _hlog, logd as _hlogd
@@ -1160,7 +1160,7 @@ class protc(AstGeneric):
             test_params.append((value, (success, v, rest)))
 
         if v:
-            v = units_pyr.ProtcParameter(v).format_value(self.linePreLen)
+            v = pyru.SExpr.format_value(v, self.linePreLen)
             #v = format_value(v, self.linePreLen)#, LID=' ' * self.linePreLen)
         return repr(ParameterValue(success, v, rest, indent=self.linePreLen))  # TODO implement as part of processing the children?
 
