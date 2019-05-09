@@ -17,4 +17,9 @@ class TestUnits(unittest.TestCase):
         s = list(r.n3(rdflib.BNode()))
         w = units.UnitsParser('9-14 weeks').asPython()
         x = list(w.n3(rdflib.BNode()))
-        breakpoint()
+        #breakpoint()
+
+    def test_brokens(self):
+        should_ser = units.UnitsParser('123 kHz / 1 J*K').asPython()
+        should_ser.ttl
+

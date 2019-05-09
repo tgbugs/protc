@@ -1,12 +1,13 @@
 import rdflib
 from pyontutils import combinators as cmb
 from pysercomb.pyr import units as pyru
-from pyontutils.namespaces import TEMP
+from pyontutils.namespaces import TEMP, OntCuries
 from pyontutils.closed_namespaces import rdf, owl, rdfs
 from nifstd_tools.methods.core import prot, proc, tech, asp, dim, unit  # FIXME circular imports incoming ...
 
 xsd = rdflib.XSD
 a = rdf.type
+OntCuries({'unit':str(unit)})
 
 
 class n3:
@@ -126,7 +127,7 @@ def LoR_n3(self, subject_or_value=None):
         unit__ = getattr(l.unit, self._op)(r.unit).n3  # huh ... would you look at that
         value, unit_ = unit__(value_)
 
-        yield subject, TEMP.hasValue, value
+        yield subject, TEMP.hasValue, value.n3
         yield subject, TEMP.hasUnit, unit_
 
     elif isinstance(l, Unit):
@@ -134,13 +135,13 @@ def LoR_n3(self, subject_or_value=None):
         value = subject_or_value
         prefix = getattr(l.prefix, self._op)(r.prefix)
         unit_ = getattr(l.unit, self._op)(r.unit)
-        base_value = prefix.to_base(value)
-        yield base_value
-        n3 = unit_.n3()
+        base_value = n3.cast(prefix.to_base(value))  #  FIXME I think __pow__ on 10 is what causes the issue
+        yield base_value.n3
+        unit_n3 = unit_.n3()
         if isinstance(unit_, self.__class__):
-            yield from n3
+            yield from unit_n3
         else:
-            yield n3
+            yield unit_n3
 
     else:
         raise ValueError(subject_or_value)
@@ -154,6 +155,7 @@ def Expr_triples(self):
 @property
 def Expr_ttl(self):
     graph = rdflib.Graph()
+    OntCuries.populate(graph)
     [graph.add(t) for t in self.triples]
     return graph.serialize(format='nifttl')
 
