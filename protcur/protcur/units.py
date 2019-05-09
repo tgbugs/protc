@@ -75,8 +75,12 @@ class Range(pyru.Range):
                  isinstance(start.value, int) and
                  isinstance(stop.value, int)
                  else owl.real)
+        # FIXME need the base normalized values
+        if self.start.unit:
+            v1, type_ = self.start.unit.n3(start.value)
 
-        # FIXME units !
+        elif self.stop.unit:
+            v2, type_ = self.stop.unit.n3(stop.value)
 
         def min_(s, p):
             o = rdflib.BNode()
