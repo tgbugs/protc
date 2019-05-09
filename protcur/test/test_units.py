@@ -15,4 +15,6 @@ class TestUnits(unittest.TestCase):
         g = list(f.n3(rdflib.BNode()))
         r = units.UnitsParser('1-100T').asPython()
         s = list(r.n3(rdflib.BNode()))
+        w = units.UnitsParser('9-14 weeks').asPython()
+        x = list(w.n3(rdflib.BNode()))
         breakpoint()

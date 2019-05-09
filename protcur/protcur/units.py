@@ -76,6 +76,8 @@ class Range(pyru.Range):
                  isinstance(stop.value, int)
                  else owl.real)
 
+        # FIXME units !
+
         def min_(s, p):
             o = rdflib.BNode()
             yield s, p, o
@@ -135,6 +137,19 @@ def LoR_n3(self, subject_or_value=None):
     else:
         raise ValueError(subject_or_value)
 
+
+@property
+def Expr_triples(self):
+    yield from self.n3(rdflib.BNode())
+
+
+@property
+def Expr_ttl(self):
+    graph = rdflib.Graph()
+    [graph.add(t) for t in self.triples]
+    return graph.serialize(format='nifttl')
+
+
 pyru.LoR.n3 = LoR_n3  # sad that monkey patching works better here
 #class Add(pyru.Add):
 #class Mul(pyru.Mul):
@@ -143,6 +158,8 @@ pyru.LoR.n3 = LoR_n3  # sad that monkey patching works better here
 
 Expr = pyru.Expr
 #Expr.bindImpl(None, Add, Mul, Div, Exp)
+Expr.triples = Expr_triples
+Expr.ttl = Expr_ttl
 
 ParamParser = pyru.ParamParser
 ParamParser.bindImpl(None,
