@@ -47,7 +47,7 @@ class Unit(pyru.Unit):
         return rdflib.Literal(self.prefix.to_base(value)), base_unit
 
 
-class PrefixUnit(pyru.PrefixUnit):
+class PrefixUnit(Unit, pyru.PrefixUnit):
     pass
 
 
@@ -57,6 +57,10 @@ class Quantity(pyru.Quantity):
         super().__init__(value, unit)
 
     def n3(self, subject):
+        if not self.unit:  # FIXME ... predicate how?
+            yield subject, TEMP.hasValue, self.value.n3
+            return
+
         value, unit = self.unit.n3(self.value)
         yield subject, TEMP.hasValue, value
         yield subject, TEMP.hasUnit, unit
