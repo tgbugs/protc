@@ -173,7 +173,7 @@
         (molarity . concentration)  ; [:: molar concentration]  moles concentration? molar is the aspect?
         (molality . molality) ; mols per mass SOLVENT _big_ difference, some people say not to call this concentration ...
         (kelvin . temperature) ; thermodynamic temperature
-        (degrees-celcius . temperature)  ; relative temperature
+        (degrees-celsius . temperature)  ; relative temperature
         (candela . [:: luminous intensity])  ; flux / solid angle
         (lumens . [:: luminous flux])  ; [:: radiant flux] is more fundamental and is measured in watts
         (lux . [:: luminous flux density])  ; illuminance (officially) lm/m**2 ala teslas = webers/m**2, radiant flux density, or irradiance flux density >_< is indeed how this unit is referred to

@@ -202,7 +202,7 @@
                                          (m1 <- (many (try infix-suffix)))
                                          (return (cons q (apply append (cons m0 m1))))))
 (define expression ((param 'expression) (<or> prefix-expression infix-expression)))  ; TODO prefixed infix...
-(define C-for-temp ((param 'unit) (>> (<or> (string "ºC") (string "C")) (return (cons 'degrees-celcius '())))))
+(define C-for-temp ((param 'unit) (>> (<or> (string "ºC") (string "C")) (return (cons 'degrees-celsius '())))))
 (define temp-for-biology ((param 'quantity) (parser-seq num C-for-temp)))
 (define parameter-expression (parser-seq
                               (AT-MOST-ONE approx)

@@ -9,10 +9,10 @@
   (M . molarity) ; molar
   (mol/kg . molality) ;FIXME NOTE molal is deprecated use mol/kg
   (K . kelvin)
-  (°C . degrees-celcius)
-  (~oC . degrees-celcius) ; Tom also accepts using the digraph for the degree symbol...
-  (ºC . degrees-celcius) ; b'\xc2\xba'
-  (◦C . degrees-celcius) ; b'\xe2\x97\xa6' white dot
+  (°C . degrees-celsius)
+  (~oC . degrees-celsius) ; Tom also accepts using the digraph for the degree symbol...
+  (ºC . degrees-celsius) ; b'\xc2\xba'
+  (◦C . degrees-celsius) ; b'\xe2\x97\xa6' white dot
   (ca . candela)
   (lm . lumens)
   (lx . lux) ; plural?
