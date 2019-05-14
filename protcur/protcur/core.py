@@ -15,7 +15,7 @@ def url_pmid(pmid):
     return 'https://www.ncbi.nlm.nih.gov/pubmed/' + pmid.split(':')[-1]
 
 
-def annoSync(memoization_file=None, helpers=tuple(), tags=tuple(), group=group):
+def annoSync(memoization_file=None, helpers=tuple(), tags=tuple(), group=group, sync=True):
     if group == '__world__':
         raise ValueError('Group is set to __world__ please run the usual `export HYP_ ...` command.')
     get_annos = Memoizer(memoization_file=memoization_file, group=group)
@@ -28,10 +28,17 @@ def annoSync(memoization_file=None, helpers=tuple(), tags=tuple(), group=group):
     annos = get_annos()
     if tags:
         annos = [a for a in annos if any(any(ft in at for ft in tags) for at in a.tags)]
+
     yield annos
-    stream_thread, exit_loop = AnnotationStream(annos, prefilter, helperSyncHandler)()
-    yield stream_thread
-    yield exit_loop
+
+    if sync:
+        stream_thread, exit_loop = AnnotationStream(annos, prefilter, helperSyncHandler)()
+        yield stream_thread
+        yield exit_loop
+
+    else:
+        yield None
+        yield None
 
 
 def linewrap(text, start, end=80, sep='|', space=' ', nl='\n', ind=4, depth=0):
