@@ -1,0 +1,150 @@
+* The orchestra
+  Science as symphony.
+  
+* Agents/Actors/Roles
+  # I am using theater terminology intentionally since it is orthogonal
+  # to the musical terminology in order to keep the structure of this
+  # document separate from the structure of the system
+  
+  Many of these roles may be embodied in the same person or device.
+  For example a scientist that does everything from memory would embody
+  all of these roles except for the venue. A phone that displayed the
+  protocol, took inputs, automatically made measurements, and stored
+  all its data locally and did analysis would embody all of these
+  roles but the venue as well, though there might be other executors
+  (such as the owner of the phone) that participated in the performance
+  of a protocol.
+
+  They are separated here to illustrate the parts of the system that can
+  and probably ought to be independent of each other.
+
+  Potential subroles that might be lifted to full roles are
+  listed in nested fashion.
+
+  The execution of a protocol may involve multiple agents of each of the types
+  listed below. All protocols require a conductor or cooperating set of
+  conductors that can act as if they were a single conductor. This does not
+  mean that every execution of every protocol should have its own conductor.
+  Conductors are probably best thought of as single monolithic entities that
+  manage performances and determine what performances they will/can carry out
+  and who is allowed to execute those performances, who may listen to them (live),
+  and who may reproduce them.
+
+** conductor
+*** authorizer
+** executor
+   Executors are agents that can follow a rendered/compiled version of a protocol.
+   They must be able to send messages to the following other agents or processes of the particular types.
+   These messages include but are not limited to:
+   1. conductor
+      1. I would like to run [protocol p] at [time t]
+      2. Please authenticate me using [credential c]
+
+   2. performance
+      1. I have completed [step s] it was a [success?]
+         step s must include or be accompanied by information about the current performance
+         a stateful version tracks which performance the executor is in and is probably more
+         complicate than the stateless version where the executor sends
+
+         [step s] of [performance p] was a [success?]
+
+         that way the conductor ('s amanuensis probably)
+         only needs to track the current state of the performance, since some executors have been
+         known to try to execute multiple performances at the same time, if the executor is working
+         via some mediating device then the device will switch between them
+         The correct way to do this is to send messages to the performance, which will check in
+         with the conductor about authorization etc.
+      2. I have deposited the results of [measurement m] with [listener l] under [name n]
+         if l is an inactive listener then the conductor needs to dispatch something (checker?)
+         to make sure everything is in order
+      3. Please give me an identifier for the output of [step s] of [performance p]
+      4. I have deposited the [output o] of [step s] of [performance p] in [container c] with [bound-name n]
+         container location specifications
+
+   3. listener
+      1. Here is [data d] for [measurement m]
+   4. singer
+      1. Show me the data for [performance p]
+
+   They must be able to receive messages from 
+
+   They must be able to report on the success of a given action to the conductor.
+   From the perspective of the system executors are things that know some secret.
+** renderer
+** measurer
+** listener
+** singer
+** venue (physical execution environment)
+** integrator/summarizer/syntheizer/analyzer
+   online vs offline
+* Conversations/Exchanges
+** executor-conductor
+** executor-listener
+* Processes
+  Objects representing the
+** performance
+   aka execution of the physical parts of a protocol
+** computation
+   # analysis, filtering, etc.
+
+* Static equivalents 
+** identity
+   ideally all the bytes, for big stuff some hash over all the bytes
+** identifier
+   A bound or unbound pointer so some other piece of data or rather, a tiny piece of data
+   that includes enough information in the current context, to find the agent that can
+   expand that information into a larger record local identifiers require much less
+   information about how they need to be used, but cannot be used outside their local
+   context without collision unless they are accompanied by a rule that disambiguate them
+   in the wider context.  If the identifier is itself an identity, then it can only be a
+   pointing identifier or a bound identifier, it cannot become part of the identified
+   thing directly due to the chicken and egg feature that all secure hash functions will
+   produce a different result if you continually embed your previous result in the blob to
+   be identified. If your hash function doesn't do this then you should probably get a new
+   one that does.
+
+** metadata
+   May be bound or unbound to a piece of data, and may be bound to multiple pieces of
+   data, however ideally unbound metadata should always include a hash/checksum/identity
+   of the data that it is supposed to be bound to or multiple identities if there are
+   multiple representations of the data to which it can validly be bound. The rule for
+   computing the identity should linked to as well. If you happen to have a system that
+   can resolve identities to their referent, that can be pretty handy, especially when it
+   comes to automatically retrieving and executing things like the hash function.
+
+   When dealing with bound metadata, the key feature that distinguishes metadata from data
+   is the presence of an unbinding function. Namely a function beyond identity that can
+   select some subset of the larger data and distinguish it from the rest. This could be a
+   file header, or an owl:Ontology section, or prefixes, etc.
+
+   There is a further subset of metadata that is necessary (though not always sufficient)
+   for the proper interpretation of any data that it is bound or could be bound to. For
+   example the prefixes in a ttl file are metadata that is critical for interpreting both
+   the owl:Ontology section and the triples section of the file that follows because both
+   rely on the expansion rules defined there. If the prefixes are removed then they have
+   to be pointed to by the metadata section with their identity bound, otherwise the
+   metadata and data portions have an infinite number of possible expansions, though
+   probably a finite number of reasonable expansions. There are also cases where there
+   is more than one possible interpretation, such as interpreting a ttl file as owl vs
+   rdf. Both interpretations are 'correct' but the presence of an ontology header section
+   provides additional information that tells a interpreting system that running an owl
+   reasoner is something that can (probably) be done.
+
+** data
+   Everything in this section is data. The distinguishing feature of data is that it is
+   unstructured or opaque or homogenous to all functions except for one or more identity
+   functions. Bytes more generally are considered to be purely data only under a given
+   identity function.  That is, collections of bytes are considered to be data when they,
+   or any additional structure that they might have, is treated in exactly the same way
+   for each part. For example if you identify an owl ontology encoded in a ttl file by
+   expanding every statement to a triple and hashing all of them, then your data is the
+   triples and not the prefixes, and the ontology header that could be considered to be
+   metadata is not, because it is treated no differently from the rest.
+   
+   Basically, in a given scheme, data is the level beyond which everything is considered
+   to be homogeneous and to have no additional structure that is relevant for the purposes
+   of the current system. Another system will almost certainly care about some deeper
+   structure within that data, and will start the cycle again, splitting the data portion
+   into metadata and data using some other unbinding function (and potentially a different
+   identity function, such as actual equality instead of a hash).
+
