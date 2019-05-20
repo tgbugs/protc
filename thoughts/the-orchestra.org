@@ -28,51 +28,251 @@
   Conductors are probably best thought of as single monolithic entities that
   manage performances and determine what performances they will/can carry out
   and who is allowed to execute those performances, who may listen to them (live),
-  and who may reproduce them.
+  and who may reproduce them. Conductors are abstractions, and ideally should be
+  able to start up and shut down, and go missing, and be replaced mid performance,
+  so long as the score is the same and some listeners remembers where we were.
+  The state of the performance should always be recoverable.
+
+  Performances come in two types. Instrumented and uninstrumented. In an instrumented
+  performance the state of the execution (execution being the real world process black box)
+  is tracked and assisted by other agents. In uninstrumented performances there are
+  non-agentous artifacts that are used to track the state by the executor alone.
+  In an instrumented performance there is the notion of the mediator, which is basically
+  the user interface. It could be graphical, auditory, textual, touch based, or
+  of the magic rock variety where a camera records live what is being written in
+  a lab notebook and translates it immediately into a digital representation and
+  where additional information is projected/overlayed on the world, sort of AR style,
+  but without the silly glasses.
 
 ** conductor
 *** authorizer
+    In theory this can be stateless, and many of the operations that we want
+    to support are in some sense stateless if they are outside the system.
+    Note also that at scale if you want to authorize tens of thousands of
+    measurements that are all part of the same performance occurring all the
+    time, then auth has to be able to happen at the edges, and preferably in
+    isolation. I think the only serious consideration is the revocation list,
+    the length of the list, and the latency from revocation to denying access.
+    
+   # - [agent a] is not authorized as of [time t]
+     # always set to -inf.0 for all agents
+   # - [agent a] is authorized as of [time t]
+   
+   # 1. listener
+      # - [executor e] is not authorized as of [time t]
+        # amusing comment about byzantine conductors all declaring eachother unauthorized
+   # 2. performance
+   
 ** executor
    Executors are agents that can follow a rendered/compiled version of a protocol.
    They must be able to send messages to the following other agents or processes of the particular types.
    These messages include but are not limited to:
    1. conductor
-      1. I would like to run [protocol p] at [time t]
-      2. Please authenticate me using [credential c]
+      1. I would like to run [protocol p] optionally at [time t]
+         - [performance p]
+         - don't know that protocol
+           - [conductor other] does -> [performance p]
+           - similar protocols
+           - send me a global identifier for that protocol
+         - I can't run that protocol
+           - [conductor other] can
+           - don't know any conductors that can
+           - don't have the required listeners
+         - I can't let you run that protocol (unauthorized)
+         - the soonest you can start that protocol is [time t']
+           - Here are the things you have to do first based on ...
+   2. executor
+      1. Please run [protocol p'] and tell [executor e] when you are done
+         Please run [protocol p'] and tell [current-conductor] to tell [executor e] (who might be me) when you are done
+         because e is waiting for the output of p'
+         The only question is whether we want executor-executor messages like this to be logged
+         with a listener so that delegation can be tracked, we probably do?
+         Alternate bad version +Please run [protocol p'] with the current [protocol p] as context+
+      2. Stop what you are doing and do something else
+   3. performance
+      Treat performances as their own objects, if an executor wants to participate in
+      multiple performances that is state that is tracked by the executor, not by the
+      conductor, the conductor manages the performances, individual performances can send
+      it questions about whether certain executors are allowed/expected. Consider a long
+      running performance where some executor leaves the team or more simply, some executor's
+      credentials are leaked. The performance shouldn't advance its state if it receives
+      messages from the revoked credentials (same for listeners, they can store the deposited
+      data, and after the fact it can be flagged with the date of the known compromise)
+      Who can participate in a long running performance will change over time, that is the
+      conductor's job, the state of the performance is the performance's.
 
-   2. performance
       1. I have completed [step s] it was a [success?]
-         step s must include or be accompanied by information about the current performance
-         a stateful version tracks which performance the executor is in and is probably more
-         complicate than the stateless version where the executor sends
-
-         [step s] of [performance p] was a [success?]
-
-         that way the conductor ('s amanuensis probably)
-         only needs to track the current state of the performance, since some executors have been
-         known to try to execute multiple performances at the same time, if the executor is working
-         via some mediating device then the device will switch between them
-         The correct way to do this is to send messages to the performance, which will check in
-         with the conductor about authorization etc.
+         - here is an [identifier i] for the output of [step s] that you will need in [step s']
+         - ok you are now on [step s'] other possible steps at this point are ...
+         - you could not have completed that step
+         - the conductor says you aren't part of me
       2. I have deposited the results of [measurement m] with [listener l] under [name n]
-         if l is an inactive listener then the conductor needs to dispatch something (checker?)
+         This is also the completion of a step.
+         If l is an inactive listener then the conductor needs to dispatch something (checker?)
          to make sure everything is in order
-      3. Please give me an identifier for the output of [step s] of [performance p]
-      4. I have deposited the [output o] of [step s] of [performance p] in [container c] with [bound-name n]
-         container location specifications
+      3. Please give me an identifier of [type t] for the [output o] of [step s]
+         In the event that someone wants to get all their labeling done first.
+         As in the qr code examples below. [fn::Note that these do still have to be attached
+         to a performance, not just a protocol. Is prep for a performance a part of that performance
+         or another performance itself? Probably another performance, except that the performance
+         will have any particular information from the prep as a prior. For example if you render
+         20 barcodes to bind to tubes then the instances with their bound identifiers will be
+         referenced directly in the subsequent performance. This makes the issue about information
+         flow and information dependencies and decouples the idea of a performance from prior information
+         that it will need. In fact each step could be its own little performance that can optionally
+         require the identifiers for the performances of any steps that it depends on. All of this
+         would have to be hidden from the user, but it is one option for how to build the system.
+         Perhaps a bit too much information though, since I imagine that users would want to be
+         able to pick up a process where they left off, and that process would be identified by its
+         ultimate end goal, such as a computed measurement, or an output. Back-tracking on failure
+         and how to manage identifiers in that context is another question.]
+      4. I have deposited the [output o] of [step s] in [location l] with [bound-identifier i]
+         If the output is its own object already with its own identifier linked to
+         step s of performance p, then only [output o] is required and it would probably be
+         [location l] with [local-identifier i] e.g. an epindorf tube with the number n
+         in G8 of box my-box in rack 4 of freezer f in room r of building b on campus c.
+         If locations are controlled by another system, then the data you want is not
+         assertional in this case, it is another measurement from a camera on a phone
+         that is [photo-of-qr-code-on-tube p0] [photo-of-contents-of-box p1] [photo-of-qr-code p2]
 
-   3. listener
+   4. listener
       1. Here is [data d] for [measurement m]
-   4. singer
-      1. Show me the data for [performance p]
+         bad
+      2. I [executor e] would like to deposit data with [identity i] for [measurement m] for [performance p]
+      3. Here is [data d] with [identity i], really this is more like
+         I [executor e] would like you to accept that someone who may or may not be me will send you some data
+         of [length l] with [identity i] and I want you to give me credit for it ...
+         So what we really want is,
+         Here is a [signed-checksum sc] that you can verify came from [executor e]
+         HMAC ... etc.
+         
+   5. singer
+      1. Get me the data for [performance p]
+      2. Get me the data for [step s] of [performance p]
+      3. Get me the data for [measure m] of [protocol p]
+      4. Get me the results of all measurements of [aspect a] during [performance p]
+      5. Get me the results of all measurements of [aspect a] on [black-box b] during [performance p] ordered by [aspect time]
+
+      Not clear whether these are singer or conductor, or something else.
+      1. Get me a list of all [measures] in [protocol p]
+      2. Get me a list of all [aspects] in [protocol p]
+      3. Get me a list of all implementations of [mass*]
+         
+   6. computation
+      1. Get me the results of [function] where the variables are bound to the results from [set of performances]
+         online analysis is specifying that a result be computed as soon as the dependent values in any performance
+         are available, because there is a live consumer for that value that needs to do something with it as soon
+         is it is available. In this case one might split a data stream and send logs to both computation and a listener
 
    They must be able to receive messages from 
 
    They must be able to report on the success of a given action to the conductor.
    From the perspective of the system executors are things that know some secret.
-** renderer
+
+** mediator
+   Note that almost all of the queries from an executor will actually be sent by
+   the mediator, and in a strict sense if you wanted to write protc in itself you
+   could do it by treating the mediator as a measurer + a singer and specifying
+   user inputs as measurements that the next steps depend on, or that can advance
+   the state of the performance, or that can send messages to singers requesting data
+   etc.
+
+   All messages start with on behalf of [executor e].
+   sent from mediator to:
+   1. conductor
+   2. listener
+   3. measurer
+      1. are you near by?
+      2. are you in use?
+      3. +please send me your value when the user pushes a button+
+      4. subscribe
+      5. unsubscribe
+      6. I am nearby
+      7. Is anyone else nearby that might cause me to record the wrong value for this step?
+      8. hey, can you send me your values for [time (range t t')]? hrm ...
+      9. please send all your buffered values to [listener l] on behalf of [executor e] using [key k]
+         In order for this to work the mediator has to provide a single use key to
+         the measurer that the measurer will use to sign the checksum and that the
+         mediator has already sent to the listener. It needs to be signed with the
+         executors private key, and it needs to encode the time, the measurer's public key
+         or some equivalent way to enable the listener to verify the measurer without having
+         to keep a central manifest of all the keys which would be much too large to be
+         practical.
+         +Payload needs to have a random value encrytped with the measurer's+
+         +public key and that same random value also encrytped with the listener's public key the measurer decrypts+
+         The above is dumb. Any measurer could just duplicate the listener public key encrypted secret. As is
+         the idea to have a shared prefix with a differing suffix, bad actor simply flips single bits until they
+         hit one that changes the suffix.
+
+   received by mediator from:
+   1. conductor
+      1. please authenticate yourself
+   2. listener
+   3. compiler
+      1. [display-error "you done goofed"]
+      2. [display-warning "watch out"]
+
+** compiler
+   Exporter, converter, renderer, interconverter, etc. This takes protc and converts it
+   into a representation that can be followed/performed. It may not do the final rendering
+   of a web page or print a document, but if direct action should be taken to launch a
+   browser or print a document, then the question is what message should be sent?
+
+   Further, does compilation produce the performance agent or a performance class/type
+   that will then be further specialized as additional implementation information is
+   made available. Many questions here.
+
 ** measurer
+   An agent that does nothing but send the results of measurements. It could be
+   a digital internet enabled scale. It could be a computer running a questionnaire.
+   It could be a web form on a phone that is filled in by an executor reading off
+   a physical ruler. It could also just be the executor for non-instrumented cases.
+   
+   send to:
+   1. listener
+      1. [measurer m] [value v] [time t]
+         A timeseries of all measurements that come off a measurer whether they are
+         an active part of a protocol or not. That
+      2. [measure m] [value v] a time series captured starting at [time t] at [frequency f]
+         If the structure of the measure is known in advance then only measure m is required
+         and the listener can decide whether to bind the metadata about the meaning of the structure
+         or not depending on its parameters. So for instance if you are making a billion of the same
+         measurement in a row, then the listener might even be configured by convention to accept all
+         values sent to it since from the specification of the system it could only receive data
+         from a single measurer. These are probably optimizations for down the line.
+
 ** listener
+   There are types of listeners. Should listener instances be decoupled from performances
+   an receive messages about any performance?
+   
+   Listeners that listen to everything for all performances at the same time?
+
+   receives messages:
+   1. some random agent
+      1. I [agent a] am sending [message m] to [agent a'] at the same [time t] I am sending it to you.
+      2. I [agent a'] received [message m] from [agent a] at [time t']
+         Probably could just be the identity of the message?
+
+   2. performance
+         
+      1. I [performance p] transitioned to [step s] at [time t]
+
+   3. measurer
+      1. For [performance p] I [measurer m] [quantity q]
+         Should each active measurer have its own id? Points to a type plus a performance? Is there a better way?
+         Identifying individual measurers is not realistic in many cases, or rather, a datasource that produces
+         many measurements structure in a certain way may also be needed?
+
+      2. I [measurer m] put [file f] at [path p] with [checksum c]
+         Might be simpler to say opaque measure process for [performance p] [line l] put [file f] at [path p] with [checksum c]
+         But recall that the singer needs to be able to answer the aspect and results of exact step queries.
+         We need to _always_ be able to map back to source coordinates. Because the protocol is _the_ coordinate
+         system by which everything else will be navigated.
+
+      3. On behalf of [executor e] here is [data d] from [measure m] [performance p] I am at [time t]
+         - ok
+         - [conductor] says that we were not expecting that (probably actually sent back via the mediator?)
+
 ** singer
 ** venue (physical execution environment)
 ** integrator/summarizer/syntheizer/analyzer
@@ -86,6 +286,27 @@
    aka execution of the physical parts of a protocol
 ** computation
    # analysis, filtering, etc.
+* Security
+  Message authentication and agent identity is handled in the layer below this system.
+  In a sense this implies that either all messages sent are individually verified,
+  or that a secure, authenticated channel is established before agents communicate
+  across a network. This seems annoying.
+
+  Security boundaries are hard if agents don't know when they are talking over the
+  network or not. They are easy to screw up. If I start a measurer on a phone and
+  someone compromises the process and starts sending me fake measurements because
+  they have root access (which is fine) then we just need a way to determine if that
+  starts to happen. On the other hand if someone compromises an executor's interface
+  and can advance a protocol by lying about step completion, then there are a very
+  large number of issues that can arise, up to and including death for large industrial
+  processes. Flagging protocols that lack sufficient confirming measurements as risks 
+  will be important. If the conductor and performance do not have enough information to
+  validate that the current state is actually what they think it is, then that is a
+  big problem for some protocols, and a normal day for others.
+
+  Listeners should record everything that is sent to them, bad data can be tagged
+  retrospectively, or even immediately. Denial of service or similar may have to
+  be dealt with by rate limiting or revoking access.
 
 * Static equivalents 
 ** identity
