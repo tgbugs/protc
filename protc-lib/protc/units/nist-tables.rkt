@@ -68,17 +68,17 @@
   (define (notc predicate)
     (λ (value) (not (predicate value))))
 
-  (define table-clean (compose
-                       (sxml:modify (list "//sup/em/.." 'delete))
-                       (sxml:modify (list "//sup[text=\"(e)\"]" 'delete))
-                       (sxml:modify (list "//@align" 'delete))
-                       (sxml:modify (list "//@style" 'delete))
-                       (sxml:modify (list "//@class" 'delete))
-                       (sxml:modify (list "//table/text()" 'delete))
-                       (sxml:modify (list "//caption/text()" 'delete))
-                       (sxml:modify (list "//tr/text()" 'delete))
-                       (sxml:modify (list "//br" 'delete))
-                       ))
+  (define table-clean (apply compose
+                             (map sxml:modify
+                                  '(("//sup/em/.." delete)
+                                    ("//sup[text=\"(e)\"]" delete)
+                                    ("//@align" delete)
+                                    ("//@style" delete)
+                                    ("//@class" delete)
+                                    ("//table/text()" delete)
+                                    ("//caption/text()" delete)
+                                    ("//tr/text()" delete)
+                                    ("//br" delete)))))
 
   (define (process-chapter ch)
     (define tables (cons '*TOP* ((sxpath "//table") ch)))  ; *TOP* required for sxml:modify to work
