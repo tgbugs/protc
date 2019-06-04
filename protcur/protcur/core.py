@@ -3,8 +3,10 @@ from hyputils.hypothesis import Memoizer, group, UID
 from hyputils.subscribe import preFilter, AnnotationStream
 from hyputils.handlers import helperSyncHandler, filterHandler
 from pysercomb.parsers import racket
-from pyontutils.utils import anyMembers
+from pyontutils.utils import anyMembers, makeSimpleLogger
 from protcur.config import __script_folder__
+
+log = makeSimpleLogger('protcur')
 
 
 def url_doi(doi):

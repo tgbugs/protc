@@ -16,7 +16,6 @@ from datetime import datetime
 from itertools import chain
 from pyontutils.core import makeGraph, makePrefixes, OntId
 from pyontutils.utils import async_getter, noneMembers, allMembers, anyMembers
-from pyontutils.utils import TermColors as tc, makeSimpleLogger
 from htmlfn import atag
 from pyontutils.hierarchies import creatTree
 from pyontutils.scigraph_client import Vocabulary
@@ -26,19 +25,18 @@ from pysercomb.pyr import units as pyru
 #from pysercomb import parsing_parsec
 from hyputils.hypothesis import HypothesisAnnotation, HypothesisHelper, idFromShareLink
 from hyputils.hypothesis import log as _hlog, logd as _hlogd
-from protcur.core import linewrap, color_pda
+from protcur.core import linewrap, color_pda, log
 from protcur.config import __script_folder__
 from IPython import embed
 
-log = makeSimpleLogger('protcur')
-logd = makeSimpleLogger('protcur-data')
+logd = log.getChild('data')
 
 # set hlog to conform to pyontutils logging conventions
 _hlog.removeHandler(_hlog.handlers[0])
 _hlog.addHandler(log.handlers[0])
 
-_hlogd.removeHandler(_hlogd.handlers[0])
-_hlogd.addHandler(logd.handlers[0])
+#_hlogd.removeHandler(_hlogd.handlers[0])
+#_hlogd.addHandler(logd.handlers[0])
 
 sgv = Vocabulary(cache=True)
 RFU = 'protc:references-for-use'
@@ -1150,7 +1148,11 @@ class protc(AstGeneric):
             success = False
             front = ''
             while cleaned and not success:
-                _, v, rest = parameter_expression(cleaned)
+                try:
+                    _, v, rest = parameter_expression(cleaned)
+                except TypeError as e:
+                    log.critical(f'{cleaned!r} {self.htmlLink}')
+                    raise e
                 success = v[0] != 'param:parse-failure'
                 if not success:
                     cleaned = cleaned[1:]

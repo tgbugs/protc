@@ -14,10 +14,10 @@ import subprocess
 from pathlib import Path
 from datetime import date
 from markdown import markdown
-from hyputils.hypothesis import HypothesisUtils, makeSimpleLogger, UID
+from hyputils.hypothesis import HypothesisUtils, UID
 from htmlfn import htmldoc, atag, deltag, titletag, render_table, zerotag, zeronotetag, h1tag
 from htmlfn import monospace_body_style, table_style, details_style, ttl_html_style, emacs_style
-from protcur.core import url_doi, url_pmid
+from protcur.core import url_doi, url_pmid, log as protcur_log
 from protcur.core import readTagDocs, justTags, addDocLinks
 from protcur.sparc import SparcMI
 from protcur.analysis import Hybrid, protc
@@ -26,7 +26,7 @@ from protcur.analysis import citation_tree, papers, statistics, ast_statistics
 from IPython import embed
 from flask import Flask, request, abort 
 
-log = makeSimpleLogger('protcur.server')
+log = protcur_log.getChild('server')
 PID = os.getpid()
 THIS_FILE = Path(__file__).absolute()
 

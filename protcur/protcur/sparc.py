@@ -15,11 +15,11 @@ from pyontutils.annotation import AnnotationMixin
 from pyontutils.namespaces import TEMP, ilxtr, editorNote, definition
 from pyontutils.closed_namespaces import rdf, rdfs, owl
 from hyputils.hypothesis import iterclass
-from protcur.analysis import AstGeneric
-from protcur.core import TagDoc
+from protcur.analysis import AstGeneric, protc
+from protcur.core import TagDoc, log as protcur_log
 from IPython import embed
 
-log = makeSimpleLogger('protcur.sparc')
+log = protcur_log.getChild('sparc')
 
 
 def oqsetup():
@@ -40,12 +40,12 @@ def oqsetup():
         ('bf-sun', 'https://app.blackfynn.io/N:organization:4827d4ca-6f51-4a4e-b9c5-80c7bf8e5730/datasets/'),
         ('bf-mvp', 'https://app.blackfynn.io/N:organization:89dfbdad-a451-4941-ad97-4b8479ed3de4/datasets/'))
     [ghq.graph.bind(p, n) for p, n in pns]
-    query = oq.OntQuery(ghq)
     oq.OntCuries(ghq.curies)
     oq.OntCuries(PREFIXES)
-    oq.OntTerm.query = query
-    oq.query.QueryResult._OntTerm = oq.OntTerm
-    OntTerm = oq.OntTerm
+    class OntTerm(oq.OntTerm):
+        pass
+    
+    OntTerm.query_init(ghq)
     return OntTerm, ghq
 
 
@@ -878,7 +878,8 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
             return owl.NamedIndividual
         else:
             if (self.astType and 'protc' in self.translators and
-                self.astType.split(':', 1)[-1] in self.translators['protc']._order):
+                self.astType.split(':', 1)[-1] in
+                self.translators['protc']._order):
                 log.debug(protc.byId(self.id))
                 v = protc.byId(self.id).astValue
                 if '(rest' in v:
@@ -977,12 +978,11 @@ class technique_to_sparc(AnnotationMixin):
 
         rq = oq.plugin.get('rdflib')(g)
         self.rq = rq
-        query = oq.OntQuery(rq)
-        oq.OntCuries({p:i for p, i in g.namespaces()})
-        oq.OntTerm.query = query
-        oq.query.QueryResult._OntTerm = oq.OntTerm
-        OntTerm = oq.OntTerm
+        class OntTerm(oq.OntTerm):
+            pass
 
+        OntTerm.query_init(rq)
+        oq.OntCuries({p:i for p, i in g.namespaces()})
 
         # if you don't set this QueryResult will switch to pyontutils and hit interlex so very slow
         sparc_ents = OntTerm.search(None, prefix='sparc')

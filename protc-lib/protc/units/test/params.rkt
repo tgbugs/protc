@@ -1,6 +1,7 @@
 #lang racket/base
 (provide param-test-strings)
 (define param-test-strings '(
+;"(-25) degrees Celsius"
 "45"
 "five"
 "x40"
