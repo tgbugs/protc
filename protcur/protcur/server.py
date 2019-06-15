@@ -7,6 +7,7 @@ Options:
     -p --port=PORT    tcp port for server [default: 7000]
     -n --no-comment   do not render comments
     -s --sync         sync
+    --sparc           run sparc main
 """
 import os
 import re
@@ -600,10 +601,15 @@ def make_server_app(memfile=None, comments=True):
 
 
 def main():
-    from docopt import docopt
+    from docopt import docopt, parse_defaults
     from hyputils.hypothesis import group_to_memfile, group
     args = docopt(__doc__)
-    port = args['--port']
+    defaults = {o.name:o.value if o.argcount else None for o in parse_defaults(__doc__)}
+    port = int(args['--port'])
+    if args['--sparc']:
+        port = port if port != int(defaults['--port']) else None
+        return sparc_main(args, port)
+
     comments = not args['--no-comment']
     _, ghash = group_to_memfile(group).rsplit('-', 1)
     ghashshort = ghash[:10]
@@ -613,15 +619,16 @@ def main():
     app.exit_loop()
 
 
-def sparc_main(port=7001):
+def sparc_main(args=None, port=None):
+    if port is None:
+        port = 7001
     from core import annoSync
     get_annos, annos, stream_thread, exit_loop = annoSync('/tmp/sparc-server-annos.json',
                                                           #tags=('sparc:',),
                                                           helpers=(SparcMI,))
-    stream_thread.start()
+    #stream_thread.start()
     [protc(a, annos) for a in annos]
-    [SparcMI(a, annos) for a in annos
-     if any(t.startswith('sparc:') for t in a.tags)]
+    [SparcMI(a, annos) for a in annos]
     SparcMI.byTags('sparc:lastName')
     app = make_sparc()
     app.debug = False
