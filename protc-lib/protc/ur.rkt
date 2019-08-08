@@ -3,12 +3,15 @@
 ;;; the the target language for protcur
 
 (require protc/private/kernel
+         protc/private/provide
          protc/private/curation
          protc/private/curation-unprefixed
          #;base)
 
 (provide (all-from-out protc/private/kernel
-                       protc/private/curation-unprefixed)
+                       protc/private/curation-unprefixed
+                       protc/private/provide  ; FIXME required for kenel.rkt??
+                       )
          (prefix-out protc: (all-from-out protc/private/curation)))
 
 (module reader syntax/module-reader protc/ur

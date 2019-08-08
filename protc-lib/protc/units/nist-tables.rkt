@@ -26,6 +26,7 @@
    (only-in sxml/sxpath
             sxpath)
    html-parsing)
+  (provide url->port)
   (define default-header
     '())
   (define (url->port url #:header [header default-header])

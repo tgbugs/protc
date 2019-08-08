@@ -9,6 +9,8 @@
 
 (define-id-funcs
   [hyp "https://hyp.is/"]
+  [hypa "https://hypothes.is/a/"]
+  [hyp.api "https://hypothes.is/api/annotations/"]
   [DOI "https://doi.org/"]
   [PMID  "https://www.ncbi.nlm.nih.gov/pubmed/"]
   [researchdiets "http://uri.interlex.org/researchdiets/uris/productnumber/"]
