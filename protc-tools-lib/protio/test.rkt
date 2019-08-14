@@ -61,3 +61,12 @@ v>   ; basically all volume/mass/allocation techniques
 >v?  ;
 
 ;?>? ; this should error (and does)
+
+;; compound process descriptions
+
+(dual >v>' v>)
+(<-> >v>' v>)
+
+(chain |> >^> >v)  ; not sure of use cases for this yet
+(-> |> >^> >v)
+

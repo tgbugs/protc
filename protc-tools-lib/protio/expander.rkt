@@ -1,5 +1,6 @@
 #lang racket/base
 (require (for-syntax racket/base
+                     racket/syntax
                      syntax/parse))
 (provide
  (rename-out [protio-module-begin #%module-begin])
@@ -73,3 +74,19 @@
 (define (single value)
   (list 'hasPrimaryParticipantNoInputNoOutput
         (aspect value)))
+
+(define (process value)
+  value)
+
+(define-syntax (operator stx)
+  (syntax-parse stx
+    [(_ op)  ; should be a symbol but whatever
+     #:with op-id (format-id #'op #:source #'op "~a" (syntax-e #'op))
+     #'op-id
+     ]))
+
+(define (dual left right)
+  (list 'dual left right))
+
+(define (chain . process-types)
+  (cons 'chain process-types))
