@@ -24,19 +24,11 @@ from pysercomb.parsers import racket, units
 from pysercomb.pyr import units as pyru
 #from pysercomb import parsing_parsec
 from hyputils.hypothesis import HypothesisAnnotation, HypothesisHelper, idFromShareLink
-from hyputils.hypothesis import log as _hlog, logd as _hlogd
-from protcur.core import linewrap, color_pda, log
+from protcur.core import linewrap, color_pda, log, logd
 from protcur.config import __script_folder__
 from IPython import embed
 
 logd = log.getChild('data')
-
-# set hlog to conform to pyontutils logging conventions
-_hlog.removeHandler(_hlog.handlers[0])
-_hlog.addHandler(log.handlers[0])
-
-#_hlogd.removeHandler(_hlogd.handlers[0])
-#_hlogd.addHandler(logd.handlers[0])
 
 sgv = Vocabulary(cache=True)
 RFU = 'protc:references-for-use'
