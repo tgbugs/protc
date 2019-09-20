@@ -28,8 +28,6 @@ from protcur.core import linewrap, color_pda, log, logd
 from protcur.config import __script_folder__
 from IPython import embed
 
-logd = log.getChild('data')
-
 sgv = Vocabulary(cache=True)
 RFU = 'protc:references-for-use'
 parameter_expression, *_ = units.make_unit_parser(Path(__script_folder__,
