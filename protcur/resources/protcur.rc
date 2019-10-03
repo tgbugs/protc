@@ -3,8 +3,8 @@
 # Distributed under the terms of the GNU General Public License v2
 
 : ${LOG_LEVEL:=info}
-: ${GROUP:=servers}
-: ${USER:=servers}
+: ${SVCGROUP:=servers}
+: ${SVCUSER:=servers}
 : ${LOG_LOC:="/var/log/protcur"}
 
 run_dir=${run_dir:-/run}
@@ -20,15 +20,15 @@ command_args="--bind ${socket}
 --workers 4
 --worker-class gevent
 --timeout 30
---group ${GROUP}
---user ${USER}
+--group ${SVCGROUP}
+--user ${SVCUSER}
 --log-level ${LOG_LEVEL}
 --log-file ${LOG}
 protcur.app:app"
 retry='TERM/30/KILL/5'
-start_stop_daemon_args="--group ${GROUP} --user ${USER}"
+start_stop_daemon_args="--group ${SVCGROUP} --user ${SVCUSER}"
 
-command_owner="${USER}:${GROUP}"
+command_owner="${SVCUSER}:${SVCGROUP}"
 
 depend() {
     after net
@@ -58,7 +58,7 @@ start_pre() {
 start() {
     ebegin "Starting protcur"
 	start-stop-daemon --start --pidfile ${pidfile} \
-		--group ${GROUP} --user ${USER} \
+		--group ${SVCGROUP} --user ${SVCUSER} \
 		--wait 1000 \
 		--env HYP_USERNAME=${HYP_USERNAME} \
 		--env HYP_GROUP=${HYP_GROUP} \
