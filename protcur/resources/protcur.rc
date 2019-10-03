@@ -11,7 +11,18 @@ run_dir=${run_dir:-/run}
 LOG="${LOG_LOC}/sysout.log"
 
 socket="unix:/run/protcur/socket"
+
 pidfile="${run_dir}/${SVCNAME}/pid"
+start_stop_daemon_args="
+--group ${SVCGROUP}
+--user ${SVCUSER}
+--wait 1000
+--env HYP_USERNAME=${HYP_USERNAME}
+--env HYP_GROUP=${HYP_GROUP}
+--env HYP_API_TOKEN=${HYP_API_TOKEN}
+--env LOG_LOC=${LOG_LOC}
+--env PYTHONPATH=${PYTHONPATH}
+"
 command="/usr/bin/gunicorn"
 command_args="--bind ${socket}
 --daemon
@@ -26,7 +37,6 @@ command_args="--bind ${socket}
 --log-file ${LOG}
 protcur.app:app"
 retry='TERM/30/KILL/5'
-start_stop_daemon_args="--group ${SVCGROUP} --user ${SVCUSER}"
 
 command_owner="${SVCUSER}:${SVCGROUP}"
 
@@ -53,18 +63,4 @@ start_pre() {
     fi
     checkpath --directory --owner ${command_owner} --mode 0775 "/run/${SVCNAME}"
     checkpath --directory --owner ${command_owner} --mode 0775 "${LOG_LOC}"
-}
-
-start() {
-    ebegin "Starting protcur"
-	start-stop-daemon --start --pidfile ${pidfile} \
-		--group ${SVCGROUP} --user ${SVCUSER} \
-		--wait 1000 \
-		--env HYP_USERNAME=${HYP_USERNAME} \
-		--env HYP_GROUP=${HYP_GROUP} \
-		--env HYP_API_TOKEN=${HYP_API_TOKEN} \
-		--env LOG_LOC=${LOG_LOC} \
-		--env PYTHONPATH=${PYTHONPATH} \
-		--exec ${command} -- ${command_args}
-    eend $? "Failed to start protcur"
 }
