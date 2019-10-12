@@ -393,16 +393,16 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
     def registry(cls):
         uris = set(a.uri for a in SparcMI if 'rcont' not in a.uri)  # rcont remove temp iris w/ bad annos
 
-        data, notes_index = get_sheet_values(cls.dfr, 'Data', False)
+        data, grid, cells_index = get_sheet_values(cls.dfr, 'Data', False)
         ml = max(len(r) for r in data)
         normalized = [r + ([''] * (ml - len(r))) for r in data]
-        prot, pnotes_index = get_sheet_values(cls.dfr, 'Protocols', False)
+        prot, pgrid, pcells_index = get_sheet_values(cls.dfr, 'Protocols', False)
         pml = max(len(r) for r in prot)
         pnorm = [r + ([''] * (pml - len(r))) for r in prot]
 
         d = byCol(normalized)
-        p = byCol(pnorm, to_index=('Protocol_Identifier',))
-        bidsf = set(d.BIDs_file_name)
+        p = byCol(pnorm, to_index=('protocol_identifier',))
+        bidsf = set(d.bids_file_name)
 
         cls._bids_id = -1
         for fn in sorted(bidsf):
@@ -411,13 +411,13 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
             yield subject, rdf.type, ilxtr.BIDSFile
             yield subject, rdfs.label, rdflib.Literal(fn)
             for r in d:
-                if r.BIDs_file_name == fn:
-                    if r.Protocol and r.Protocol != 'None':
+                if r.bids_file_name == fn:
+                    if r.protocol and r.protocol != 'None':
                         # FIXME hasProtocol not entirely correct
                         # data produced from process partially documented by ...
-                        pr = p.searchIndex('Protocol_Identifier', r.Protocol)
-                        piri = rdflib.URIRef(r.Protocol)
-                        asl = rdflib.URIRef(pr.Annotation_Substrate_Link)
+                        pr = p.searchIndex('protocol_identifier', r.protocol)
+                        piri = rdflib.URIRef(r.protocol)
+                        asl = rdflib.URIRef(pr.annotation_substrate_link)
                         yield subject, ilxtr.hasProtocol, piri
                         yield piri, rdf.type, owl.NamedIndividual
                         yield piri, rdf.type, ilxtr.protocolArtifact
