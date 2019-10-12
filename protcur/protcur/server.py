@@ -15,7 +15,7 @@ import subprocess
 from pathlib import Path
 from datetime import date
 from markdown import markdown
-from hyputils.hypothesis import HypothesisUtils, UID
+from hyputils.hypothesis import HypothesisUtils, ucd
 from htmlfn import htmldoc, atag, deltag, titletag, render_table, zerotag, zeronotetag, h1tag
 from htmlfn import monospace_body_style, table_style, details_style, ttl_html_style, emacs_style
 from protcur.core import url_doi, url_pmid, log as protcur_log
@@ -117,8 +117,8 @@ def correct_colorized(html):
     return html5
 
 colorizer_command = THIS_FILE.resolve().parent.parent / 'bin/colorizer.lisp'
-ast_file = Path(f'/tmp/{UID}-protc-ast-render.rkt')
-ast_html_file = Path(f'/tmp/{UID}-protc-ast-render.html')
+ast_file = Path(f'{ucd}/protc-ast-render.rkt')
+ast_html_file = Path(f'{ucd}/protc-ast-render.html')
 if ast_html_file.exists(): os.remove(ast_html_file.as_posix())  # cleanup at startup
 html_holder = ['']
 def render_ast():
@@ -613,7 +613,7 @@ def main():
     comments = not args['--no-comment']
     _, ghash = group_to_memfile(group).rsplit('-', 1)
     ghashshort = ghash[:10]
-    app = make_server_app(f'/tmp/protcur-{UID}-{port}-{ghashshort}-server-annos.json', comments)
+    app = make_server_app(f'{ucd}/protcur-{port}-{ghashshort}-server-annos.json', comments)
     app.debug = False
     app.run(host='localhost', port=port, threaded=True)
     app.exit_loop()

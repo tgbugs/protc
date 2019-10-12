@@ -1,5 +1,5 @@
 import re
-from hyputils.hypothesis import Memoizer, group, UID
+from hyputils.hypothesis import Memoizer, group, ucd
 from hyputils.subscribe import preFilter, AnnotationStream
 from hyputils.handlers import helperSyncHandler, filterHandler
 from pysercomb.parsers import racket
