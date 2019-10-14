@@ -611,7 +611,7 @@ def main():
         return sparc_main(args, port)
 
     comments = not args['--no-comment']
-    _, ghash = group_to_memfile(group).rsplit('-', 1)
+    _, ghash = group_to_memfile(group).as_posix().rsplit('-', 1)
     ghashshort = ghash[:10]
     app = make_server_app(f'{ucd}/protcur-{port}-{ghashshort}-server-annos.json', comments)
     app.debug = False
