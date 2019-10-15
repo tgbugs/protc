@@ -117,8 +117,8 @@ def correct_colorized(html):
     return html5
 
 colorizer_command = THIS_FILE.resolve().parent.parent / 'bin/colorizer.lisp'
-ast_file = Path(f'{ucd}/protc-ast-render.rkt')
-ast_html_file = Path(f'{ucd}/protc-ast-render.html')
+ast_file = Path(f'{ucd}/protcur/protc-ast-render.rkt')
+ast_html_file = Path(f'{ucd}/protcur/protc-ast-render.html')
 if ast_html_file.exists(): os.remove(ast_html_file.as_posix())  # cleanup at startup
 html_holder = ['']
 def render_ast():
@@ -613,7 +613,7 @@ def main():
     comments = not args['--no-comment']
     _, ghash = group_to_memfile(group).as_posix().rsplit('-', 1)
     ghashshort = ghash[:10]
-    app = make_server_app(f'{ucd}/protcur-{port}-{ghashshort}-server-annos.json', comments)
+    app = make_server_app(f'{ucd}/protcur/protcur-{port}-{ghashshort}-server-annos.json', comments)
     app.debug = False
     app.run(host='localhost', port=port, threaded=True)
     app.exit_loop()
