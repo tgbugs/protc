@@ -16,6 +16,7 @@ with open('README.org', 'rt') as f:
     # TODO pandoc conversion
     long_description = f.read()
 
+tests_require = ['pytest', 'pytest-runner']
 setup(name='protcur',
       version=__version__,
       description='A dashboard for web annotation workflows for protocol curation.',
@@ -33,12 +34,14 @@ setup(name='protcur',
       install_requires=[
           'flask',
           'htmlfn',
-          'hyputils',
+          'hyputils>=0.0.4',
           'Markdown',
-          'pyontutils',
+          'pyontutils>=0.1.3',
           'pysercomb',
       ],
-      extras_require={'dev':[]},
+      extras_require={'dev':[],
+                      'test': tests_require,
+                     },
       entry_points={
           'console_scripts': [
               'protcur-server=protcur.server:main',
