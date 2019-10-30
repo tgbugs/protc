@@ -1,5 +1,8 @@
 recursive-include test *
+recursive-include units *.rkt
+include README.org
 exclude MANIFEST.in
+exclude units/parsing.rkt
 recursive-exclude *.egg-info *
 recursive-exclude * *.pyc
 recursive-exclude * *.swp

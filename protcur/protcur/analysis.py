@@ -25,13 +25,12 @@ from pysercomb.pyr import units as pyru
 #from pysercomb import parsing_parsec
 from hyputils.hypothesis import HypothesisAnnotation, HypothesisHelper, idFromShareLink
 from protcur.core import linewrap, color_pda, log, logd
-from protcur.config import __script_folder__
+from protcur.config import __units_folder__ as units_folder
 from IPython import embed
 
 sgv = Vocabulary(cache=True)
 RFU = 'protc:references-for-use'
-parameter_expression, *_ = units.make_unit_parser(Path(__script_folder__,
-                                                       '../../protc-lib/protc/units'))
+parameter_expression, *_ = units.make_unit_parser(units_folder)
 error_output = []
 
 # utility
