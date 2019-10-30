@@ -4,7 +4,8 @@ from hyputils.subscribe import preFilter, AnnotationStream
 from hyputils.handlers import helperSyncHandler, filterHandler
 from pysercomb.parsers import racket
 from pyontutils.utils import anyMembers, makeSimpleLogger
-from protcur.config import __script_folder__
+from protcur.config import __anno_tags__ as anno_tags
+from protcur.config import __protc_tags__ as protc_tags
 
 log = makeSimpleLogger('protcur')
 logd = log.getChild('data')
@@ -174,9 +175,9 @@ def addDocLinks(base_url, doc):
 
 
 def readTagDocs():
-    with open(f'{__script_folder__}/../../protc-tags.rkt', 'rt') as f:
+    with open(protc_tags, 'rt') as f:
         text = f.read()
-    with open(f'{__script_folder__}/../../anno-tags.rkt', 'rt') as f:
+    with open(anno_tags, 'rt') as f:
         text += f.read()
     success, docs, rest = racket.tag_docs(text)
     if rest:

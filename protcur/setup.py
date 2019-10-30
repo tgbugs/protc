@@ -23,15 +23,27 @@ with open('README.org', 'rt') as f:
 RELEASE = '--release' in sys.argv
 if RELEASE:
     sys.argv.remove('--release')
+    from protcur.config import __anno_tags__, __protc_tags__
     from protcur.config import __units_folder__, __units_test_folder__
+
     units = [p.name for p in __units_folder__.iterdir()
              if p.is_file() and p.name != 'parsing.rkt' and p.suffix == '.rkt']
-    units_test = [p.parent.name + '/' + p.name
+    units_test = [p.parent.parent.name + '/' + p.parent.name + '/' + p.name
                   for p in __units_test_folder__.iterdir()
                   if p.is_file() and p.suffix == '.rkt']
-    shutil.copytree(__units_folder__, 'units')
-    data_files=[('protcur/units', units),
-                ('protcur/units/test', units_test)]
+
+    shutil.copytree(__units_folder__, 'resources/units')
+    shutil.copy(__anno_tags__, 'resources')
+    shutil.copy(__protc_tags__, 'resources')
+
+ru = Path('resources', 'units')
+if ru.exists():  # release or running from sdist not in git
+    data_files = [
+        ('share/protcur', ['resources/anno-tags.rkt',
+                           'resources/protc-tags.rkt']),
+        ('share/protcur/units', [p.as_posix() for p in ru.glob('*.rkt')
+                                 if p.name != 'parsing.rkt']),
+        ('share/protcur/units/test', [p.as_posix() for p in (ru / 'test').glob('*.rkt')]),]
 else:
     data_files = []
 
@@ -40,7 +52,7 @@ tests_require = ['pytest', 'pytest-runner']
 try:
     setup(name='protcur',
           version=__version__,
-          description='A dashboard for web annotation workflows for protocol curation.',
+          description='Web annotation workflows for protocol curation.',
           long_description=long_description,
           long_description_content_type='text/plain',
           url='https://github.com/tgbugs/protc/tree/master/protcur',
@@ -65,6 +77,7 @@ try:
                          },
           entry_points={
               'console_scripts': [
+                  'protcur=protcur.cli:main',
                   'protcur-server=protcur.server:main',
                   'protcur-analysis=protcur.analysis:main',
               ],
@@ -73,4 +86,6 @@ try:
          )
 finally:
     if RELEASE:
-        shutil.rmtree('units')
+        shutil.rmtree('resources/units')
+        Path('resources', __anno_tags__.name).unlink()
+        Path('resources', __protc_tags__.name).unlink()
