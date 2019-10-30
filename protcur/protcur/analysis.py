@@ -1,7 +1,7 @@
-#!/usr/bin/env python3.6
+#!/usr/bin/env python3.7
 """Run protcur analaysis
 Usage:
-    analysis [options]
+    protcur-analysis [options]
 
 Options:
     -s --sync   sync
@@ -26,7 +26,10 @@ from pysercomb.pyr import units as pyru
 from hyputils.hypothesis import HypothesisAnnotation, HypothesisHelper, idFromShareLink
 from protcur.core import linewrap, color_pda, log, logd
 from protcur.config import __units_folder__ as units_folder
-from IPython import embed
+try:
+    breakpoint
+except NameError:
+    from IPython import embed as breakpoint
 
 sgv = Vocabulary(cache=True)
 RFU = 'protc:references-for-use'
@@ -538,7 +541,7 @@ class Hybrid(HypothesisHelper):
     def children(self):  # TODO various protc:implied- situations...
         #if anyMembers(self.tags, *('protc:implied-' + s for s in ('input', 'output', 'aspect'))):  # FIXME hardcoded fix
             #if self.parent is None:
-                #embed()
+                #breakpoint()
                 #raise ValueError(f'protc:implied-* does not have a parrent? Did you mistag?')
         if 'protc:aspect' in self.tags:
             for reply in self.replies:
@@ -768,7 +771,7 @@ class AstGeneric(Hybrid):
                 # it would seem that this happens sporadically because
                 # of the set ordering of tags
                 print('===========================================================')
-                embed()
+                breakpoint()
                 raise TypeError(f'Cannot dispatch on NoneType!\n{super()!r}')
             else:
                 raise TypeError('Cannot dispatch on NoneType!\n'
@@ -787,7 +790,7 @@ class AstGeneric(Hybrid):
                 # namespace into the current handler
                 return self.additional_namespaces[namespace](self).astValue
             else:
-                embed()
+                breakpoint()
                 raise TypeError(f'{self.classn} does not dispatch on types from '
                                 f'another namespace ({namespace}) ({self.tags}).')
         dispatch_on = dispatch_on.replace('*', '').replace('-', '_')
@@ -881,7 +884,7 @@ class AstGeneric(Hybrid):
                 #return self.astType + self.astValue >= other.astType + other.astValue
                 return type_ + self.value >= oat + other.value
             except TypeError as e:
-                embed()
+                breakpoint()
                 raise e
 
     def __lt__(self, other):
@@ -1435,7 +1438,7 @@ def main():
     if args['--sync']:
         stream_thread.start()  # need this to be here to catch deletes
 
-    embed()
+    breakpoint()
     exit_loop()
     if args['--sync']:
         stream_thread.join()
@@ -1484,7 +1487,7 @@ def _more_main():
     #with open(os.path.expanduser('~/ni/nifstd/chebimissing_id_names2.txt'), 'wt') as f: f.write(pformat(ids_only))
     #with open(os.path.expanduser('~/ni/nifstd/chebimissing_ids2.txt'), 'wt') as f: f.write('\n'.join(missing))
 
-    embed()
+    breakpoint()
     # HOW DO I KILL THE STREAM LOOP!??! << answered, though quite a bit more complicated than expected
 
 if __name__ == '__main__':

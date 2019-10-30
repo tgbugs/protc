@@ -13,9 +13,9 @@ logd = log.getChild('data')
 # set hlog and plog to conform to pyontutils logging conventions
 # note that this resets logd handler too since it is inherited
 from hyputils.hypothesis import log as _hlog
-from pysercomb.utils import log as _plog
 _hlog.removeHandler(_hlog.handlers[0])
 _hlog.addHandler(log.handlers[0])
+from pysercomb.utils import log as _plog
 _plog.removeHandler(_plog.handlers[0])
 _plog.addHandler(log.handlers[0])
 

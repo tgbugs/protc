@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.6
+#!/usr/bin/env python3.7
 """protcur development server
 Usage:
     protcur-server [options]
@@ -606,24 +606,28 @@ def main():
     args = docopt(__doc__)
     defaults = {o.name:o.value if o.argcount else None for o in parse_defaults(__doc__)}
     port = int(args['--port'])
-    if args['--sparc']:
-        port = port if port != int(defaults['--port']) else None
-        return sparc_main(args, port)
-
     comments = not args['--no-comment']
+
     _, ghash = group_to_memfile(group).as_posix().rsplit('-', 1)
     ghashshort = ghash[:10]
+
+    if args['--sparc']:
+        port = port if port != int(defaults['--port']) else None
+        memfile = f'{ucd}/protcur/sparc-{port}-{ghashshort}-server-annos.json'
+        return sparc_main(memfile, args, port)
+
     app = make_server_app(f'{ucd}/protcur/protcur-{port}-{ghashshort}-server-annos.json', comments)
     app.debug = False
     app.run(host='localhost', port=port, threaded=True)
     app.exit_loop()
 
 
-def sparc_main(args=None, port=None):
+def sparc_main(memfile, args=None, port=None):
     if port is None:
         port = 7001
+
     from core import annoSync
-    get_annos, annos, stream_thread, exit_loop = annoSync('/tmp/sparc-server-annos.json',
+    get_annos, annos, stream_thread, exit_loop = annoSync(memfile,
                                                           #tags=('sparc:',),
                                                           helpers=(SparcMI,))
     #stream_thread.start()
