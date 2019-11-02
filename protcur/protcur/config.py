@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+import appdirs
 
 __script_folder__ = Path(__file__).resolve().parent
 
@@ -10,6 +11,9 @@ if not __units_folder__.exists():
     _attempts = [
         Path(__script_folder__, '../resources/units'),
         Path(sys.prefix, 'share', 'protcur', 'units'),
+        Path('/usr', 'share', 'protcur', 'units'),  # pypy3
+        Path('share', 'protcur', 'units'),  # ebuild testing
+        Path(appdirs.user_data_dir(), 'protcur', 'units'),  # pip install --user
     ]
     for attempt in _attempts:
         if attempt.exists():
@@ -28,6 +32,9 @@ if not (__tags_folder__ / 'protc-tags.rkt').exists():
     _attempts = [
         Path(__script_folder__, '../resources'),
         Path(sys.prefix, 'share', 'protcur'),
+        Path('/usr', 'share', 'protcur'),  # pypy3
+        Path('share', 'protcur'),  # ebuild testing
+        Path(appdirs.user_data_dir(), 'protcur'),  # pip install --user
     ]
     for attempt in _attempts:
         if (attempt / 'protc-tags.rkt').exists():
