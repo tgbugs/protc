@@ -9,7 +9,7 @@ import ontquery as oq
 from pyontutils import combinators as cmb
 from pyontutils.core import OntId, simpleOnt
 from pyontutils.utils import byCol, anyMembers, makeSimpleLogger
-from pyontutils.config import devconfig
+from pyontutils.config import auth
 from pyontutils.sheets import get_sheet_values
 from pyontutils.annotation import AnnotationMixin
 from pyontutils.namespaces import TEMP, ilxtr, editorNote, definition
@@ -749,7 +749,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
 
     @classmethod
     def _graph(cls):
-        local_version = Path(devconfig.ontology_local_repo, 'ttl/sparc-methods.ttl')  # FIXME hardcoded
+        local_version = auth.get_path('ontology-local-repo') / 'ttl/sparc-methods.ttl'  # FIXME hardcoded
         if local_version.exists():  # on the fly updates from local
             graph = rdflib.Graph().parse(local_version.as_posix(), format='turtle')
         else:
@@ -965,7 +965,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
 class technique_to_sparc(AnnotationMixin):
     # we have 3 options for how to do this, neurons style, methods style, or parcellation style
     def __init__(self):
-        olr = Path(devconfig.git_local_base) / 'duplicates' / 'sparc-NIF-Ontology'
+        olr = auth.get_path('git-local-base') / 'duplicates' / 'sparc-NIF-Ontology'
         g = (rdflib.Graph()
             .parse((olr / 'ttl/sparc-methods.ttl').as_posix(),
                     format='turtle')

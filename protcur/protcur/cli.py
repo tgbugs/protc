@@ -50,10 +50,10 @@ class Main(clif.Dispatcher):
             return getattr(protc, output_name)()
 
     def export(self):
-        from pyontutils.config import devconfig
+        from pyontutils.config import auth
         from hyputils.hypothesis import group_to_memfile, Memoizer
 
-        group_id = devconfig.secrets('hypothesis', 'group', self.options.group_name)
+        group_id = auth.dynamic_config.secrets('hypothesis', 'group', self.options.group_name)
         cache_file = group_to_memfile(group_id + 'protcur-cli')  # note, caching is not memoization (duh)
         get_annos = Memoizer(memoization_file=cache_file, group=group_id)
         annos = get_annos()
