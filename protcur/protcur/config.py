@@ -10,10 +10,10 @@ __units_folder__ = Path(__script_folder__, '../../protc-lib/protc/units')
 if not __units_folder__.exists():
     _attempts = [
         Path(__script_folder__, '../resources/units'),
+        Path(appdirs.user_data_dir(), 'protcur', 'units'),  # pip install --user
         Path(sys.prefix, 'share', 'protcur', 'units'),
         Path('/usr', 'share', 'protcur', 'units'),  # pypy3
         Path('share', 'protcur', 'units'),  # ebuild testing
-        Path(appdirs.user_data_dir(), 'protcur', 'units'),  # pip install --user
     ]
     for attempt in _attempts:
         if attempt.exists():
@@ -31,10 +31,10 @@ __tags_folder__ = Path(__script_folder__, '../../.')
 if not (__tags_folder__ / 'protc-tags.rkt').exists():
     _attempts = [
         Path(__script_folder__, '../resources'),
+        Path(appdirs.user_data_dir(), 'protcur'),  # pip install --user
         Path(sys.prefix, 'share', 'protcur'),
         Path('/usr', 'share', 'protcur'),  # pypy3
         Path('share', 'protcur'),  # ebuild testing
-        Path(appdirs.user_data_dir(), 'protcur'),  # pip install --user
     ]
     for attempt in _attempts:
         if (attempt / 'protc-tags.rkt').exists():
