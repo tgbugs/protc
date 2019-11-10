@@ -72,7 +72,7 @@ try:
               'pyontutils>=0.1.4',
               'pysercomb>=0.0.2',
           ],
-          extras_require={'dev':[],
+          extras_require={'dev':['pytest-cov', 'wheel'],
                           'test': tests_require,
                          },
           entry_points={
