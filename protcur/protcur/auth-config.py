@@ -1,7 +1,7 @@
 {'config-search-paths': ['{:user-config-path}/protcur/config.yaml',],
  'auth-variables':
  {'units-folder': {'environment-variables': 'PROTCUR_UNITS_FOLDER',
-                   'default': ['../../protc-lib/units',  # git
+                   'default': ['../../protc-lib/protc/units',  # git
                                '../resources/units',  # test sdist
                                '{:user-data-path}/protcur/units',  # pip install --user
                                '{:prefix}/share/protcur/units',  # system
