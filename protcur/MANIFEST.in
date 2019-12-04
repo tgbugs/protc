@@ -3,7 +3,6 @@ recursive-include resources *.rkt
 include README.org
 exclude MANIFEST.in
 exclude resources/units/parsing.rkt
-recursive-exclude *.egg-info *
 recursive-exclude * *.pyc
 recursive-exclude * *.swp
 recursive-exclude * *.swo
