@@ -1,38 +1,19 @@
 * protcur
-  A dashboard for web annotation workflows for protocol curation.
+[[https://pypi.org/project/protcur/][[[https://badge.fury.io/py/protcur.svg]]]]\\
+# [[https://travis-ci.org/tgbugs/protcur][[[https://travis-ci.org/tgbugs/protcur.svg?branch=master]]]]\\
+# [[https://coveralls.io/github/tgbugs/protcur?branch=master][[[https://coveralls.io/repos/github/tgbugs/protcur/badge.svg?branch=master]]]]
+A dashboard for web annotation workflows for protocol curation.
 * Setup
 ** Python
-   Coming!
-** SBCL
-   In addition to the usual python setup protcur also depends on
-   Steel Bank Common Lisp and quicklisp to run the ast colorizer.
-   1. Install =sbcl= for your distribution.
-   2. As the user that will be running the daemon run the following
-      as documented at https://www.quicklisp.org/beta/.
-      #+BEGIN_SRC bash
-        curl -O https://beta.quicklisp.org/quicklisp.lisp
-        curl -O https://beta.quicklisp.org/quicklisp.lisp.asc
-        gpg --verify quicklisp.lisp.asc quicklisp.lisp
-      #+END_SRC
-      Run =sbcl= and run each command one at a time or execute this block.
-      #+BEGIN_SRC lisp
-        (load "quicklisp.lisp")
-        (quicklisp-quickstart:install)
-        (ql:add-to-init-file)
-        (ql:quickload "colorize")
-        (quit)
-      #+END_SRC
-** Manual installation as openrc service
-   Until a =protcur= ebuild is ready you can install the init script and config
-   manually. As root run the following.
-   #+BEGIN_SRC bash
-     groupadd servers -g 950
-     useradd servers -m -d /var/lib/servers -u 950 -g 950
-     cp resources/protcur.rc /etc/init.d/protcur
-     cp resources/protcur.confd /etc/conf.d/protcur
-     chmod 0600 /etc/conf.d/protcur
-     # set environment variables in the config
-     vim /etc/conf.d/protcur
-     rc-config add protcur default
-     /etc/init.d/protcur start
-   #+END_SRC
+=pip install protcur=
+** Gentoo
+As root.
+#+BEGIN_SRC bash
+layman -a tgbugs-overlay
+emerge -p protcur
+vim /etc/portage/package.accept_keywords
+emerge protcur
+vim /etc/conf.d/protcur
+rc-config add protcur default
+/etc/init.d/protcur start
+#+END_SRC
