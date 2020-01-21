@@ -6,3 +6,5 @@ exclude resources/units/parsing.rkt
 recursive-exclude * *.pyc
 recursive-exclude * *.swp
 recursive-exclude * *.swo
+recursive-include resources *.confd
+recursive-include resources *.rc
