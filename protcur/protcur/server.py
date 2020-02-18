@@ -24,8 +24,12 @@ from protcur.sparc import SparcMI
 from protcur.analysis import Hybrid, protc
 from protcur.analysis import hypothesis_local, get_hypothesis_local
 from protcur.analysis import citation_tree, papers, statistics, ast_statistics
-from IPython import embed
 from flask import Flask, request, abort 
+try:
+    breakpoint
+except NameError:
+    from IPython import embed as breakpoint
+
 
 log = protcur_log.getChild('server')
 PID = os.getpid()
@@ -346,7 +350,7 @@ def make_sparc(app=Flask('sparc curation services'), debug=False, comments=True)
     if debug:
         from pyontutils.core import OntId
         from pyontutils.closed_namespaces import rdf, rdfs, owl
-        embed()
+        breakpoint()
         import sys
         sys.exit()
 

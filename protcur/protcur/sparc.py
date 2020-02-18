@@ -17,7 +17,10 @@ from pyontutils.closed_namespaces import rdf, rdfs, owl
 from hyputils.hypothesis import iterclass
 from protcur.analysis import AstGeneric, protc
 from protcur.core import TagDoc, log as protcur_log
-from IPython import embed
+try:
+    breakpoint
+except NameError:
+    from IPython import embed as breakpoint
 
 log = protcur_log.getChild('sparc')
 
@@ -840,7 +843,7 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
                            self.value,
                            self._repr)
                     log.error(msg.format(*args))
-                    #embed()
+                    #breakpoint()
 
             self._subject = rdflib.BNode()
 
@@ -1001,7 +1004,7 @@ class technique_to_sparc(AnnotationMixin):
 
         # collapse
         # link all parts of protocls into experiments
-        embed()
+        breakpoint()
         self._triples = tuple()  # TODO
 
         protocol = list(self.protocols)
@@ -1044,7 +1047,7 @@ def sparc_mapping():
                                  _repo=True,
                                  write=False)
 
-    embed()
+    breakpoint()
 
     @property
     def protc_unit_mapping(self):
@@ -1092,7 +1095,7 @@ def main():
     sparc_tags_from_protc = [_ for _ in [SparcMI.translators['protc'](p).tags for p in protc] if _]
     trouble = protc.byId('tkkziO-mEei0Xze-UL2X8g')
     wat = SparcMI.byId('tkkziO-mEei0Xze-UL2X8g')
-    embed()
+    breakpoint()
     return
     sparc_mapping()
 

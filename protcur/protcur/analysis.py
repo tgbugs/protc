@@ -1350,7 +1350,11 @@ def main():
     from protcur.core import annoSync
     from protcur import namespace_mappings as nm
 
-    from desc.prof import profile_me
+    try:
+        from desc.prof import profile_me
+    except ModuleNotFoundError:
+        profile_me = lambda x:x
+
     from docopt import docopt
     args = docopt(__doc__)
 

@@ -69,7 +69,7 @@ try:
               'htmlfn',
               'hyputils>=0.0.4',
               'Markdown',
-              'pyontutils>=0.1.9',
+              'pyontutils>=0.1.16',
               'pysercomb>=0.0.3',
           ],
           extras_require={'dev':['pytest-cov', 'wheel'],
