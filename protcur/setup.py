@@ -20,9 +20,13 @@ with open('README.org', 'rt') as f:
     long_description = f.read()
 
 
+ru = Path('resources', 'units')
 RELEASE = '--release' in sys.argv
-if RELEASE:
-    sys.argv.remove('--release')
+WHEEL_FROM_GIT = not ru.exists() and 'bdist_wheel' in sys.argv
+if RELEASE or WHEEL_FROM_GIT:
+    if RELEASE:
+        sys.argv.remove('--release')
+
     from protcur.config import __anno_tags__, __protc_tags__
     from protcur.config import __units_folder__, __units_test_folder__
 
@@ -36,7 +40,6 @@ if RELEASE:
     shutil.copy(__anno_tags__, 'resources')
     shutil.copy(__protc_tags__, 'resources')
 
-ru = Path('resources', 'units')
 if ru.exists():  # release or running from sdist not in git
     data_files = [
         ('share/protcur', ['resources/anno-tags.rkt',
@@ -85,7 +88,7 @@ try:
           data_files=data_files,
          )
 finally:
-    if RELEASE:
+    if RELEASE or WHEEL_FROM_GIT:
         shutil.rmtree('resources/units')
         Path('resources', __anno_tags__.name).unlink()
         Path('resources', __protc_tags__.name).unlink()
