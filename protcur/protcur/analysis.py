@@ -14,12 +14,13 @@ import inspect
 from pathlib import PurePath, Path
 from datetime import datetime
 from itertools import chain
-from pyontutils.core import makeGraph, makePrefixes, OntId
+import rdflib
+from pyontutils.core import makePrefixes, OntId, OntGraph
 from pyontutils.utils import async_getter, noneMembers, allMembers, anyMembers
 from htmlfn import atag
 from pyontutils.hierarchies import creatTree
 from pyontutils.scigraph_client import Vocabulary
-from pyontutils.closed_namespaces import rdf, rdfs, owl
+from pyontutils.namespaces import rdf, rdfs, owl, OntCuries
 from pysercomb.parsers import racket, units
 from pysercomb.pyr import units as pyru
 #from pysercomb import parsing_parsec
@@ -87,15 +88,17 @@ def citation_triples(annos, all=False):
                 for url in urls:
                     o = get_hypothesis_local(url)
                     o = o if o else url
-                    yield p, s, o
+                    yield s, p, o
 
 def citation_tree(annos, html_head='', all=False):
     t = citation_triples(annos, all)
     PREFIXES = {'protc':'https://protc.olympiangods.org/curation/tags/',
                 'hl':'https://hypothesis-local.olympiangods.org/'}
     PREFIXES.update(makePrefixes('rdfs'))
-    g = makeGraph('', prefixes=PREFIXES)
-    for p, s, o in t:
+    OntCuries(PREFIXES)
+    graph = OntGraph()
+    OntCuries.populate(graph)
+    for s, p, o in t:
         if 'http' in s:
             su = s
         else:
@@ -104,11 +107,20 @@ def citation_tree(annos, html_head='', all=False):
             ou = o
         else:
             ou = hypothesis_local(o)
-        g.add_trip(su, p, ou)
-        g.add_trip(su, 'rdfs:label', s)  # redundant
-        g.add_trip(ou, 'rdfs:label', o)  # redundant
-    ref_graph = g.make_scigraph_json(RFU, direct=True)
-    if list(g.g):
+
+        su = rdflib.URIRef(su)
+        p = graph.namespace_manager.expand(p)
+        ou = rdflib.URIRef(ou)
+        s = rdflib.Literal(s)
+        o = rdflib.Literal(o)
+
+        [graph.add(t) for t in
+         ((su, p, ou),
+          (su, rdfs.label, s),
+          (ou, rdfs.label, o))]
+
+    ref_graph = graph.asOboGraph(RFU, restriction=False)
+    if list(graph):
         tree, extra = creatTree('hl:ma2015.pdf', RFU, 'OUTGOING', 10, json=ref_graph, prefixes=PREFIXES, html_head=html_head)
         return tree, extra
     else:
@@ -237,6 +249,7 @@ class Hybrid(HypothesisHelper):
 
         # TODO OntTerm
         # extend input to include black_box_component, aspect, etc
+        # WARNING sometime socket can hang in sgv here !?
         if self.classn == 'protc' or self.predicate not in self.nolu:  # FIXME
             data = sgv.findByTerm(value, searchSynonyms=False, searchAbbreviations=False)  # TODO could try the annotate endpoint? FIXME _extremely_ slow so skipping
             if not data:
@@ -1426,8 +1439,8 @@ def main():
     def more():
         tl = protc.topLevel()
         with open('/tmp/top-protcur.rkt', 'wt') as f: f.write(tl)
-        pl = protc.parentless()
-        with open('/tmp/pl-protcur.rkt', 'wt') as f: f.write(pl)
+        #pl = protc.parentless()  # parentless was removed awhile back ?
+        #with open('/tmp/pl-protcur.rkt', 'wt') as f: f.write(pl)
         pn = protc.parentneed()
         with open('/tmp/pn-protcur.rkt', 'wt') as f: f.write(pn)
         lang_output = protc.protcurLang()
