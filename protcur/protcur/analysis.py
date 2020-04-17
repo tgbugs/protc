@@ -22,7 +22,6 @@ from pyontutils.hierarchies import creatTree
 from pyontutils.scigraph_client import Vocabulary
 from pyontutils.namespaces import rdf, rdfs, owl, OntCuries
 from pysercomb.parsers import racket, units
-from pysercomb.pyr import units as pyru
 #from pysercomb import parsing_parsec
 from hyputils.hypothesis import HypothesisAnnotation, HypothesisHelper, idFromShareLink
 from protcur.core import linewrap, color_pda, log, logd
@@ -1123,6 +1122,14 @@ class protc(AstGeneric):
         'unk':('protc:fuzzy-quantity', '"unknown"', '"unknown"'),
     }
 
+    def __new__(cls, anno, annos):
+        if not hasattr(cls, 'pyru'):
+            from pysercomb.pyr import units as pyru
+            cls.pyru = pyru
+
+        self = super().__new__(cls, anno, annos)
+        return self
+
     @property
     def tags(self):
         return super().tags
@@ -1167,7 +1174,7 @@ class protc(AstGeneric):
             test_params.append((value, (success, v, rest)))
 
         if v:
-            v = pyru.SExpr.format_value(v, self.linePreLen)
+            v = self.pyru.SExpr.format_value(v, self.linePreLen)
             #v = format_value(v, self.linePreLen)#, LID=' ' * self.linePreLen)
         return repr(ParameterValue(success, v, rest, indent=self.linePreLen))  # TODO implement as part of processing the children?
 
