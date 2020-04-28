@@ -23,7 +23,7 @@ class Options(clif.Options):
 
     @property
     def __output_type(self):
-        return [self.args['--output-type']]
+        return [self._args['--output-type']]
 
 
 class Main(clif.Dispatcher):
