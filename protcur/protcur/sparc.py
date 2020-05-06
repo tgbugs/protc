@@ -1045,7 +1045,8 @@ def sparc_mapping():
                                  branch='sparc',
                                  fail=False,
                                  _repo=True,
-                                 write=False)
+                                 write=False,
+                                 calling__file__=__file__,)
 
     breakpoint()
 
