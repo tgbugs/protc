@@ -5,12 +5,12 @@
 : ${LOG_LEVEL:=info}
 : ${SVCGROUP:=servers}
 : ${SVCUSER:=servers}
-: ${LOG_LOC:="/var/log/protcur"}
+: ${LOG_LOC:="/var/log/${SVCNAME}"}
 
 run_dir=${run_dir:-/run}
 LOG="${LOG_LOC}/sysout.log"
 
-socket="unix:/run/protcur/socket"
+socket="unix:/run/${SVCNAME}/socket"
 
 pidfile="${run_dir}/${SVCNAME}/pid"
 start_stop_daemon_args="
