@@ -23,7 +23,7 @@ raco pkg install scribble-math
 ```
 
 ## Additional setup requirements
-For some experimental features you will need [rkdf](https://github.com/tgubgs/rkdf)
+For some experimental features you will need [rkdf](https://github.com/tgbugs/rkdf)
 and the [NIF-Ontology](https://github.com/SciCrunch/NIF-Ontology) repo.
 ```
 git clone https://github.com/tgbugs/rkdf.git
