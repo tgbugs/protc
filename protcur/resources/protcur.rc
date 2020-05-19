@@ -30,11 +30,12 @@ command_args="--bind ${socket}
 --name protcur
 --workers 4
 --worker-class gevent
---timeout 30
+--timeout 60
 --group ${SVCGROUP}
 --user ${SVCUSER}
 --log-level ${LOG_LEVEL}
 --log-file ${LOG}
+--capture-output
 protcur.app:app"
 retry='TERM/30/KILL/5'
 
