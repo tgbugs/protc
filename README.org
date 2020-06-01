@@ -1,31 +1,40 @@
-# Protc
+#+title: Protc
+
 A language for specifying protocols.
 
-## Description
+* Description
 Protc (pro tik) is a formal language for specifying protocols,
 scientific or otherwise. Its primary focus is on measurement
 and the processes leading up to it. Protc is intended to provide
 a formal way to record the specification and implementation of a protocol.
-
-## WIP
-Protc is a work in progress.
-At the moment it is not ready for outside use.
-Many parts of the language will change substantially.
-
-## Development installation
-Protc is built using [Racket](https://racket-lang.org/).
+* WIP
+Protc is a work in progress. At the moment it is not ready for outside
+use. Many parts of the language will change substantially.
+* Development
+** Installation
+Protc is built using [[https://racket-lang.org/][Racket]].
 I suggest using either DrRacket or emacs with racket-mode for developing and writing Protc.
-``` bash
+
+#+begin_src bash
 raco pkg install protc*/
 
 # building scribble docs requires
 raco pkg install scribble-math
-```
+#+end_src
+** Testing
+To run tests for a given protc module you can run =raco test module-name=
+or =raco test module-name/= from the containing folder, or run
+=raco test .= from the module folder itself. For example for =protc-lib=
+you can run the following from the folder of this README.org file.
 
-## Additional setup requirements
-For some experimental features you will need [rkdf](https://github.com/tgbugs/rkdf)
-and the [NIF-Ontology](https://github.com/SciCrunch/NIF-Ontology) repo.
-```
+#+begin_src bash
+raco test protc-lib
+#+end_src
+* Additional setup requirements
+For some experimental features you will need [[https://github.com/tgbugs/rkdf][rkdf]]
+and the [[https://github.com/SciCrunch/NIF-Ontology][NIF-Ontology]] repo.
+
+#+begin_src bash
 git clone https://github.com/tgbugs/rkdf.git
 git clone https://github.com/SciCrunch/NIF-Ontology.git
 pushd NIF-Ontology
@@ -33,11 +42,11 @@ git checkout dev
 ../rkdf/bin/rkdf-convert-all
 popd
 raco pkg install NIF-Ontology/
-```
-
-## Licensing
-This repository holds a number of different projects that have different licenses.
-For the time being the Racket code is licensed under [AGLP-3](). Explicitly NOT 3+.
+#+end_example
+* Licensing
+This repository holds a number of different projects that have different
+licenses. For the time being the Racket code is licensed under
+[[https://www.gnu.org/licenses/agpl-3.0.en.html][AGLP-3]]. Explicitly NOT 3+.
 Please see individual subfolders for license information.
 This licensing may be revisited in the future, such that the core Protc implementation
 bears a more permissive license, while the Protc core libraries bear a copyleft license.
@@ -45,7 +54,7 @@ bears a more permissive license, while the Protc core libraries bear a copyleft 
 Scribble documentation is licensed under the license for the code in its containing
 subtree or if copying only the text portions of the compiled docs then CC-BY-4.0.
 
-Files in `thoughts/` are explicitly not licensed and all rights are reserved
+Files in =thoughts/= are explicitly not licensed and all rights are reserved
 (though various parts will eventually be incorporated into documents that
 will be permissively licensed).
 
