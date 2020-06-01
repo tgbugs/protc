@@ -11,7 +11,7 @@
                      racket/pretty
                      racket/syntax
                      syntax/parse
-                     "direct-model.rkt"
+                     (except-in "direct-model.rkt" #%top)
                      "syntax-classes.rkt"
                      "utils.rkt"))
 
@@ -29,7 +29,7 @@
     ; the executor function needs to define symbol->being and being->symbol or maybe that goes somehwere ehse?
     #:datum-literals (.uses .inputs .outputs .vars .measures)
     #:local-conventions ([body sc-protc-body]  ; TODO allow these to be defined dynamically
-                         [inputs sc-prtoc-input]
+                         [inputs sc-protc-input]
                          [outputs sc-protc-output]
                          [required-symbolic-inputs id]  ; number/literal, number + unit (literalis require translation)
                          [required-symbolic-outputs id]  ; number/literal, number + unit (literalis require translation)
@@ -155,25 +155,34 @@
                                 "~a-stx" (syntax-e #'name))
      #:with (bout ...) (datum->syntax this-syntax (flatten (syntax->datum #'(body.outputs ...))))
      #:with docstringf #'(λ (inputs ...) (format (~? doc "") inputs ...))
-     #:with docstring (if (attribute doc)
-                          (if (attribute inputs)
-                              (apply format (syntax-e #'doc) (syntax->datum #'(inputs ...))) ; FIXME we want to format this via args
-                              #'doc)
-                          (datum->syntax #'name (format "do ~a" #'name)))
+     #:with docstring
+     (if (attribute doc)
+         (if (attribute inputs)
+             (apply format (syntax-e #'doc) (syntax->datum #'(inputs ...))) ; FIXME we want to format this via args
+             #'doc)
+         (datum->syntax #'name (format "do ~a" #'name)))
 
-     #;(let ([names (syntax->list #'((~? steps.name) ...))])
-         (unless (null? names)
-           (println names)
-           (println (map
-                     (compose syntax-local-value
-                              (λ (name) (format-id name #:source name "~a-stx" (syntax-e name))))
-                     ;syntax-local-value
-                     names))))
-     #:with (subprotocols ...) (let ([names (syntax->list #'((~? steps.name) ...))])
-                                 (map
-                                  (compose syntax-local-value
-                                           (λ (name) (format-id name #:source name "~a-stx" (syntax-e name))))
-                                  names))
+     #;
+     (let ([names (syntax->list #'((~? steps.name) ...))])
+       (unless (null? names)
+         (println names)
+         (println (map
+                   (compose syntax-local-value
+                            (λ (name) (format-id name #:source name "~a-stx" (syntax-e name))))
+                   ;syntax-local-value
+                   names))))
+     #:with (subprotocols ...)
+     (let ([names (syntax->list #'((~? steps.name) ...))]
+           [count 0]
+           )
+       (map
+        (λ (name)
+          (if (string? (syntax-e name))
+              (begin (set! count (add1 count)) (format "unnamed-step-~a" count))
+              ((compose syntax-local-value
+                        (λ (name)
+                          (format-id name #:source name "~a-stx" (syntax-e name)))) name)))
+        names))
 
      #'(begin
          (define (specification-phase)
@@ -345,5 +354,5 @@
   (define protc-for-export
     (list test-connected-pair-ast))
   (provide protc-for-export)  ; TODO compiled protc modules should export this automatically
-  (export test-connected-pair 'html 'pdf)
+  (export test-connected-pair 'html 'pdf) ; FIXME broken due to weirdness in export impl
   )

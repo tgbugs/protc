@@ -280,8 +280,19 @@ All actualize sections should specify a variable name that will be used in inher
 
 (define-syntax-class sc-step-ref
   (pattern instruction:str
-           #:attr name #'null;#f
-           #:attr [args 1] #f)
+           #:attr name (datum->syntax #'instruction (format "~a-wat" (gensym)))
+           #; #; ; I love that double sexp comments like this work
+           #:do ((println #'instruction))
+           #;
+           (datum->syntax #'instruction (format-id #'instruction "~a" (gensym)))
+           #;
+           (datum->syntax #f `(quote ,(gensym)))
+           #;
+           #'null
+           #;
+           #f
+           #:attr [args 1] #f
+           )
   (pattern (name:id args:expr ...)
            #:attr instruction
            (let ([slv (syntax-local-value

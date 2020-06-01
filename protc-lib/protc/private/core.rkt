@@ -311,6 +311,25 @@ earth's location which is the aspect of a proper name and thus
 (module+ agent-oof
   ; oof what a mess, reveals pretty conclusively that
   ; define-name is not at all working the way we want it to
+
+  ; placeholders to keep the compiler happy
+  (define agent 'agent)
+  (define public-key 'public-key)
+  (define (lookup agent public-key) #f)
+  (define (decrypt key sig) #f)
+  (define signature 'signature)
+  (define cypher 'cypher)
+  (define (message-from-agent message) message)
+  (define (encrypt key value #:scheme [scheme 'if-only-it-were-so-simple]) #f)
+  (define overseer-public-key 'some-public-key)
+  (define-syntax (loop-until-done stx)
+    "just keep going"
+    (syntax-parse stx
+      [(_ body ...)
+       #'(λ () body ...)
+       ]))
+  (define (send-to thing message return-address) #f)
+
   (define-name agent-bad
     (on-aspect (public-key random-value message-received)
                ; FIXME random value is not an aspect of the agent
@@ -363,11 +382,16 @@ earth's location which is the aspect of a proper name and thus
   ; if you define things every time then they work, but the information is trapped and you
   ; have to apply the predicate as a black box to everything
   ; more importantly define-name does not compose at all in the way desired
-  (define how-i-would-rather-do-it?
+  (define (how-i-would-rather-do-it?)
     (define (symbolic-constraints agent-public-key overseer-private-key random-value return-address)
       ; return address is often left out of the equation >_<
       ; overseer-public-key could also be a one-time-pad or temp key etc.
-      (define message-sent (encrypt agent-public-key (random-value overseer-public-key)))
+      ; this is clearly wrong ... or I have no memory of what I was trying to do here
+      ; ask them to decrypt with their private key and send me back the random value
+      ; encrypted with the overseer public key ?? clearly vulnerable to the agent
+      ; sharing the random value once they decrypt it, so would have to match
+      ; something else to make this work ...
+      (define message-sent (encrypt agent-public-key (cons random-value overseer-public-key)))
       "send message-sent to everyone and everything asking for them to return it!"
       "can't assume we have the agents address, they may actually come to us"
       "how to deal with the return address is another issue entirely"
@@ -376,23 +400,32 @@ earth's location which is the aspect of a proper name and thus
        (define message-received (measure return-address next-message))
        ; remember kids, always encrypt with the other person's public key first!
        (= (decrypt agent-public-key (decrypt overseer-private-key message-received)) random-value)
-       )))
+       ))
+    (void))
 
   ; all the free variables argh, I guess it is ok??
   (define (message-from-agent? signature message agent-proper-name)
     (define public-key (lookup agent-proper-name public-key))
     (= (decrypt public-key signature) (cypher message)))
 
+  (define (message-listen address)
+    "looking for some bytes here ..."
+    (let ([signature 'lol]
+          [message-received 'hahahaha])
+      (values signature message-received)))
+
   (define (proper-agent-1? thing)
     ;(define random-value (random))
     ;(define message (encrypt public-key random-value))
+    (define agent-proper-name 'magical-monadic-proper-name-lookup-device)
+    (define return-address 'magical-monadic-return-addres-for-proper-agent-1-lookup-device)
     (define public-key (lookup agent-proper-name public-key))
     (send-to
      thing
      "hey, can you send me a message and signature encrypted with the private key for proper-agent-1?"
      return-address)
     (define-values (signature message-received) (message-listen return-address))
-    (message-from-agent? signature message-received proper-agent-1)
+    (message-from-agent? signature message-received 'proper-agent-1)
     ; challenge response here ... if they have a private key and send you any message
     ; back and you have their public key then why do you need the random value at all!?
     )

@@ -65,6 +65,8 @@
                   ))
     )
 
+  (define mass 'mass)
+
   ; observe the drawbacks :/
   (specf #:type 'actualize  ; this should be bound
          #:name 'cut-down-to-size  ; this is a name we are doefining
@@ -822,85 +824,87 @@ For example use @(def solution (a+b solute solvent))."
   ;(test-asp (: brain g))  ; FIXME
   (test-asp (: brain g ([volume 5])))
   (test-asp (: brain g ([volume 5] [volume 1000])))
-  )
 
-(define (run-tests)
-  (define thing 'things-must-also-be-defined-beforehand)
-  (define aspect 'aspects-need-to-be-defined-beforehand)
-  (define-values (a1 a2 a3) (values 'a1 'a2 'a3))
-  (define-values (;a at
-                  atv aaaa)
-    (values ;(: aspect)
-     ;(: thing aspect)  ; FIXME
-     (: thing aspect 'value)
-     (: thing a2 ([a1 1] [a3 3]))
-     ; (: thing ([a1 1] a2 [a3 3])) ; fails as expected
-     ))
+  (define mass 'mass)
 
-  (.identifier DOI: 10.1234/hello.world PMID: 1234567)
-  ((.inputs a b c))
-  
-  (spec (*: g weigh) ;(#%measure :g weigh)
-        (def bob 'hello?)
-        (.invariant (< 0.01 (error g))))
+  (define (run-tests)
+    (define thing 'things-must-also-be-defined-beforehand)
+    (define aspect 'aspects-need-to-be-defined-beforehand)
+    (define-values (a1 a2 a3) (values 'a1 'a2 'a3))
+    (define-values (;a at
+                    atv aaaa)
+      (values ;(: aspect)
+       ;(: thing aspect)  ; FIXME
+       (: thing aspect 'value)
+       (: thing a2 ([a1 1] [a3 3]))
+       ; (: thing ([a1 1] a2 [a3 3])) ; fails as expected
+       ))
 
-  (spec (:* mass cut-down-to-size) ;(#%actualize :mass cut-down-to-size)
-        (.vars final-weight))
+    (.identifier DOI: 10.1234/hello.world PMID: 1234567)
+    ((.inputs a b c))
+    
+    (spec (*: g weigh) ;(#%measure :g weigh)
+          (def bob 'hello?)
+          (.invariant (< 0.01 (error g))))
 
-  (spec (actualize mass cut-down-to-size)
-        ; TODO there is no issue with having multiple different specifications with the same name
-        ; since they all point to the same underlying object
-        ; HOWEVER we probably do need to warn people that they cannot overwrite
-        ; and we need to error in cases where there are conflicts
-        (.vars final-weight))
+    (spec (:* mass cut-down-to-size) ;(#%actualize :mass cut-down-to-size)
+          (.vars final-weight))
 
-  (spec (** solution) ;(#%make solution)
-        (.vars final-volume)
-        (.inputs solute   ; FIXME allow arbitrary order
-                 ;[solvent (= solvent :volume final-volume)]
-                 ;[: solvent (= volume final-volume)]
-                 [: solvent ([volume final-volume])]  ; TODO asp-exp
+    (spec (actualize mass cut-down-to-size)
+          ; TODO there is no issue with having multiple different specifications with the same name
+          ; since they all point to the same underlying object
+          ; HOWEVER we probably do need to warn people that they cannot overwrite
+          ; and we need to error in cases where there are conflicts
+          (.vars final-weight))
 
-                 ;(with-invariants [(> :volume final-volume)] beaker)
-                 ;comm for testing;[beaker (> :volume final-volume)]  ; this is super nice for lisp; beaker :volume > final-volume possible
-                 ;comm for testing;[beaker (> beaker :volume final-volume)]
-                 ;[beaker (> (: _ volume) final-volume)]  ; FIXME how to bind beaker implicitly?
-                 [: beaker ([volume final-volume])]  ; TODO asp-exp
-                 ;[: beaker (volume final-volume)]  ; basic equality but in theory could extend...
-                 ;(: beaker [= volume final-volume])  ; more consistent syntax also [] vs ()
-                 ;(: beaker (> volume final-volume))
-                 ;(: beaker [> volume final-volume])
-                 ;[: beaker [> volume final-volume]]  ; <- this one!
-                 ....)
-        )
+    (spec (** solution) ;(#%make solution)
+          (.vars final-volume)
+          (.inputs solute   ; FIXME allow arbitrary order
+                   ;[solvent (= solvent :volume final-volume)]
+                   ;[: solvent (= volume final-volume)]
+                   [: solvent ([volume final-volume])]  ; TODO asp-exp
 
-  (impl (solution way0)
-        'no
-        'steps
-        'here!)
-  (impl (solution way1)
-        ;implicit order
-        'step-0
-        'step-1
-        'step-2
-        )
-  (impl (solution way2)
-        ; no dependencies
-        (.order
-         'another-thing-without-obvious-order
-         'thing-without-obvious-order
-         ))
-  (impl (solution way3)
-        ; with input/output dependencies (may not need)
-        (.order+
-         'another-thing-without-obvious-order
-         'thing-without-obvious-order
-         ))
+                   ;(with-invariants [(> :volume final-volume)] beaker)
+                   ;comm for testing;[beaker (> :volume final-volume)]  ; this is super nice for lisp; beaker :volume > final-volume possible
+                   ;comm for testing;[beaker (> beaker :volume final-volume)]
+                   ;[beaker (> (: _ volume) final-volume)]  ; FIXME how to bind beaker implicitly?
+                   [: beaker ([volume final-volume])]  ; TODO asp-exp
+                   ;[: beaker (volume final-volume)]  ; basic equality but in theory could extend...
+                   ;(: beaker [= volume final-volume])  ; more consistent syntax also [] vs ()
+                   ;(: beaker (> volume final-volume))
+                   ;(: beaker [> volume final-volume])
+                   ;[: beaker [> volume final-volume]]  ; <- this one!
+                   ....)
+          )
 
-  ; not at all clear why these fail before the impl sections fail...
-  (displayln weigh)
-  (displayln cut-down-to-size)
-  (displayln solution)
+    (impl (solution way0)
+          'no
+          'steps
+          'here!)
+    (impl (solution way1)
+          ;implicit order
+          'step-0
+          'step-1
+          'step-2
+          )
+    (impl (solution way2)
+          ; no dependencies
+          (.order
+           'another-thing-without-obvious-order
+           'thing-without-obvious-order
+           ))
+    (impl (solution way3)
+          ; with input/output dependencies (may not need)
+          (.order+
+           'another-thing-without-obvious-order
+           'thing-without-obvious-order
+           ))
+
+    ; not at all clear why these fail before the impl sections fail...
+    (displayln weigh)
+    (displayln cut-down-to-size)
+    (displayln solution)
+    )
   )
 
 (module+ test
