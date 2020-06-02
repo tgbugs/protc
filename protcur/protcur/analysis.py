@@ -383,7 +383,9 @@ class Hybrid(HypothesisHelper):
             if value:
                 return value
 
-        if self.text and not self.text.startswith('https://hyp.is'):
+        if (self.text and
+            not self.text.startswith('**https://hyp.is') and  # markdown madness
+            not self.text.startswith('https://hyp.is')):
             if 'RRID' not in self.text:
                 return self.text
 
