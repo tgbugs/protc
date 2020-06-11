@@ -192,4 +192,3 @@ def justTags(tag_lookup=None):
     for tag, doc in sorted(tag_lookup.items()):
         if anyMembers(tag, *tag_prefixes) and not doc.deprecated:
             yield tag
-
