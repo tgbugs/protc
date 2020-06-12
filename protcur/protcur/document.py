@@ -1,6 +1,7 @@
 from collections import defaultdict
 from urllib.parse import urlparse
 import idlib
+from pyontutils.utils import isoformat
 from hyputils import hypothesis as hyp
 from .core import log
 #from desc.prof import profile_me
@@ -59,8 +60,7 @@ class Annotation(hyp.HypothesisAnnotation):
     _pio_cache = {}  # FIXME idlib should handle this transparently when data is cached
 
     def __repr__(self):
-        # TODO
-        return self.id
+        return f'{self.__class__.__name__}({self.id!r})'
 
     @property
     def uri_original(self):
@@ -182,6 +182,11 @@ class AnnoCounts:
             =protc:= tag or are a reply to an annotation with a =protc: tag= """
         return [f for f in self.with_data() if f.has_protc_or_reply(self._pool)]
 
+    def with_min_annos_end(self, minimum_annotation_count=None):  # FIXME not sure if want?
+        hhs = self.with_protc_tags_or_reply()
+        idn = IdNormalization(hhs)
+        return idn.annos_end(minimum_annotation_count)
+
     def document_stats(self, *args, minimum_annotation_count=None):
         if minimum_annotation_count is None:
             raise TypeError('minimum_annotation_count is a required keyword argument')
@@ -238,15 +243,77 @@ class IdNormalization:
     @idlib.utils.cache_result
     def normalized(self):
         """ normalized uris """
-        return set(h.uri_normalized for h in self.hhs)
+        norms = defaultdict(list)
+        for anno in self.hhs:
+            norms[anno.uri_normalized].append(anno)
+        return dict(norms)
 
     @idlib.utils.cache_result
     def slug_tails(self):
         """ trailing fragment of protocols.io uri """
         slugs = defaultdict(list)
-        for p in self.hhs:  # FIXME apparently this is what is eating the memory !??!!
-            slugs[p.slug_tail].append(p)
+        for anno in self.hhs:  # FIXME apparently this is what is eating the memory !??!!
+            slugs[anno.slug_tail].append(anno)
         return dict(slugs)
+
+    @idlib.utils.cache_result
+    def slug_streams(self):
+        """ idlib.Pio streams associated with each slug """
+        return {k:set(a._pio for a in v) for k, v in self.slug_tails().items()}
+
+    @idlib.utils.cache_result
+    def _uri_humans(self):
+        urings = defaultdict(list)
+        for anno in self.hhs:  # FIXME apparently this is what is eating the memory !??!!
+            slugs[anno.uri_normalized].append(anno)
+        return dict(slugs)
+
+    def document_rows(self):
+        tails = self.slug_tails()
+        norms = self.normalized()
+        yield ('slug',
+               'uri',
+               'doi',
+               'title',
+               'author count',
+               'authors',
+               'protocol created',
+               'protocol updated',
+               'protocol has versions',
+               'anno count',
+               'anno date first',
+               'anno date last',
+               'anaesthesia',
+               'microscopy',
+               'close but no cigar',  # euthanasia, ephys rig
+               )
+        for slug, pios in self.slug_streams().items():
+            #annos = tails[slug]
+            spios = sorted([p for p in pios], key=lambda p: p.uri_human)
+            for pio in spios:  # have to denormalize a bit
+                annos = norms[pio.asStr()]  # already normalized I think?
+                minad = min([a.created for a in annos])
+                maxad = max([a.updated for a in annos])
+
+                authors = [a.name for a in pio.authors]
+                authors_s = '|'.join(authors)
+                yield (slug,
+                       pio.asStr(),
+                       pio.doi.asStr() if pio.doi else '',
+                       pio.title,  # title
+                       len(authors),
+                       authors_s,
+                       isoformat(pio.created),
+                       isoformat(pio.updated),
+                       pio.hasVersions,
+                       len(annos),
+                       minad,
+                       maxad,
+                       ''
+                       '',
+                       '',
+                       '',
+                       )
 
     def with_minimum_number_of_annoations(self, limit):
         """ slug tails with more than the minimum number of annotations """
