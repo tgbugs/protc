@@ -268,11 +268,10 @@ class IdNormalization:
             slugs[anno.uri_normalized].append(anno)
         return dict(slugs)
 
-    def document_rows(self):
-        tails = self.slug_tails()
-        norms = self.normalized()
+    def slug_rows(self):
         yield ('slug',
                'uri',
+               'anno count',
                'doi',
                'title',
                'author count',
@@ -280,13 +279,62 @@ class IdNormalization:
                'protocol created',
                'protocol updated',
                'protocol has versions',
-               'anno count',
                'anno date first',
                'anno date last',
                'anaesthesia',
                'microscopy',
                'close but no cigar',  # euthanasia, ephys rig
                )
+
+        tails = self.slug_tails()
+        for slug, pios in self.slug_streams().items():
+            spios = sorted([p for p in pios], key=lambda p: p.uri_human)
+            pio = spios[0]
+            annos = tails[pio.asStr()]  # already normalized I think?
+            hpio = pio.uri_human
+
+            minad = min([a.created for a in annos])
+            maxad = max([a.updated for a in annos])
+
+            authors = [a.name for a in hpio.authors]
+
+            yield (slug,
+                   hpio.asStr(),
+                   len(annos),
+                   hpio.title,  # title
+                   hpio.doi.asStr() if pio.doi else '',
+                   len(authors),
+                   authors_s,
+                   isoformat(hpio.created),
+                   isoformat(hpio.updated),
+                   hpio.hasVersions,
+                   minad,
+                   maxad,
+                       ''
+                       '',
+                       '',
+                       '',
+                       )
+
+    def document_rows(self):
+        norms = self.normalized()
+        yield ('slug',
+               'uri',
+               'anno count',
+               'doi',
+               'title',
+               'author count',
+               'authors',
+               'protocol created',
+               'protocol updated',
+               'protocol has versions',
+               'anno date first',
+               'anno date last',
+               'anaesthesia',
+               'microscopy',
+               'close but no cigar',  # euthanasia, ephys rig
+               )
+
         for slug, pios in self.slug_streams().items():
             #annos = tails[slug]
             spios = sorted([p for p in pios], key=lambda p: p.uri_human)
@@ -299,6 +347,7 @@ class IdNormalization:
                 authors_s = '|'.join(authors)
                 yield (slug,
                        pio.asStr(),
+                       len(annos),
                        pio.doi.asStr() if pio.doi else '',
                        pio.title,  # title
                        len(authors),
@@ -306,7 +355,6 @@ class IdNormalization:
                        isoformat(pio.created),
                        isoformat(pio.updated),
                        pio.hasVersions,
-                       len(annos),
                        minad,
                        maxad,
                        ''

@@ -1109,6 +1109,8 @@ class protc(AstGeneric):
                                                #TODO we need more here...
                                                ))
     _manual_fix = {
+        # FIXME param: vs protc: for fuzzy-quantity, the fuz is not handled
+        # by the param parser atm so keeping it in protc for now ...
         'roomtemperature':('protc:fuzzy-quantity', '"room temperature"', '"temperature"'),
         'room temperature':('protc:fuzzy-quantity', '"room temperature"', '"temperature"'),
 
@@ -1209,7 +1211,7 @@ class protc(AstGeneric):
         id, label = self.ontLookup(value)
         if id:
             #value += f" ({id_}, {data['labels'][0]})"
-            value = f"(term {id} \"{label}\" #:original \"{value}\"{ont})"
+            value = f"(term {id} {json.dumps(label)} #:original {json.dumps(value)}{ont})"
             #value = ("term", id_, data['labels'][0], "#:original", value)
             #raise ValueError(value)
             return value

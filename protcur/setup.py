@@ -70,7 +70,7 @@ try:
           install_requires=[
               'flask',
               'htmlfn',
-              'hyputils>=0.0.5',
+              'hyputils>=0.0.6',
               'Markdown',
               'pyontutils>=0.1.22',
               'pysercomb>=0.0.5',
