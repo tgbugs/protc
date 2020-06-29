@@ -50,7 +50,7 @@ if ru.exists():  # release or running from sdist not in git
 else:
     data_files = []
 
-tests_require = ['pytest', 'pytest-runner']
+tests_require = ['pytest']
 
 try:
     setup(name='protcur',
