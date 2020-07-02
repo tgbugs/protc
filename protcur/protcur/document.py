@@ -88,6 +88,7 @@ class Annotation(hyp.HypothesisAnnotation):
     @property
     @idlib.utils.cache_result
     def uri_bound(self):
+        # FIXME confusing naming since this is the uri for the doc not anno
         if self._pio is not None:
             return self._pio.uri_human
 
@@ -118,8 +119,14 @@ class Annotation(hyp.HypothesisAnnotation):
     @idlib.utils.cache_result
     def slug_tail(self):
         """ The set of chars following the final =-= in a protocols.io URI. """
-        if self.uri_bound is not None:  # FIXME uri_bound vs _pio needs col
-            return self.uri_bound.slug_tail
+
+        try:
+            uri_bound = self.uri_bound
+        except idlib.exceptions.RemoteError:
+            uri_bound = None
+
+        if uri_bound is not None:  # FIXME uri_bound vs _pio needs col
+            return uri_bound.slug_tail
         elif (self.is_protocols_io() and
               self._pio.identifier.prefix == 'pio.view'):  # FIXME account for no data separately
             return self._pio.slug_tail
@@ -139,7 +146,10 @@ class Annotation(hyp.HypothesisAnnotation):
         """ do we have access to protocol data?
             regardless of the reason for lack of access, we need
         """
-        return self.is_protocols_io() and (self._pio.data())
+        try:
+            return self.is_protocols_io() and self._pio.data()
+        except idlib.exceptions.RemoteError:
+            return False
 
     def has_protc_or_reply(self, pool):
         if self.is_reply() and self.parent(pool) is None:
@@ -272,6 +282,8 @@ class IdNormalization:
         yield ('slug',
                'uri',
                'anno count',
+               'private',
+               'private only',
                'doi',
                'title',
                'author count',
@@ -288,26 +300,43 @@ class IdNormalization:
 
         tails = self.slug_tails()
         for slug, pios in self.slug_streams().items():
+            annos = tails[slug]
             spios = sorted([p for p in pios], key=lambda p: p.uri_human)
-            pio = spios[0]
-            annos = tails[pio.asStr()]  # already normalized I think?
+            _privates = [p for p in spios if p.identifier.is_private()]
+            private = _privates[0] if _privates else None
+            pio = spios[0]  # have to pick one uri if there are multiple
             hpio = pio.uri_human
 
             minad = min([a.created for a in annos])
             maxad = max([a.updated for a in annos])
 
-            authors = [a.name for a in hpio.authors]
+            private_only = False
+
+            try:
+                authors = [a.name for a in hpio.authors]
+                id = hpio
+            except idlib.exceptions.RemoteError as e:
+                if pio.identifier.is_private():
+                    private_only = True
+                    authors = [a.name for a in pio.authors]
+                    id = pio
+                else:
+                    raise e
+
+            authors_s = '|'.join(authors)
 
             yield (slug,
                    hpio.asStr(),
                    len(annos),
-                   hpio.title,  # title
-                   hpio.doi.asStr() if pio.doi else '',
+                   private.asStr() if private else '',
+                   private_only,
+                   id.doi.asStr() if id.doi else '',
+                   id.title,  # title
                    len(authors),
                    authors_s,
-                   isoformat(hpio.created),
-                   isoformat(hpio.updated),
-                   hpio.hasVersions,
+                   isoformat(id.created),
+                   isoformat(id.updated),
+                   id.hasVersions,
                    minad,
                    maxad,
                        ''
