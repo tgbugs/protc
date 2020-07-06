@@ -30,6 +30,13 @@
 
 ; aspect and input are the only 2 that need to lift units out
 
+(define-syntax (executor-verb stx)
+  (syntax-parse stx
+    [act:sc-cur-executor-verb
+     ;; TODO check whether the verb is know or whether we need to
+     ;; add it to a list of unspecified terms
+     #'act]))
+
 (define-syntax (actualize stx)
   (syntax-parse stx
     [thing #;(_ wut:id (~optional (~seq #:prov prov)) rest:expr ...)
