@@ -840,8 +840,11 @@ class AstGeneric(Hybrid):
         return (cls.lang_line + '\n' +
                 ''.join(sorted(repr(o)
                                for o in cls.objects.values()
-                               if o is not None and o.isAstNode and not o.hasAstParent
+                               if o is not None and o.is_protcur_lang()
                                and (not ids or o.id in ids))))
+
+    def is_protcur_lang(self):
+        return self.isAstNode and not self.hasAstParent
 
     @classmethod
     def topLevel(cls, ids=tuple()):
@@ -1144,6 +1147,7 @@ class protc(AstGeneric):
     def __new__(cls, anno, annos):
         if not hasattr(cls, 'pyru'):
             from pysercomb.pyr import units as pyru
+            pyru.Hyp.bindImpl(None, HypothesisAnno=cls.byId)
             cls.pyru = pyru
 
         self = super().__new__(cls, anno, annos)
@@ -1158,6 +1162,14 @@ class protc(AstGeneric):
             return "'room-temperature"
         else:
             return self._value_escape(self.value)
+
+    def asPython(self):
+        """ generate the protcur expression for this node
+            and parse it node back to python """
+        if self.isAstNode:
+            return self.pyru.RacketParser(repr(self))
+        else:
+            pass  # TODO ?
 
     def parameter(self):
         success, v, rest = getattr(self, '_parameter', (None, None, None))  # memoization of the parsed form
