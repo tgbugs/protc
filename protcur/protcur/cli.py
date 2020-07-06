@@ -27,15 +27,17 @@ class Options(clif.Options):
 
 
 class Main(clif.Dispatcher):
+
     def _output(self):
         type_ =self.options.output_type
         fmt = self.options.output_format
+        partition = lambda o: o.uri_api_int, o.uri_normalized  # TODO need the parition functions e.g. for per document
         if fmt == 'html':
             ast = protc
             join = ast._repr_join.replace('\n', '<br>\n').join
             selector = dict(
                 lang = lambda o: o.isAstNode and not o.hasAstParent,
-                top = lambda o: o.isAstNode and not o.hasAstParent and o.astType in ast._topLevel,
+                top = lambda o: o.is_top_level(),
                 flat = lambda o: o.isAstNode,
                 need = lambda o: o.isAstNode and not o.needsParent,
             )[type_]

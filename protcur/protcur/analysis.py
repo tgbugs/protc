@@ -47,10 +47,12 @@ def get_hypothesis_local(uri):
         _known_extensions[pp.stem] = pp.suffix
         return pp.stem
 
+
 HLPREFIX = '://hypothesis-local.olympiangods.org/'
 def hypothesis_local(hln, s=True):
     # FIXME log.warning on hln not in _known_extensions
     return ('https' if s else 'http') + HLPREFIX + hln + _known_extensions.get(hln, '.pdf')
+
 
 def extract_links_from_markdown(text):
     def doline(line):
@@ -76,6 +78,7 @@ def extract_links_from_markdown(text):
 def getUri(anno):
     return anno._anno.uri if isinstance(anno, HypothesisHelper) else anno.uri
 
+
 def citation_triples(annos, all=False):
     p = RFU
     for anno in annos:
@@ -88,6 +91,7 @@ def citation_triples(annos, all=False):
                     o = get_hypothesis_local(url)
                     o = o if o else url
                     yield s, p, o
+
 
 def citation_tree(annos, html_head='', all=False):
     t = citation_triples(annos, all)
@@ -125,6 +129,7 @@ def citation_tree(annos, html_head='', all=False):
     else:
         return None, None
 
+
 def papers(annos):
     idents = {}
 
@@ -157,6 +162,7 @@ def papers(annos):
 
     return idents
 
+
 def statistics(annos):
     stats = {}
     for anno in annos:
@@ -166,6 +172,7 @@ def statistics(annos):
         stats[hl] += 1
 
     return stats
+
 
 def ast_statistics(ast):
     stats = {}
@@ -177,6 +184,7 @@ def ast_statistics(ast):
             stats[hl] += 1
 
     return stats
+
 
 def splitLines(text):
     for line in text.split('\n'):
@@ -819,40 +827,47 @@ class AstGeneric(Hybrid):
         return self._value_escape(self.value)
 
     @classmethod
-    def parsed(cls):
+    def parsed(cls, ids=tuple()):
         return (cls.lang_line + '\n' +
                 ''.join(sorted(repr(o)
                                for o in cls.objects.values()
-                               if o is not None and o.isAstNode)))
+                               if o is not None and o.isAstNode
+                               and (not ids or o.id in ids))))
 
     @classmethod
-    def protcurLang(cls):
+    def protcurLang(cls, ids=tuple()):
         """ A clean output for consumption by #lang protc/ur """
         return (cls.lang_line + '\n' +
                 ''.join(sorted(repr(o)
                                for o in cls.objects.values()
-                               if o is not None and o.isAstNode and not o.hasAstParent)))
+                               if o is not None and o.isAstNode and not o.hasAstParent
+                               and (not ids or o.id in ids))))
 
     @classmethod
-    def topLevel(cls):
+    def topLevel(cls, ids=tuple()):
         return (cls.lang_line + '\n' +
                 ''.join(sorted(repr(o) for o in cls.objects.values()
-                               if o is not None and
-                               o.isAstNode and
-                               not o.hasAstParent and
-                               o.astType in cls._topLevel)))
+                               if o is not None and o.is_top_level()
+                               and (not ids or o.id in ids))))
+
+    def is_top_level(self):
+        return (self.isAstNode and
+                not self.hasAstParent and
+                self.astType in self._topLevel)
 
     @classmethod
-    def flatall(cls):
+    def flatall(cls, ids=tuple()):
         return (cls.lang_line + '\n' +
                 ''.join(sorted(repr(o) for o in cls.objects.values()
-                               if o is not None and o.isAstNode)))
+                               if o is not None and o.isAstNode
+                               and (not ids or o.id in ids))))
 
     @classmethod
-    def parentneed(cls):
+    def parentneed(cls, ids=tuple()):
         return (cls.lang_line + '\n' +
                 ''.join(sorted(repr(o) for o in cls.objects.values()
-                               if o is not None and o.needsParent)))
+                               if o is not None and o.needsParent
+                               and (not ids or o.id in ids))))
 
     @property
     def astType(self):

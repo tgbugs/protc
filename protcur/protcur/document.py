@@ -116,6 +116,19 @@ class Annotation(hyp.HypothesisAnnotation):
             return self.slug_tail
 
     @property
+    def uri_api_int(self):
+        if self.is_protocols_io():
+            try:
+                return self._pio.uri_api_int
+            except idlib.exc.RemoteError as e:
+                try:
+                    return self._pio.identifier.uri_api_int
+                except:
+                    # usually shouldn't happen if we start from a private id
+                    # unless the whole protocol has been deleted
+                    pass
+
+    @property
     @idlib.utils.cache_result
     def slug_tail(self):
         """ The set of chars following the final =-= in a protocols.io URI. """
@@ -237,7 +250,7 @@ class AnnoCounts:
 class IdNormalization:
     """ number of unique documents for a set of annotations using certain criteria """
 
-    def __init__(self, hypothesis_helpers):
+    def __init__(self, hypothesis_helpers):  # FIXME this should take a pool !!!
         self.hhs = hypothesis_helpers
 
     @idlib.utils.cache_result
@@ -273,13 +286,21 @@ class IdNormalization:
 
     @idlib.utils.cache_result
     def _uri_humans(self):
-        urings = defaultdict(list)
+        urs = defaultdict(list)
         for anno in self.hhs:  # FIXME apparently this is what is eating the memory !??!!
-            slugs[anno.uri_normalized].append(anno)
-        return dict(slugs)
+            urs[anno.uri_normalized].append(anno)
+        return dict(urs)
+
+    @idlib.utils.cache_result
+    def _uri_api_ints(self):
+        idints = defaultdict(list)
+        for anno in self.hhs:  # FIXME apparently this is what is eating the memory !??!!
+            idints[anno.uri_api_int].append(anno)
+        return dict(idints)
 
     def slug_rows(self):
         yield ('slug',
+               'id',
                'uri',
                'anno count',
                'private',
@@ -326,6 +347,7 @@ class IdNormalization:
             authors_s = '|'.join(authors)
 
             yield (slug,
+                   id.data()['id'],
                    hpio.asStr(),
                    len(annos),
                    private.asStr() if private else '',
