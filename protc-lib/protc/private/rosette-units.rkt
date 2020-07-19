@@ -451,3 +451,243 @@ This function should be wrapped with make-func-safe"
 ;(sym kg)
 (solve-N #:N (sym N) #:kg 10 #:m 300 #:s 3)
 (solve-N #:kg 100 #:m 300 #:s 3)
+
+(module+ new
+  ;; given a single equation written as an s-expression
+  ;; automatically generate the define-symbolics and the asserts
+  ;; the symbolic defines need to be qualified and matched to the individual
+  ;; real things to which they are bound otherwise they are assumed to be
+  ;; the same quantity
+
+  ;; the other issue is that we might have to do multiple dispatch ...
+  '((solution ml)
+    (subject kg)
+    (performance h)
+    (/ (/ ml kg) h)  ; need to check for cases where there are multiple instances of the same unit
+    (/ (/ volume mass) duration)  ; would be nice to specify these equations by dimension and specialize to units ...
+    (ml/k/h)
+    )
+
+  (define-symbolic volume real?)
+  (define-symbolic mass real?)
+  (define-symbolic duration real?)
+  (define-symbolic invariant real?)  ; simpler than constructing the equation-name every time
+  #;
+  (define-symbolic volume/mass/duration real?)
+  ; I don't think we can lift to dimensions here ... maybe rosette can IF we specify the base system (e.g. mgs)
+  ; wrong, we can, because the dimensional relationship is what matters in here, the units
+  ; are tracked by the caller and this function doesn't have to know anything about them
+  #;
+  (define-symbolic ml/kg/h real?)
+  (clear-asserts!)
+  ; 30 ml/kg/hour -> how many ml in 3 hours for 100kg? (* 30 3 100) = 9000ml = 9L
+  #;
+  (assert (= 30 ml/kg/h))  ; FIXME vs volume/mass/duration n I don't think we can
+
+  ; dimensional
+  ;(assert (< 0 volume))
+  ;(assert (< 0 mass))
+  ;(assert (< 0 duration))
+  (assert (and (< 0 volume) (< 0 mass) (< 0 duration) (< 0 invariant)))
+  (assert (= invariant (/ (/ volume mass) duration)))
+  #;
+  (assert (= volume/mass/duration (/ (/ volume mass) duration)))
+
+
+  (define-symbolic solution-ml real?)
+  (define-symbolic subject-kg real?)
+  (define-symbolic performance-h real?)  ; it will always be step/performance right? so could be implicit? well no there is hours / day
+
+  #;
+  (assert (= 30 volume/mass/duration))
+
+  (assert (= invariant 30))
+  (assert (= volume solution-ml))
+  (assert (= mass subject-kg))
+  (assert (= duration performance-h))
+  ;(assert (= ml/kg/h (/ (/ solution:ml subject:kg) performance:h)))
+  ;(assert (= ml/kg/h (/ (/ volume mass) duration)))
+  (model (solve (assert (and (= subject-kg 100) (= performance-h 3)))))
+  )
+
+(module helper racket/base
+  (require (only-in racket/list flatten))
+  (provide get-variables)
+  (define (get-variables equation)
+   (flatten (get-cdrs equation)))
+
+  (define (get-cdrs l)
+   ; recursively return all the cdrs
+   (cond [(null? l) l]
+         [(syntax? l) (let ([decomp (syntax-e l)])
+                        (if (list? decomp) (get-cdrs decomp) l))]
+         [(list? l) (map get-cdrs (cdr l))]
+         [#t l]))
+
+  (module+ test
+    (require rackunit)
+    (check-equal? (get-cdrs '(1 2 (3 (4 5 6) (7 8 9)))) '(2 ((5 6) (8 9))))
+    (define equation-1 '(/ (/ volume mass) duration))
+    (define equation-2 '(/ (/ volume (* mass (expt acceleration lol))) duration))
+    (get-variables equation-1)
+    (get-variables equation-2)
+    (define eqn #'(/ (/ volume (* mass (expt acceleration lol))) duration))
+    (get-variables eqn)
+    (define eqn-2 #'((= molar-mass (/ mass-atomic mol-atomic))
+                     (= mol-atomic 1)))
+    (get-variables eqn-2)
+    ))
+
+(require (for-syntax 'helper racket/pretty))
+
+(begin-for-syntax
+  (require (for-syntax syntax/parse))
+  (define-syntax (pp stx)
+    (syntax-parse stx
+      [(_ body:expr ...)
+       #'(let ([out (begin body ...)])
+           (if (syntax? out)
+               (pretty-print (syntax->datum out))
+               (pretty-print out))
+           out)])))
+
+(define-syntax (invariant-ok stx)
+  (syntax-parse stx
+    [(_ equation)
+     #:with (variable ...) (get-variables #'equation)  ; so apparently using syntax->datum on #'equation destorys everything ...
+     #:with (variable-value ...) (map gensym (syntax->datum #'(variable ...)))
+     #:with (variable-keyword ...) (map (compose string->keyword symbol->string)
+                                        (syntax->datum #'(variable ...)))
+     #'(λ (#:invariant invariant-value (~@ variable-keyword [variable-value (sym variable)]) ...)
+         (clear-asserts!)
+         (define-symbolic variable real?) ...
+         (define-symbolic equation-invariant real?)
+         (assert (and (< 0 variable) ...))
+         (assert (= equation-invariant equation))
+         (assert (and (= equation-invariant invariant-value) (= variable variable-value) ...))
+         (model (solve null))
+         )]))
+
+(define-syntax (invariant-good stx)
+  (syntax-parse stx
+    [(_ equation)
+     #:with (variable ...) (get-variables #'equation)
+     #:with (variable-value ...) (map gensym (syntax->datum #'(variable ...)))
+     #:with (variable-keyword ...) (map (compose string->keyword symbol->string)
+                                        (syntax->datum #'(variable ...))) ;; TODO check if the syntax loc is tracked
+     #;(map (λ (v) (format-id v)) (syntax->datum #'(variable ...)))
+     #'(λ (#:invariant invariant-value (~@ variable-keyword [variable-value (sym variable)]) ...)
+         (clear-asserts!)
+         (define-symbolic variable real?) ...
+         (define-symbolic equation-invariant real?)
+         (assert (and (< 0 variable) ...))
+         (assert (= equation-invariant equation))
+         (assert (and (= equation-invariant invariant-value) (= variable variable-value) ...))
+         (model (solve null))
+         )]))
+
+(define-syntax (invariant stx)
+  (syntax-parse stx
+    [(_ equation helper-assertion ...)
+     #:do
+     ((define variables (get-variables #'equation))
+      (define var-syms (map syntax-e variables))
+      (define helpers (filter (λ (h) (let ([sh (syntax-e h)])
+                                       (and #t (symbol? sh)
+                                            (not (member sh var-syms)))))
+                              (remove-duplicates
+                               (get-variables #'(no-op helper-assertion ...))
+                               (λ (a b) (equal? (syntax-e a) (syntax-e b)))
+                               )))
+      (pretty-print `(helpers: ,helpers))
+      (define var-hel (filter (compose symbol? syntax-e) (append variables helpers))))
+     #:with (variable ...) var-hel ;variables
+     ;#:with (variable ...) (append (get-variables #'equation) (get-))
+     ;#:with (hvariable ...) (get-variables #'(helper-assertion ...))
+     ;#:with (variable-value ...) (map gensym var-hel)
+     #:with (variable-value ...) (map gensym (syntax->datum #'(variable ...)))
+     #:with (variable-keyword ...) (map (compose string->keyword symbol->string)
+                                        (syntax->datum #'(variable ...))) ;; TODO check if the syntax loc is tracked
+     ; if a helper uses the same id as the main equation it will be a different syntax object so we have to strip the source
+     ;#:with (helper-matched ...) (syntax->datum #'(helper-assertion ...))
+     #;(map (λ (v) (format-id v)) (syntax->datum #'(variable ...)))
+     (pp
+     #'(λ (#:invariant invariant-value (~@ variable-keyword [variable-value (sym variable)]) ...)
+         (clear-asserts!)
+         (define-symbolic variable real?) ...
+         (define-symbolic equation-invariant real?)
+         (assert (and (< 0 variable) ...))
+         (assert helper-assertion) ... ; include helper equations that have additional useful relations
+         (assert (= equation-invariant equation))
+         (assert (and (= equation-invariant invariant-value) (= variable variable-value) ...))
+         #;
+         (model (solve null))
+         (begin0
+             (model (solve null))
+           (when #t  ; TODO are there use cases where we don't want to clear asserts?
+             (clear-asserts!))))
+     )
+     ]
+    #; ; TODO
+    [(_ (operator:id equation-invariant:id equation:expr))
+     ; allowing the user to specify the invariant id and the operator will simplify composition
+     ; there are then 3 ways we could pass values, args, kwargs, and parameters
+     ; that is going to depend on what we ultimately need/want to do with these
+     ; I think the procedures need to be stored attached to their steps/participants/inputs/outputs or similar
+     ; so that we can implement automatic conversion, NOTE that the form we have now does allow for
+     ; more effective composition and reuse and the effect has clear racket semantics
+     ; so I suggest that we retain this form, and we can then use a another macro to
+     ; implement the (invariant (<= aspect (/ a b)))
+     ; it would be really great if it were possible to compose the output functions
+     ; such that you could do (< molarity 10) instead of just (= molarity 10) but
+     ; I'm not sure that actually helps us since we basically always have to compute the upper bounds
+     #'(λ (equation-invariant)
+         (assert (operator equation-invariant equation)))]
+    ))
+
+(module+ test
+  (define dose-rate (invariant (/ (/ volume mass) duration)))
+  (dose-rate #:invariant 30 #:mass 100 #:duration 3)
+  ; the keyworded versions is a slightly more programatic api
+  ; but we should also be able to accept/process a form that
+  ; fills in the blanks ; i.e., we can use hole syntax
+  '
+  (dose-rate (= 30 (/ (/ volume 100) 3)))
+
+  ; NOTE to implement this I think we actually need to allow multiple invariants
+  ; in a single space so that (= molar-mass (/ mass mol)) can be provided as well
+  (define molarity (invariant #;(/ (* mass (/ mass-molar)#;(/ mol mass-atomic)) volume)
+                              (/ (* mass (/ mass-molar)) volume)
+                              (= mass-molar (/ mass-atomic mol-atomic))
+                              ;(= mol 1)
+                              (= mol-atomic 1)
+                              ))
+  (molarity #:invariant 100 #:mass-molar 100 #:volume 2) ; life pro-tip: don't try to make a 100M solution out of something that weighs 2g/mol :D 20 kiols of the stuff ... what is it uranium!?
+  #; ; yeah sadly can't inline this without doing the rewrite
+  (define M (invariant (/ (* mass (/ (= mass-molar
+                                        (/ mass-atomic
+                                           mol-atomic)))
+                             volume))))
+  #;
+  (M #:invariant 100 #:mass-molar 100 #:volume 2)
+  )
+
+(module+ new-simple
+  (clear-asserts!)
+
+  ; a general dose per hour relation
+  (define-symbolic volume real?)
+  (define-symbolic mass real?)
+  (define-symbolic duration real?)
+  (define-symbolic invariant real?)
+  (assert (and (< 0 volume) (< 0 mass) (< 0 duration) (< 0 invariant)))
+  (assert (= invariant (/ (/ volume mass) duration)))
+
+  ; the specialization of that can actually drop the units entirely
+  ; for interaction with this function, conversion to other units
+  ; can be handled elsewhere in a context that cares about the units
+  ; we don't care about those here, we only care about quickly solving
+  ; to return the necessary amounts of different inputs
+  (model (solve (assert (and (= invariant 30) (= mass 100) (= duration 3)))))
+
+  )
