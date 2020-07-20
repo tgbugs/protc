@@ -894,7 +894,8 @@ class AstGeneric(Hybrid):
                 return next(t for t in tags if t != 'TODO')
             else:
                 tl = ' '.join(f"'{t}" for t in sorted(tags))
-                logd.warning(f'something weird is going on with (annotation-tags {tl}) and self._order {self._order}')
+                logd.warning(f'something weird is going on with (annotation-tags {tl}) '
+                             f'and self._order {self._order}')
 
     @property
     def astValue(self):
@@ -1058,9 +1059,30 @@ class AstGeneric(Hybrid):
 
         id_ = f"'{self.id}"
         if html: id_ = color(id_)
-        prov = f"{OPEN(1)}hyp:{SPACE}{id_}{CLOSE}"
+        prov = f"#:prov{SPACE}{OPEN(1)}hyp:{SPACE}{id_}{CLOSE}"
 
-        return f'{notes}{start}{self.astType}{SPACE}{value}{SPACE}{prov}{childs}'
+        if isinstance(value, ParameterValue):
+            value.SPACE = SPACE
+
+        if (isinstance(value, ParameterValue) and
+            not value.success and not children and
+            value.v[0] == 'param:parse-failure'):
+            # invert the nodes in the graph so that the parse failure wraps
+            # we can only do this when there are no children unfortunately
+            car = value.v[0]
+            value.linePreLen += (len(car) - len(self.astType))
+            value.v = ((f"#:node-type{SPACE}'{self.astType}\n"
+                        f'{SPACE * value.linePreLen}'
+                        f"#:failed-input{SPACE}") +
+                       json.dumps(value.v[1]).replace(' ', SPACE))
+            value.rest = ''  # already in the failed input
+            # FIXME TODO do we need to bump the other line prelens?
+            # I don't think we do because this would be the end of the line (hohoho)
+        else:
+            car = self.astType
+            prov = SPACE + prov
+
+        return f'{notes}{start}{car}{SPACE}{value}{prov}{childs}'
 
 
 class protc(AstGeneric):
@@ -1149,6 +1171,7 @@ class protc(AstGeneric):
             from pysercomb.pyr import units as pyru
             pyru.Hyp.bindImpl(None, HypothesisAnno=cls.byId)
             cls.pyru = pyru
+            ParameterValue.pyru = pyru
 
         self = super().__new__(cls, anno, annos)
         return self
@@ -1190,24 +1213,34 @@ class protc(AstGeneric):
             # ignore gargabe at the start
             success = False
             front = ''
+            v_orig = None
             while cleaned and not success:
                 try:
                     _, v, rest = parameter_expression(cleaned)
+                    if v_orig is None:
+                        v_orig = v
                 except TypeError as e:
                     log.critical(f'{cleaned!r} {self.htmlLink}')
                     raise e
                 success = v[0] != 'param:parse-failure'
                 if not success:
+                    # jump one char down and try again
                     cleaned = cleaned[1:]
+
             if not success:
                 rest = cleaned_orig
+
+            if not success:
+                v = v_orig
+
             self._parameter = success, v, rest
             test_params.append((value, (success, v, rest)))
 
-        if v:
+        if v and False:
             v = self.pyru.SExpr.format_value(v, self.linePreLen)
             #v = format_value(v, self.linePreLen)#, LID=' ' * self.linePreLen)
-        return repr(ParameterValue(success, v, rest, indent=self.linePreLen))  # TODO implement as part of processing the children?
+
+        return ParameterValue(success, v, rest, linePreLen=self.linePreLen)  # TODO implement as part of processing the children?
 
     def invariant(self):
         return self.parameter()
@@ -1309,18 +1342,32 @@ class protc(AstGeneric):
 # utility
 
 class ParameterValue:
-    def __init__(self, success, v, rest, indent=1):
-        self.value = success, v, rest
-        self.indent = ' ' * indent
+    SPACE = ' '
+    def __init__(self, success, v, rest, linePreLen=1):
+        self.success = success
+        self.v = v
+        self.rest = rest
+        self.linePreLen = linePreLen
+
     def __repr__(self):
-        success, v, rest = self.value
+        success, v, rest = self.success, self.v, self.rest
+        indent = self.SPACE * self.linePreLen
+        if isinstance(v, tuple):
+            # ParameterValue.pyru set in protc.__new__
+            v = self.pyru.SExpr.format_value(v, self.linePreLen, SPACE=self.SPACE)
+
         if rest:
             rest = json.dumps(rest)  # slower but at least correct :/
-        if not success:
-            out = f'{v}\n{self.indent}{rest}'
         else:
-            out = v + (f'\n{self.indent}(rest {rest})' if rest else '')
+            rest = ''  # in the even that None shows up
+
+        if not success:
+            out = f'{v}\n{indent}{rest}'
+        else:
+            out = v + (f'\n{indent}(rest{self.SPACE}{rest})' if rest else '')
+
         return out
+
 
 test_params = []
 test_input = []
