@@ -560,6 +560,12 @@ class Hybrid(HypothesisHelper):
             yield from self._get_children_ids(self._children_text)
 
     @property
+    def rchildren(self):
+        for child in self.children:
+            yield child
+            yield from child.children
+
+    @property
     def children(self):  # TODO various protc:implied- situations...
         #if anyMembers(self.tags, *('protc:implied-' + s for s in ('input', 'output', 'aspect'))):  # FIXME hardcoded fix
             #if self.parent is None:
@@ -1205,6 +1211,7 @@ class protc(AstGeneric):
             if value == '':  # breaks the parser :/
                 return ''
             cleaned = value.strip()
+            cleaned = value.replace('\xA0', ' ')
             for child in self.children:  # TODO
                 if child.astType == 'protc:unit':
                     cleaned += child.value
