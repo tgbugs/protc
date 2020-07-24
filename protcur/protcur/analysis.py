@@ -380,6 +380,19 @@ class Hybrid(HypothesisHelper):
 
     @property
     def value(self):
+        value = self._value()
+        # normalization
+        remove = '\u201c', '\u201d', '\u2019'
+        for r in remove:
+            value = value.replace(r, '')
+
+        # HYPHEN MY OLD ENEMEY I SEE WE MEET AGAIN
+        value = (value
+                 .replace('\u2010', '-'))
+
+        return value
+
+    def _value(self):
         for reply in self.replies:
             correction = reply.text_correction('value')
             if correction:
