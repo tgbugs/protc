@@ -121,12 +121,9 @@ class Annotation(hyp.HypothesisAnnotation):
             try:
                 return self._pio.uri_api_int
             except idlib.exc.RemoteError as e:
-                try:
-                    return self._pio.identifier.uri_api_int
-                except:
-                    # usually shouldn't happen if we start from a private id
-                    # unless the whole protocol has been deleted
-                    pass
+                # usually shouldn't happen if we start from a private id
+                # unless the whole protocol has been deleted
+                pass
 
     @property
     @idlib.utils.cache_result
