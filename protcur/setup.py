@@ -70,10 +70,10 @@ try:
           install_requires=[
               'flask',
               'htmlfn',
-              'hyputils>=0.0.7',
+              'hyputils>=0.0.8',
               'idlib>=0.0.1.dev7',
               'Markdown',
-              'pyontutils>=0.1.24',
+              'pyontutils>=0.1.25',
               'pysercomb>=0.0.7',
           ],
           extras_require={'dev':['pytest-cov', 'wheel'],
