@@ -68,6 +68,8 @@
          "Steps that reference a schematic or drawing, these may be labeled and return names")
 (tag-doc 'protc:delegated-instructions 'ilxtr:executorSemantics
          "Similar to `protc:executor-verb` but usually operating at a higher level, instructions given without enough background or context since the executor is expected to know what they mean")
+(tag-doc 'protc:executor '()
+         "")
 (tag-doc 'protc:executor-verb 'ilxtr:executorSemantics
          "error: actions without enough detailed instructions to be executed, might be described elsewhere, however the person running the protocol is expected to know what this means.")
 (tag-doc 'protc:experiment-logic '(ilxtr:deprecatedTag)
@@ -101,7 +103,7 @@
          "Used to refer to inputs in contexts where there is a generic input such as 'video camera' along with the execution trace information about the exact input. It is not clear whether these should simply be treated as inputs for unabstracted protocols, or whether they should be treated as provenance information in the context of a paper. e.g. as protc-prov:input which seems like a better option, but would probably complicate the parsing. Regardless we need a way to bind protc:input -> protc:prov:input for the purposes of the tagging workflow.")
 (tag-doc 'protc:internal-step 'ilxtr:deprecatedTag
          "The distinction between internal and top level steps is not meaningful when you can call functions inside other functions.")
-(tag-doc 'protc:invariant 'ilxtr:parameter
+(tag-doc 'protc:invariant 'ilxtr:constraint
          "Numbers dependent on the procedure, mostly ratios/percentages, not directly measureable. Actualizing an invariant is more complex than actualizing a `protc:parameter*` and will generally involve the construction of a number of `protc:parameter*`s")
 (tag-doc 'protc:measure '()
          "")
@@ -133,7 +135,7 @@
          "Description of the structure of the information to be saved (e.g. neurolucida in (x, y, z, d) out) [THIS IS CONFUSING BECAUSE IT IS FOR NUMBERS NOT PHYSICAL OBJECTS?] [3-16-18: replace with protc:aspect or protc:parameter or protc:result]")
 (tag-doc 'protc:parameter '(ilxtr:deprecatedTag)
          "Use `protc:symbolic-input` instead.")
-(tag-doc 'protc:parameter* 'ilxtr:parameter
+(tag-doc 'protc:parameter* 'ilxtr:constraint
          "Numbers or specific measurements/locations used for lab settings, directly measureable. Often have units or are 'counts' of things")
 (tag-doc 'protc:parameterized-values '()
          "")
@@ -141,6 +143,10 @@
          "")
 (tag-doc 'protc:fuzzy-quantity '(ilxtr:TODO)
          "Fuzzy quantities are quantities that have some meaning, but that are not strictly quantified. Some examples are 'room temperature', and 'overnight'. [At the moment this is only used internally, it is not currently used in the curation workflow")
+(tag-doc 'protc:process '()
+         "")
+(tag-doc 'protc:qualifier '()
+         "")
 (tag-doc 'protc:referenced-for-use-by '()
          "")
 (tag-doc 'protc:references-for-evidence 'ilxtr:citationTag

@@ -31,7 +31,7 @@ class Main(clif.Dispatcher):
     def _output(self):
         type_ =self.options.output_type
         fmt = self.options.output_format
-        partition = lambda o: o.uri_api_int, o.uri_normalized  # TODO need the parition functions e.g. for per document
+        partition = (lambda o: (o.uri_api_int, o.uri_normalized))  # TODO need the parition functions e.g. for per document
         if fmt == 'html':
             ast = protc
             join = ast._repr_join.replace('\n', '<br>\n').join

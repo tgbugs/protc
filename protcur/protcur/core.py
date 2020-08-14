@@ -182,7 +182,7 @@ def readTagDocs():
     success, docs, rest = racket.tag_docs(text)
     if rest:
         raise SyntaxError(f'tag docs did not parse everything!\n{rest}')
-    tag_lookup = {tag:TagDoc(doc, parent) for _, tag, parent, doc in docs}
+    tag_lookup = {tag[1]:TagDoc(doc, parent) for _, tag, parent, doc in docs}
     return tag_lookup
 
 tag_prefixes = 'ilxtr:', 'protc:', 'mo:', 'annotation-'

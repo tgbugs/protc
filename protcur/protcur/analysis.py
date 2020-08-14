@@ -11,6 +11,7 @@ import re
 import ast
 import json
 import inspect
+from types import MappingProxyType
 from pathlib import PurePath, Path
 from datetime import datetime
 from itertools import chain
@@ -26,6 +27,7 @@ from pysercomb.parsers import racket, units
 from hyputils.hypothesis import HypothesisAnnotation, HypothesisHelper, idFromShareLink
 from protcur.core import linewrap, color_pda, log, logd
 from protcur.config import __units_folder__ as units_folder
+
 try:
     breakpoint
 except NameError:
@@ -213,6 +215,7 @@ class Hybrid(HypothesisHelper):
     namespace = None  # the tag prefix for this ast, ONE PREFIX PER CLASS, use NamespaceTranslators for multiple
     tag_translators = {}
     additional_namespaces = {}
+    _map_tags = MappingProxyType({})
     objects = {}  # TODO updates
     _tagIndex = {}
     _replies = {}
@@ -434,6 +437,12 @@ class Hybrid(HypothesisHelper):
 
         out = []
         for tag in self._tags:
+            # note that tag being in map tags is not exclusive
+            # use case is .e.g being able to run and old and new
+            # tag at the same time during a tag renaming cycle
+            if tag in self._map_tags:
+                out.append(self._map_tags[tag])
+
             if tag not in skip_tags:
                 out.append(tag)
 
@@ -1184,6 +1193,12 @@ class protc(AstGeneric):
         'several thousand':('protc:fuzzy-quantity', '"several thousand"', '"ammount"'),  # FIXME vs count
         'unk':('protc:fuzzy-quantity', '"unknown"', '"unknown"'),
     }
+    _map_tags = {'sparc:Tool': 'protc:input',
+                 'sparc:Reagent': 'protc:input',
+                 'sparc:Sample': 'protc:input',
+                 #'sparc:OrganismSubject': '',
+                 'sparc:AnatomicalLocation': 'protc:black-box',
+                 }
 
     def __new__(cls, anno, annos):
         if not hasattr(cls, 'pyru'):
@@ -1459,6 +1474,7 @@ def test_annos(annos):
                                        #'text':'0.6 x 10^7 / mm^3',
                                        'tags':['protc:parameter*']}))
 
+
 def main():
     from time import sleep, time
     from pprint import pformat
@@ -1466,7 +1482,6 @@ def main():
     from hyputils.hypothesis import group, group_to_memfile
     from protcur.analysis import protc, Hybrid, HypothesisHelper  # __main__ bug hack
     from protcur.core import annoSync
-    from protcur import namespace_mappings as nm
 
     try:
         from desc.prof import profile_me
@@ -1611,6 +1626,10 @@ def _more_main():
 
     breakpoint()
     # HOW DO I KILL THE STREAM LOOP!??! << answered, though quite a bit more complicated than expected
+
+## end imports
+
+#from protcur import namespace_mappings as nm
 
 if __name__ == '__main__':
     main()
