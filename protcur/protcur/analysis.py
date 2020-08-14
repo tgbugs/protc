@@ -208,6 +208,7 @@ class Hybrid(HypothesisHelper):
         from hypothes.is annotations. """
     control_tags = tuple()  # tags controlling how tags from a reply affect the parent's tags
     prefix_skip_tags = tuple()  # pattern for tags that should not be exported to the ast
+    ignore_tags = tuple()  # drop these tags if encountered
     prefix_ignore_unless_mapped = tuple()  # pattern for tags that should be ignored unless mapped
     text_tags = tuple()  # tags controlling how the text of the current affects the parent's text
     children_tags = tuple()  # tags controlling how links in the text of the parent annotation are affected
@@ -401,8 +402,11 @@ class Hybrid(HypothesisHelper):
             if correction:
                 return correction
 
-        if anyMembers(self.tags, *('protc:implied-' + s
-                                   for s in ('input', 'output', 'aspect', 'section', 'vary'))):  # FIXME hardcoded fix
+        if anyMembers(
+                self.tags,
+                *('protc:implied-' + s
+                  # FIXME hardcoded fix
+                  for s in ('input', 'output', 'aspect', 'section', 'vary'))):
             value, children_text = self._fix_implied_input()
             if value:
                 return value
@@ -422,7 +426,7 @@ class Hybrid(HypothesisHelper):
 
     @property
     def tags(self):
-        skip_tags = []
+        ignore_tags = list(self.ignore_tags)
         add_tags = []
         for reply in self.replies:
             corrections = reply.tag_corrections
@@ -431,9 +435,9 @@ class Hybrid(HypothesisHelper):
                 if op in ('add', 'replace'):
                     add_tags.extend(corrections[1:])
                 if op == 'replace':
-                    skip_tags.extend(self._cleaned__tags)  # FIXME recursion error
+                    ignore_tags.extend(self._cleaned__tags)  # FIXME recursion error
                 elif op == 'delete':
-                    skip_tags.extend(corrections[1:])
+                    ignore_tags.extend(corrections[1:])
 
         out = []
         for tag in self._tags:
@@ -443,7 +447,7 @@ class Hybrid(HypothesisHelper):
             if tag in self._map_tags:
                 out.append(self._map_tags[tag])
 
-            if tag not in skip_tags:
+            if tag not in ignore_tags:
                 out.append(tag)
 
         # I hate python excpetions, things fail silentlty and
@@ -538,7 +542,9 @@ class Hybrid(HypothesisHelper):
             children_text = ''
         elif anyMembers(self.tags, *self.children_tags):  # FIXME this assumes all tags are :delete
             children_text = ''
-        elif any(tag.startswith('PROTCUR:') for tag in self.tags) and noneMembers(self.tags, *self.text_tags):
+        elif (any(tag.startswith('PROTCUR:')
+                  for tag in self.tags) and
+              noneMembers(self.tags, *self.text_tags)):
             # accidental inclusion of feedback that doesn't start with SKIP eg https://hyp.is/HLv_5G43EeemJDuFu3a5hA
             children_text = ''
         else:
@@ -918,8 +924,12 @@ class AstGeneric(Hybrid):
                 return next(iter(tags))
             elif len(list(self._cleaned_tags)) == 1:
                 return next(iter(self._cleaned_tags))
-            elif 'TODO' in tags and len(tags) == 2:  # FIXME remove hardcoding
-                return next(t for t in tags if t != 'TODO')
+            elif (('TODO' in tags or 'PROTCUR:review' in tags) and
+                  len(tags) == 2):  # FIXME remove hardcoding
+                return next(t for t in tags
+                            if t != 'TODO' and t != 'PROTCUR:review')
+            elif 'protc:back-box' in tags:
+                breakpoint()
             else:
                 tl = ' '.join(f"'{t}" for t in sorted(tags))
                 logd.warning(f'something weird is going on with (annotation-tags {tl}) '
@@ -983,7 +993,10 @@ class AstGeneric(Hybrid):
                 out = f"{OPEN()}circular-link no-type {OPEN(1)}cycle {cyc}{CLOSE}{CLOSE}" + CLOSE * nparens + debug
                 return out
             else:
-                log.warning(f'unhandled type for {self._repr} {self.tags}')
+                if ('ilxtr:technique' not in self.tags and
+                    'PROTCUR:feedback' not in self.tags):
+                    log.warning(f'unhandled type for {self._repr} {self.tags}')
+
                 close = CLOSE * (nparens - 1)
                 out = super().__repr__(html=html, number=number, depth=depth, nparens=0)
                 mnl = '\n' if depth == 1 else ''
@@ -1117,6 +1130,7 @@ class protc(AstGeneric):
     namespace = 'protc'
     translators = {}
     tag_translators = {}
+    ignore_tags = 'protc:process', 'protc:repeat', 'PROTCUR:review', 'protc:telos'
     additional_namespaces = {}  # filled in by the child classes
     lang_line = '#lang protc/ur'
     indentDepth = 2
@@ -1141,7 +1155,7 @@ class protc(AstGeneric):
               'output',
               'objective*',
               'order',
-              'repeat',
+              'repeat',  # XXX bad
               'implied-vary',  # TODO
               #'implied-context',  # TODO
               'implied-aspect',
@@ -1197,7 +1211,11 @@ class protc(AstGeneric):
                  'sparc:Reagent': 'protc:input',
                  'sparc:Sample': 'protc:input',
                  #'sparc:OrganismSubject': '',
-                 'sparc:AnatomicalLocation': 'protc:black-box',
+                 'sparc:AnatomicalLocation': 'protc:black-box-component',
+
+                 # FIXME any PROTCUR: tag isn't just skipped
+                 # it triggers a complete skip of the annotation
+                 'PROTCUR:review': 'TODO',
                  }
 
     def __new__(cls, anno, annos):

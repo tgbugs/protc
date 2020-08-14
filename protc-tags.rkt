@@ -154,7 +154,7 @@
 (tag-doc 'protc:references-for-use 'ilxtr:citationTag
          "Citations of other literature or research papers (author and year) that are explicitly referenced in a methods section as documentation for a protocol.")
 (tag-doc 'protc:repeat 'protc:control-flow
-         "Repeat commands or computations for a specific set of varying inputs (i.e. there should be an associated annotation that enumerates said inputs), related to `protc:substitute-input`.")
+         "Repeat commands or computations for a specific set of varying inputs (i.e. there should be an associated annotation that enumerates said inputs), related to `protc:substitute-input`. This should almost certainly be deprecated since it should be handled by protc:aspect count instead.")
 (tag-doc 'protc:result 'ilxtr:informationArtifact
          "A number generated as the result of a `protc:*measure`.")
 (tag-doc 'protc:same-reference '(ilxtr:citationTag)
