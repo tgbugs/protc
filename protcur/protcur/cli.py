@@ -1,7 +1,8 @@
 #!/usr/bin/env python3.7
 """ protcur cli
 Usage:
-    protcur export [options] <group-name> <path>
+    protcur export  [options] <group-name> <path>
+    protcur convert [options] <path-input> <path-output>
 
 Options:
     -d --debug
@@ -20,6 +21,12 @@ from protcur.analysis import protc
 
 class Options(clif.Options):
     """ wheeeeee """
+
+    @property
+    def path(self):
+        p = self._args['<path>']
+        op = self._args['<path-output>']
+        return Path(p if p else op)
 
     @property
     def __output_type(self):
@@ -51,19 +58,39 @@ class Main(clif.Dispatcher):
                            'need': 'parentneed',}[type_]
             return getattr(protc, output_name)()
 
-    def export(self):
-        from pyontutils.config import auth
-        from hyputils.hypothesis import group_to_memfile, Memoizer
+    def _from_cache(self, cache_file, group_id=None):
+        from hyputils.hypothesis import Memoizer, AnnoReader
 
-        group_id = auth.dynamic_config.secrets('hypothesis', 'group', self.options.group_name)
-        cache_file = group_to_memfile(group_id + 'protcur-cli')  # note, caching is not memoization (duh)
-        get_annos = Memoizer(memoization_file=cache_file, group=group_id)
+        if group_id is None:  # FIXME bad way to detect convert vs export
+            import json
+            with open(cache_file, 'rt') as f:
+                j = json.load(f)
+
+            group_id = j[0][0]['group']
+            j = None  # should trigger gc
+
+            get_annos = AnnoReader(memoization_file=cache_file, group=group_id)
+        else:
+            get_annos = Memoizer(memoization_file=cache_file, group=group_id)
+
         annos = get_annos()
         [protc(a, annos) for a in annos]
 
         path = Path(self.options.path)
         with open(path, 'wt') as f:
             f.write(self._output())
+
+    def export(self):
+        from pyontutils.config import auth
+        from hyputils.hypothesis import group_to_memfile
+
+        group_id = auth.dynamic_config.secrets('hypothesis', 'group', self.options.group_name)
+        cache_file = group_to_memfile(group_id + 'protcur-cli')  # note, caching is not memoization (duh)
+        self._from_cache(cache_file, group_id)
+
+    def convert(self):
+        cache_file = self.options.path_input
+        self._from_cache(cache_file)
 
 
 def main():
