@@ -1663,4 +1663,6 @@ Hrm, it would seem that there are cases where we need to be able to pass paramet
 "100x (oil immersion objective, 1.4-0.7 NA) "
 " juvenile  rat  hind-limb  somatosensory  cortex"
 "300μm"
+"≤ 10"
+"≥ 10"
 ))

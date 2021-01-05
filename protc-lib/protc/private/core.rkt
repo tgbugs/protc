@@ -108,7 +108,7 @@ or it must include time in some way, e.g. the pusar position system
 e.g. using the 3d positions and spectra of nearby stars it would be
 possible to construct a completely scalar definition of Sol, but
 the proper name function of those stars could not rely (as they do
-traditionally on their location in the sky, since that depends on
+traditionally) on their location in the sky, since that depends on
 earth's location which is the aspect of a proper name and thus
 
 --rambling--

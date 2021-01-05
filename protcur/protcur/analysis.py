@@ -390,9 +390,13 @@ class Hybrid(HypothesisHelper):
         for r in remove:
             value = value.replace(r, '')
 
-        # HYPHEN MY OLD ENEMEY I SEE WE MEET AGAIN
         value = (value
-                 .replace('\u2010', '-'))
+                 # HYPHEN MY OLD ENEMEY I SEE WE MEET AGAIN
+                 .replace('\u2010', '-')
+                 # for a terrifying time check out unicode COMBINING
+                 # and wonder how many things mishandle the case where
+                 # a string starts with one of those
+                 .replace(' \u0334', '~'))
 
         return value
 
