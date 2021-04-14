@@ -159,7 +159,7 @@
 (define fold-prefix (>> (parser-seq by (lookAhead num)) (return (cons 'fold '()))))  ; don't use endBy here it is a many0 in parsack
 (define pH (string "pH"))
 (define P (string "P"))
-(define postnatal-day (>> P (return 'postnatal-day)))
+(define postnatal-day (>> P (return 'postnatal-days)))
 (define fold-suffix (>> (parser-seq by (lookAhead (<or> $eof (<!> num)))) (return (cons 'fold '()))))  ; FIXME
 (define percent (>> (string "%") (return (cons 'percent '()))))
 (define prefix-unit-base (<or> pH postnatal-day fold-prefix))

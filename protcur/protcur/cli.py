@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.7
+#!/usr/bin/env python3
 """ protcur cli
 Usage:
     protcur export  [options] <group-name> <path>

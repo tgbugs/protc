@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.7
+#!/usr/bin/env python3
 """protcur development server
 Usage:
     protcur-server [options]

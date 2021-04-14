@@ -14,6 +14,6 @@
   )
 )
 (define units-extra-prefix
-'((P . postnatal-day)
+'((P . postnatal-days)
   )
 )
