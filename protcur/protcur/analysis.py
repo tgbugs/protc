@@ -1016,9 +1016,14 @@ class AstGeneric(Hybrid):
                                          close)
 
         self.linePreLen = self.indentDepth * (depth - 1) + len('(') + len(str(self.astType)) +  len(' ')
-        value = (self.astValue.replace(' ', SPACE).replace('\n', NL)
-                 if html else
-                 self.astValue) # astValue depends on linePreLen
+        _av = self.astValue
+        if isinstance(_av, ParameterValue) and html:
+            _av.SPACE = SPACE
+            _av.NL = NL
+
+        value = (_av.replace(' ', SPACE).replace('\n', NL)
+                 if html and not isinstance(_av, ParameterValue) else
+                 _av) # astValue depends on linePreLen
         if html:
             value = color(value, count=1)
         self.linePreLen += self.indentDepth  # doing the children now we bump back up
@@ -1104,7 +1109,9 @@ class AstGeneric(Hybrid):
 
         id_ = f"'{self.id}"
         if html: id_ = color(id_)
-        prov = f"#:prov{SPACE}{OPEN(1)}hyp:{SPACE}{id_}{CLOSE}"
+        _pk = '#:prov'
+        if html: _pk = color(_pk)
+        prov = f"{_pk}{SPACE}{OPEN(1)}hyp:{SPACE}{id_}{CLOSE}"
 
         if isinstance(value, ParameterValue):
             value.SPACE = SPACE
@@ -1399,12 +1406,33 @@ class protc(AstGeneric):
 # utility
 
 class ParameterValue:
+
+    NL = '\n'
     SPACE = ' '
+
     def __init__(self, success, v, rest, linePreLen=1):
         self.success = success
         self.v = v
         self.rest = rest
         self.linePreLen = linePreLen
+
+    def __len__(self):
+        if not hasattr(self, '_value'):
+            self._value = repr(self)
+
+        return len(self._value)
+
+    def __iter__(self):
+        if not hasattr(self, '_value'):
+            self._value = repr(self)
+
+        yield from self._value
+
+    def __getitem__(self, idx):
+        if not hasattr(self, '_value'):
+            self._value = repr(self)
+
+        return self._value[idx]
 
     def __repr__(self):
         success, v, rest = self.success, self.v, self.rest
@@ -1419,9 +1447,9 @@ class ParameterValue:
             rest = ''  # in the even that None shows up
 
         if not success:
-            out = f'{v}\n{indent}{rest}'
+            out = f'{v}{self.NL}{indent}{rest}'
         else:
-            out = v + (f'\n{indent}(rest{self.SPACE}{rest})' if rest else '')
+            out = v + (f'{self.NL}{indent}(rest{self.SPACE}{rest})' if rest else '')
 
         return out
 
