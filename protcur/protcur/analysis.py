@@ -425,6 +425,8 @@ class Hybrid(HypothesisHelper):
             return self.exact
         elif self._type == 'reply':
             return ''
+        elif self._type == 'pagenote':
+            return ''
         else:
             raise ValueError(f'{self.shareLink} {self.id} has no text and no exact and is not a reply.')
 

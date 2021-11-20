@@ -94,6 +94,11 @@ class Main(clif.Dispatcher):
                 idints.update(nidn.normalized())
 
             pidints = {k:[protc.byId(a.id) for a in v] for k, v in idints.items()}
+            # constrainted process that produced TODO include in generation for protcur.ttl?
+            dsids = {k:[t for p in v if p._anno.is_page_note()
+                        for t in p.tags if 'dataset:' in t]
+                     for k, v in pidints.items()}
+
             def fmt(o):  # FIXME this should have been accounted for in repr but somehow was not
                 r = o.__repr__(depth=2)
                 if r.startswith('\n'):
@@ -107,13 +112,18 @@ class Main(clif.Dispatcher):
                                       for o in v
                                       if o is not None and o.is_top_level() or o.needsParent))
             def kr(k, v):
+                if k in dsids:
+                    ds = f'\n  #:datasets ({" ".join(dsids[k])})'
+                else:
+                    ds = ''
+
                 if type(k) == str:
                     id =  k
                     hid = k
                 else:
                     id = k.asUri()
                     hid = k.uri_human.asUri()
-                return f'\n  #:id {id}\n  #:hid {hid}\n  #:anno-count {len(v)}'  # FIXME non pio ids can have () etc. in them
+                return f'\n  #:id {id}\n  #:hid {hid}\n  #:anno-count {len(v)}{ds}'  # FIXME non pio ids can have () etc. in them
 
             body = '\n'.join([
                 f'(protcur:protocol{kr(k, v)}{vr(v)}\n)'
