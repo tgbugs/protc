@@ -15,6 +15,7 @@ Options:
 
 from pathlib import Path
 from pyontutils import clifun as clif
+from protcur import document as ptcdoc
 from protcur.server import make_ast
 from protcur.analysis import protc
 
@@ -55,10 +56,11 @@ class Main(clif.Dispatcher):
             output_name = {'lang': 'protcurLang',
                            'top': 'topLevel',
                            'flat': 'flatall',
-                           'need': 'parentneed',}[type_]
+                           'need': 'parentneed',
+                           }[type_]
             return getattr(protc, output_name)()
 
-    def _from_cache(self, cache_file, group_id=None):
+    def _from_cache(self, cache_file, group_id=None, auth=None):
         from hyputils.hypothesis import Memoizer, AnnoReader
 
         if group_id is None:  # FIXME bad way to detect convert vs export
@@ -72,21 +74,64 @@ class Main(clif.Dispatcher):
             get_annos = AnnoReader(memoization_file=cache_file, group=group_id)
         else:
             get_annos = Memoizer(memoization_file=cache_file, group=group_id)
+            get_annos.api_token = auth.get('hypothesis-api-key')
 
-        annos = get_annos()
+        # also in sparcur pipelines
+        annos = [ptcdoc.Annotation(a) for a in get_annos()]
+        idn = ptcdoc.IdNormalization(annos)
+        protc.reset(reset_annos_dict=True)  # apparently we have to do this here ?? stale data or something?
+
         [protc(a, annos) for a in annos]
 
         path = Path(self.options.path)
-        with open(path, 'wt') as f:
-            f.write(self._output())
+
+        if self.options.output_format == 'prot':
+            idints = idn._uri_api_ints()
+
+            if None in idints:
+                nones = idints.pop(None)
+                nidn = ptcdoc.IdNormalization(nones)
+                idints.update(nidn.normalized())
+
+            pidints = {k:[protc.byId(a.id) for a in v] for k, v in idints.items()}
+            def fmt(o):  # FIXME this should have been accounted for in repr but somehow was not
+                r = o.__repr__(depth=2)
+                if r.startswith('\n'):
+                    return '\n  ' + r[1:]
+                if r.startswith (';'):
+                    return '\n  ' + r.replace('\n(', '(')  # \n  \n( is present in this case
+                else:
+                    raise NotImplementedError(r)
+            def vr(v):
+                return ''.join(sorted(fmt(o)
+                                      for o in v
+                                      if o is not None and o.is_top_level() or o.needsParent))
+            def kr(k, v):
+                if type(k) == str:
+                    id =  k
+                    hid = k
+                else:
+                    id = k.asUri()
+                    hid = k.uri_human.asUri()
+                return f'\n  #:id {id}\n  #:hid {hid}\n  #:anno-count {len(v)}'  # FIXME non pio ids can have () etc. in them
+
+            body = '\n'.join([
+                f'(protcur:protocol{kr(k, v)}{vr(v)}\n)'
+                for k, v in sorted(pidints.items(), key=lambda kv: len(kv[1]))])
+            with open(path, 'wt') as f:
+                f.write(body)
+
+        else:
+            with open(path, 'wt') as f:
+                f.write(self._output())
 
     def export(self):
-        from pyontutils.config import auth
+        from protcur.config import auth
         from hyputils.hypothesis import group_to_memfile
 
         group_id = auth.dynamic_config.secrets('hypothesis', 'group', self.options.group_name)
         cache_file = group_to_memfile(group_id + 'protcur-cli')  # note, caching is not memoization (duh)
-        self._from_cache(cache_file, group_id)
+        self._from_cache(cache_file, group_id, auth)
 
     def convert(self):
         cache_file = self.options.path_input

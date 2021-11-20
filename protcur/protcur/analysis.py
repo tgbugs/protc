@@ -1193,6 +1193,10 @@ class protc(AstGeneric):
                                              '*measure',
                                              'symbolic-measure',
                                              'black-black-component',
+                                             'executor-verb',
+                                             'references-for-use',
+                                             'references-for-data',
+                                             'references-for-evidence',
                                             ))
     _needParent = tuple('protc:' + t for t in ('aspect',
                                                'black-box-component',
