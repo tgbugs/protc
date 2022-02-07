@@ -396,10 +396,10 @@ class SparcMI(AstGeneric, metaclass=GraphOutputClass):
     def registry(cls):
         uris = set(a.uri for a in SparcMI if 'rcont' not in a.uri)  # rcont remove temp iris w/ bad annos
 
-        data, grid, cells_index = get_sheet_values(cls.dfr, 'Data', False)
+        data, data_formula, grid, cells_index = get_sheet_values(cls.dfr, 'Data', False)
         ml = max(len(r) for r in data)
         normalized = [r + ([''] * (ml - len(r))) for r in data]
-        prot, pgrid, pcells_index = get_sheet_values(cls.dfr, 'Protocols', False)
+        prot, prot_formula, pgrid, pcells_index = get_sheet_values(cls.dfr, 'Protocols', False)
         pml = max(len(r) for r in prot)
         pnorm = [r + ([''] * (pml - len(r))) for r in prot]
 
