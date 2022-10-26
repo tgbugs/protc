@@ -1,3 +1,4 @@
+import base64, uuid
 from collections import defaultdict
 from urllib.parse import urlparse
 import idlib
@@ -7,11 +8,34 @@ from .core import log
 #from desc.prof import profile_me
 
 
+class ParentDeletedError(Exception):
+    """ SIGH bad design yet again """
+
+
 def cleandoc(doc):
     return ' '.join(doc.split())
 
 
 class Pool(hyp.AnnotationPool):
+
+    def __init__(self, annos=None, cls=hyp.HypothesisAnnotation):
+        super().__init__(annos, cls)
+        # FIXME possibly subtype this to HtmlPool ??
+        self._oid_index = {
+            a._row['extra']['id_original']:a for a in annos
+            if 'extra' in a._row and 'id_original' in a._row['extra']}
+
+    def add(self, annos):
+        super().add(annos)
+        for a in annos:
+            if 'extra' in a._row and 'id_original' in a._row['extra']:
+                self._oid_index[a._row['extra']['id_original']] = a
+
+    def byOriginalId(self, id_original):
+        try:
+            return self._oid_index[id_original]
+        except KeyError:
+            pass
 
     def bySlugTail(self, slug_tail):
         # FIXME index these
@@ -19,16 +43,59 @@ class Pool(hyp.AnnotationPool):
             if o.slug_tail == slug_tail:
                 yield o
 
+    def clone_to(self, pool, h):
+        """ clone (with modifications) to new pool posting as user to group"""
+        for anno in self._annos:
+            new = pool.byOriginalId(anno.id)
+            if new is not None:
+                # TODO detect if there have been changes
+                log.info(f'already cloned as {new}')
+
+            elif anno.is_protocols_io():
+                try:
+                    payload = anno.html_payload(h.username, h.group, pool)
+                except ParentDeletedError as e:
+                    log.warning(e)
+                    # don't sync replies that have no parent, they will be invisible
+                    continue
+
+                try:
+                    if False:  # testing
+                        resp = h.post_annotation(payload)
+                        blob = resp.json()
+                    else:  # XXX testing
+                        blob = {k:v for k, v in payload.items()}
+                        blob['id'] = base64.urlsafe_b64encode(uuid.uuid4().bytes)[:-2].decode()
+                        blob['created'] = 'now'
+                        blob['updated'] = 'now'
+
+                    new = anno.__class__(blob)
+                    pool.add([new])
+                except Exception as e:
+                    cs = list(self.children(anno))
+                    if cs:
+                        raise e
+                    raise e
+                    # check if there are children
+
     def docs(self):
         def key(r):
             return ['' if c is None else c for c in r]
+
+        def fib(o):
+            # at some point we made these fatal by default
+            try:
+                return o.uri_bound
+            except (idlib.exceptions.IdDoesNotExistError, idlib.exceptions.NotAuthorizedError) as e:
+                log.error(e)
+                return None
 
         report = sorted(set(
             [(o.slug_tail,
               o.private_id,
               o.uri_normalized,
               o.uri_original,
-              o.uri_bound,
+              fib(o),
               o)
              for o in self._annos]),
                       key=key)
@@ -126,6 +193,16 @@ class Annotation(hyp.HypothesisAnnotation):
                 pass
 
     @property
+    def uri_html(self):
+        if self.is_protocols_io():
+            try:
+                return self._pio.uri_human_html
+            except idlib.exc.RemoteError as e:
+                # usually shouldn't happen if we start from a private id
+                # unless the whole protocol has been deleted
+                pass
+
+    @property
     @idlib.utils.cache_result
     def slug_tail(self):
         """ The set of chars following the final =-= in a protocols.io URI. """
@@ -173,6 +250,91 @@ class Annotation(hyp.HypothesisAnnotation):
 
     def include_for_paper(self, pool):
         return self.has_data() and self.has_protc_or_reply(pool)
+
+    @property
+    def html_target(self):
+        # FIXME have to do this all in order so that the parents will already exist!
+        target = {'source': self.uri_html.asUri()}
+        selector = [s for s in self.selectors if s['type'] == 'TextQuoteSelector'],  # XXX watch out for multi target case
+        if selector:
+            target['selector'] = selector
+
+        return [target]
+
+    @property
+    def html_document(self):
+        doc = {
+            'title': [self.doc_title],
+        }
+
+        try:
+            doi = self.uri_api_int.doi
+        except idlib.exceptions.RemoteError as e:
+            log.error(e)
+            doi = None
+
+        if doi is not None:
+            doc['dc'] = {
+                'identifier': [
+                    doi.identifier.curie,
+                    doi.identifier.suffix,  # handle form
+                ]}
+
+        uh = self.uri_api_int.uri_human.asUri()  # matches what the html page itself says
+        if uh is not None:
+            doc['link'] = [
+                {'href': uh,
+                 'rel': 'canonical',}]
+
+        return doc
+
+    @property
+    def html_extra(self):
+        return {
+            'document': self.html_document,
+            'id_original': self.id,
+            'updated_original': self.updated,  # needed for change detection
+            # we don't need the group id embedded
+            # nor do we want to risk leaking it
+         }
+
+    def html_references(self, html_pool):
+        parents = [html_pool.byOriginalId(ref)
+                   for ref in self.references]
+
+        for p in parents:
+            if p is None:
+                raise ParentDeletedError(f'parent deleted for {self}')
+
+        return [p.id for p in parents]
+
+    def html_payload_less_ugp(self, pool):
+        # FIXME parent for replies!
+        out = {
+            'uri': self.uri_html.asUri(),
+            'target': self.html_target,
+            'tags': self.tags,
+            'text': self.text,
+            'exact': self.exact,
+            'document': self.html_document,
+            'extra': self.html_extra,
+        }
+        if self.references:
+            out['references'] = self.html_references(pool)  # FIXME pool required
+
+        return out
+
+    def html_payload(self, user, group, pool):
+        return {
+            **self.html_payload_less_ugp(pool),
+            'user': 'acct:' + user + '@hypothes.is',
+            'group': group,
+            'permissions': {
+                "read": ['group:' + group],
+                "update": ['acct:' + user + '@hypothes.is'],
+                "delete": ['acct:' + user + '@hypothes.is'],
+                "admin":  ['acct:' + user + '@hypothes.is'],
+            }}
 
 
 class AnnoCounts:
