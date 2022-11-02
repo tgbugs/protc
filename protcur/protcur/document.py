@@ -5,6 +5,7 @@ import idlib
 from pyontutils.utils import isoformat
 from hyputils import hypothesis as hyp
 from .core import log
+from .analysis import extract_links_from_markdown
 #from desc.prof import profile_me
 
 
@@ -43,15 +44,30 @@ class Pool(hyp.AnnotationPool):
             if o.slug_tail == slug_tail:
                 yield o
 
-    def clone_to(self, pool, h):
+    @property
+    def topological_annos(self):
+        """ api default order works for refereces/replies but not parent/child
+        """
+        # XXX text parent cycles must be stricly forbidden otherwise it is
+        # impossible to clone between groups (so far this has never happened)
+        # because it is extremely unlikely that the text of an annotation would
+        # ever contain a shared link pointing to a reply
+        tas = toposort(self)
+        return tas
+
+    def clone_to(self, pool, h, *, test=True):
         """ clone (with modifications) to new pool posting as user to group"""
-        for anno in self._annos:
+        for anno in self.topological_annos:
             new = pool.byOriginalId(anno.id)
             if new is not None:
                 # TODO detect if there have been changes
                 log.info(f'already cloned as {new}')
 
             elif anno.is_protocols_io():
+                if not anno.has_data():
+                    log.warning(f'skipping cases where we have no data {anno.uri_html.asStr()}')
+                    continue
+
                 try:
                     payload = anno.html_payload(h.username, h.group, pool)
                 except ParentDeletedError as e:
@@ -60,7 +76,7 @@ class Pool(hyp.AnnotationPool):
                     continue
 
                 try:
-                    if False:  # testing
+                    if not test:
                         resp = h.post_annotation(payload)
                         blob = resp.json()
                     else:  # XXX testing
@@ -72,7 +88,7 @@ class Pool(hyp.AnnotationPool):
                     new = anno.__class__(blob)
                     pool.add([new])
                 except Exception as e:
-                    cs = list(self.children(anno))
+                    cs = list(self.replies(anno.id))
                     if cs:
                         raise e
                     raise e
@@ -203,6 +219,18 @@ class Annotation(hyp.HypothesisAnnotation):
                 pass
 
     @property
+    def uri_for_hypothesis(self):
+        if self.is_protocols_io():
+            try:
+                # XXX protocols.io braindead link rel canonical issues
+                # XXX combined with hypothes.is braindead anchoring issue
+                return self._pio.uri_api_int.uri_human.asUri().replace('www.', '')
+            except idlib.exc.RemoteError as e:
+                # usually shouldn't happen if we start from a private id
+                # unless the whole protocol has been deleted
+                pass
+
+    @property
     @idlib.utils.cache_result
     def slug_tail(self):
         """ The set of chars following the final =-= in a protocols.io URI. """
@@ -254,8 +282,10 @@ class Annotation(hyp.HypothesisAnnotation):
     @property
     def html_target(self):
         # FIXME have to do this all in order so that the parents will already exist!
-        target = {'source': self.uri_html.asUri()}
-        selector = [s for s in self.selectors if s['type'] == 'TextQuoteSelector'],  # XXX watch out for multi target case
+        ufh = self.uri_for_hypothesis
+        target = {'source': ufh}
+        # XXX have to use canonical because hypothes.is document iding is bad?
+        selector = [s for s in self.selectors if s['type'] == 'TextQuoteSelector']  # XXX watch out for multi target case
         if selector:
             target['selector'] = selector
 
@@ -264,7 +294,7 @@ class Annotation(hyp.HypothesisAnnotation):
     @property
     def html_document(self):
         doc = {
-            'title': [self.doc_title],
+            'title': [self.uri_api_int.title],  # get the latest title
         }
 
         try:
@@ -273,18 +303,19 @@ class Annotation(hyp.HypothesisAnnotation):
             log.error(e)
             doi = None
 
-        if doi is not None:
+        if doi is not None:  # this might be messing up document identification?
             doc['dc'] = {
                 'identifier': [
                     doi.identifier.curie,
                     doi.identifier.suffix,  # handle form
                 ]}
 
-        uh = self.uri_api_int.uri_human.asUri()  # matches what the html page itself says
-        if uh is not None:
+        ufh = self.uri_for_hypothesis
+        if ufh is not None:
             doc['link'] = [
-                {'href': uh,
-                 'rel': 'canonical',}]
+                {'href': ufh,
+                 'rel': 'canonical',
+                 }]
 
         return doc
 
@@ -294,9 +325,56 @@ class Annotation(hyp.HypothesisAnnotation):
             'document': self.html_document,
             'id_original': self.id,
             'updated_original': self.updated,  # needed for change detection
+            'uri_html': self.uri_html.asUri(),  # XXX hypothesis is braindead on document identification and anchoring
             # we don't need the group id embedded
             # nor do we want to risk leaking it
          }
+
+
+    @property
+    @idlib.utils.cache_result
+    def text_parent_ids(self):
+        text = self.text
+        bads = (
+            'oxvwiCmfEem9-hfQWeIrcw',  # self reference, can't fix without more processing, can't delete
+            'juUahocPEem2zks3ALW0tg',  # incorrect circular reference to X5pbtIcQEemZSQsKkd_KIw
+            'fyiidoPGEem38QfhKz5VLw',  # self ref
+            'uXkJwC7zEemw8k_1tMnOfg',  # badly broken multiple circular, requires deep intervention
+            'zlZXIHNuEem9HDcWGaQrMQ',  # bad reference from input -> aspect
+
+        )
+        if self.id in bads:
+            return []
+        elif 'hyp.is' in text:
+            def get_id(l):
+                i = l.split('/')[3]
+                if i in ('journals.plos.org', 'www.protocols.io'):
+                    log.debug(l)
+                return i
+
+            return [get_id(l) for l in extract_links_from_markdown(text)]
+        else:
+            return []
+
+    def html_text(self, html_pool):
+        text = self.text
+        if 'hyp.is' in text:
+            # we are safe to do this because there are no cases
+            # where there are both links and other text
+            def clean(l):
+                old_id = l.split('/')[3]  # XXX this is not foolproof, one url is mangled
+                #log.debug(old_id)
+                new = html_pool.byOriginalId(old_id)  # XXX FIXME this can and will fail because not in topological order
+                if new is None:
+                    log.warning(f'parent annotation no longer exists on {self}: {old_id}')
+                else:
+                    new_id = new.id  # we want to error if this is None
+                    return f'https://hyp.is/{new_id}'
+
+            return '\n'.join([cl for link in extract_links_from_markdown(text)
+                              for cl in (clean(link),) if cl is not None])
+        else:
+            return text
 
     def html_references(self, html_pool):
         parents = [html_pool.byOriginalId(ref)
@@ -304,18 +382,18 @@ class Annotation(hyp.HypothesisAnnotation):
 
         for p in parents:
             if p is None:
-                raise ParentDeletedError(f'parent deleted for {self}')
+                raise ParentDeletedError(f'reference deleted for {self}')
 
         return [p.id for p in parents]
 
     def html_payload_less_ugp(self, pool):
         # FIXME parent for replies!
+        ufh = self.uri_for_hypothesis
         out = {
-            'uri': self.uri_html.asUri(),
+            'uri': ufh,
             'target': self.html_target,
             'tags': self.tags,
-            'text': self.text,
-            'exact': self.exact,
+            'text': self.html_text(pool),
             'document': self.html_document,
             'extra': self.html_extra,
         }
@@ -335,6 +413,38 @@ class Annotation(hyp.HypothesisAnnotation):
                 "delete": ['acct:' + user + '@hypothes.is'],
                 "admin":  ['acct:' + user + '@hypothes.is'],
             }}
+
+
+def toposort(pool):
+    marked = set()
+    temp = set()
+    qq = list(pool._annos)
+    out = []
+    def visit(n):
+        if n in marked:
+            return
+        if n in temp:
+            import pprint
+            raise Exception(f'oops you have a cycle {n}\n{pprint.pformat(n._row)}')
+
+        temp.add(n)
+        for m_id in (n.references + n.text_parent_ids):
+            m = pool.byId(m_id)
+            if m is not None:
+                visit(m)
+            else:
+                log.warning(f'non-existent parent {m_id}')
+
+        temp.remove(n)
+        marked.add(n)
+        qq.remove(n)
+        out.append(n)
+
+    while qq:
+        n = qq[0]
+        visit(n)
+
+    return out
 
 
 class AnnoCounts:
