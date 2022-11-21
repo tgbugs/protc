@@ -256,7 +256,13 @@ class Hybrid(HypothesisHelper):
 
         return Document(self)
 
-    def ontLookup(self, value, rank=('NCBITaxon', 'CHEBI', 'GO', 'UBERON', 'ilxtr', 'PATO')):
+    def ontLookup(self, *args, **kwargs):
+        # XXX the ontology lookup produces very bad results
+        # so cut it out for now
+        # this also avoids having network dependency at this phase
+        return None, None
+
+    def _ontLookup(self, value, rank=('NCBITaxon', 'CHEBI', 'GO', 'UBERON', 'ilxtr', 'PATO')):
 
         # TODO OntTerm
         # extend input to include black_box_component, aspect, etc
@@ -298,7 +304,13 @@ class Hybrid(HypothesisHelper):
         else:
             data = data[0]  # TODO could check other rules I have used in the past
 
-        id = data['curie'] if 'curie' in data else data['iri']
+        if 'curie' not in data:  # avoid unknown id sources
+            return None, None
+
+        id = data['curie']  # if 'curie' in data else data['iri']
+        if id.split(':')[0] not in rank:  # avoid unknown curie prefixes i.e. likely garbage
+            return None, None
+
         if data['labels']:
             label = data['labels'][0]
         else:
@@ -1339,9 +1351,15 @@ class protc(AstGeneric):
         value = manual_corrections(value)
 
         id, label = self.ontLookup(value)
+
+        if ('sparc:AnatomicalLocation' in self._tags and
+            [t for t in self._tags if t.startswith('UBERON:')]):
+            id = [t for t in self._tags if t.startswith('UBERON:')][0]
+
         if id:
             #value += f" ({id_}, {data['labels'][0]})"
-            value = f"(term {id} {json.dumps(label)} #:original {json.dumps(value)}{ont})"
+            value = (f"(term {id} {json.dumps(label) if label else '#f'} "
+                     f"#:original {json.dumps(value)}{ont})")
             #value = ("term", id_, data['labels'][0], "#:original", value)
             #raise ValueError(value)
             return value
