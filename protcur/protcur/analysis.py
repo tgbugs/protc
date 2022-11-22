@@ -1344,7 +1344,9 @@ class protc(AstGeneric):
             if v == 'PB':
                 v = 'phosphate buffer'
             elif v == 'PBS':
-                v = 'buffered phosphate saline'
+                v = 'phosphate buffered saline'
+            elif v == 'Phosphate Buffered Saline Solution':
+                v = 'phosphate buffered saline'
             elif v == 'APs':
                 v = 'action potential'  # plural ...
             return v
