@@ -1,7 +1,9 @@
 #lang racket/base
 (provide prefixes-si)
 (define prefixes-si
-'((Y . yotta)
+'((Q . quetta)
+  (R . ronna)
+  (Y . yotta)
   (Z . zetta)
   (E . exa)
   (P . peta)
@@ -22,5 +24,6 @@
   (f . femto)
   (a . atto)
   (z . zepto)
-  (y . yocto))
-)
+  (y . yocto)
+  (r . ronto)
+  (q . quecto)))

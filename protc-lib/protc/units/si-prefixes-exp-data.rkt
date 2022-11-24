@@ -1,7 +1,9 @@
 #lang racket/base
 (provide prefixes-si-exponents)
 (define prefixes-si-exponents
-'((yotta . 24)
+'((quetta . 30)
+  (ronna . 27)
+  (yotta . 24)
   (zetta . 21)
   (exa . 18)
   (peta . 15)
@@ -21,5 +23,7 @@
   (femto . -15)
   (atto . -18)
   (zepto . -21)
-  (yocto . -24))
+  (yocto . -24)
+  (ronto . -27)
+  (quecto . -30))
 )
