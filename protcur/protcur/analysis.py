@@ -23,6 +23,7 @@ from pyontutils.hierarchies import creatTree
 from pyontutils.scigraph_client import Vocabulary
 from pyontutils.namespaces import rdf, rdfs, owl, OntCuries
 from pysercomb.parsers import racket, units
+from pysercomb.parsing import _raw_dash_things
 #from pysercomb import parsing_parsec
 from hyputils.hypothesis import HypothesisAnnotation, HypothesisHelper, idFromShareLink
 from protcur.core import linewrap, color_pda, log, logd
@@ -1222,6 +1223,7 @@ class protc(AstGeneric):
     _manual_fix = {
         # FIXME param: vs protc: for fuzzy-quantity, the fuz is not handled
         # by the param parser atm so keeping it in protc for now ...
+        'rt': ('protc:fuzzy-quantity', '"room temperature"', '"temperature"'),
         'roomtemperature':('protc:fuzzy-quantity', '"room temperature"', '"temperature"'),
         'room temperature':('protc:fuzzy-quantity', '"room temperature"', '"temperature"'),
 
@@ -1296,11 +1298,25 @@ class protc(AstGeneric):
             success = False
             front = ''
             v_orig = None
+
+            def contains_dash_thing(s):
+                for dt in chain(_raw_dash_things, ('-to-',)):
+                    if dt in s:
+                        return dt
+
             while cleaned and not success:
                 try:
                     _, v, rest = parameter_expression(cleaned)
                     if v_orig is None:
                         v_orig = v
+                    if rest.strip():
+                        _strv = str(v)
+                        _dt = contains_dash_thing(cleaned[1:])
+                        if _dt and '^' in _strv:
+                            #log.info(cleaned)
+                            cleaned = cleaned.replace(_dt, ' - ')
+                            continue
+
                 except TypeError as e:
                     log.critical(f'{cleaned!r} {self.htmlLink}')
                     raise e
