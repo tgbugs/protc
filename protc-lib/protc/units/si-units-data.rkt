@@ -7,12 +7,16 @@
   (l . liters) ; often seen in ul or ml
   (mol . moles)
   (M . molarity) ; molar
+  (molar . molarity) ; needs to be present separately otherwise we get mmol instead of mM
   (mol/kg . molality) ;FIXME NOTE molal is deprecated use mol/kg
   (K . kelvin)
-  (°C . degrees-celsius)
+  ; oh dear https://en.wiktionary.org/wiki/Appendix:Variations_of_%22o%22 we are going to need a separate appraoch
+  (°C . degrees-celsius) ; b'\xc2\xb0' the sane degree symbol
   (~oC . degrees-celsius) ; Tom also accepts using the digraph for the degree symbol...
-  (ºC . degrees-celsius) ; b'\xc2\xba'
-  (◦C . degrees-celsius) ; b'\xe2\x97\xa6' white dot
+  ;(ºC . degrees-celsius) ; b'\xc2\xba'
+  ;(◦C . degrees-celsius) ; b'\xe2\x97\xa6' white dot
+  ;(˚C . degrees-celsius) ; b'\xcb\x9a' ring above
+  ;(⁰C . degrees-celsius) ; b'\xe2\x81\xb0' superscript zero
   (ca . candela)
   (lm . lumens)
   (lx . lux) ; plural?

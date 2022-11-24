@@ -9,8 +9,9 @@
   (w . weeks)
   (months . months)
   (Y . years) ; lowercase y causes day -> deca years FIXME maybe we need units-extra-not-prefixable?
+  (Eq . equivalents) ; Eq is unofficial apparently
+  (equiv . equivalents) ; https://en.wikipedia.org/wiki/Equivalent_(chemistry)
   ;(osmol . osmoles) ; shows up as osmol/l which suggests that Osm maybe osmolarity since it leaves out the /l?
-  (count . count) ; when something has been counted and the unit type comes from the parent (sort of a dimensionless quantity but not quite...)
   )
 )
 (define units-extra-prefix

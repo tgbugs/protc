@@ -11,6 +11,9 @@
   (lb . pounds)  ; FIXME normalization
   (lbs . pounds)
   (RCF . relative-centrifugal-force)
+  (rpm . revolutions-per-minute)
+  (DPI . pixels-per-inch) ; dpi lowercase is dry pints apparently ? pint uses pixels-per-inch
   (Fr . french-gauge)  ; also Fg and F but F has many collisions with degrees-fahrenheit
-  (G . birmingham-gauge))
+  (G . birmingham-gauge)
+  )
 )
