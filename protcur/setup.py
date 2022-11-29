@@ -84,11 +84,11 @@ try:
           install_requires=[
               'flask',
               'htmlfn',
-              'hyputils>=0.0.8',
+              'hyputils>=0.0.9',
               'idlib>=0.0.1.dev8',
               'Markdown',
               'pyontutils>=0.1.27',
-              'pysercomb>=0.0.8',
+              'pysercomb>=0.0.9',
           ],
           extras_require={'dev':['pytest-cov', 'wheel'],
                           'test': tests_require,
