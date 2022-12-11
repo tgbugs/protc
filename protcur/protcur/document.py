@@ -459,6 +459,12 @@ class AnnoCounts:
         return self._pool._annos
 
     @idlib.utils.cache_result
+    def all_with_protc_tags_or_reply(self):
+        """ any annotations that have at least one =protc:= tag
+            or are a reply to an annotation with a =protc: tag= """
+        return [f for f in self.all() if f.has_protc_or_reply(self._pool)]
+
+    @idlib.utils.cache_result
     def from_protocols_io(self):
         """ annotations on URIs with protocols.io netloc """
         return [f for f in self.all() if f.is_protocols_io()]
