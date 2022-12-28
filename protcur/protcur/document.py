@@ -94,6 +94,13 @@ class Pool(hyp.AnnotationPool):
                     raise e
                     # check if there are children
 
+    def protocols_io_streams(self):
+        if not self._annos[0]._pio_cache:
+            [a._pio for a in self._annos]
+
+        return sorted(set(v for v in self._annos[0]._pio_cache.values()
+                          if v is not None))
+
     def docs(self):
         def key(r):
             return ['' if c is None else c for c in r]
@@ -102,7 +109,9 @@ class Pool(hyp.AnnotationPool):
             # at some point we made these fatal by default
             try:
                 return o.uri_bound
-            except (idlib.exceptions.IdDoesNotExistError, idlib.exceptions.NotAuthorizedError) as e:
+            except (idlib.exceptions.IdDoesNotExistError,
+                    idlib.exceptions.NotAuthorizedError,
+                    idlib.exceptions.CouldNotReachError) as e:
                 log.error(e)
                 return None
 
@@ -235,6 +244,8 @@ class Annotation(hyp.HypothesisAnnotation):
     def slug_tail(self):
         """ The set of chars following the final =-= in a protocols.io URI. """
 
+        # FIXME very bad behavior in certain failure modes will cause
+        # absurd amounts of retries
         try:
             uri_bound = self.uri_bound
         except idlib.exceptions.RemoteError:
@@ -257,6 +268,11 @@ class Annotation(hyp.HypothesisAnnotation):
     def has_protc_tags(self):
         return bool(self.protc_tags)
 
+    # cache result due to the insane number of errors and retries that
+    # occur when we call data() every time, and even this is not
+    # enough because we really need to cache over the idlib.Pio object
+    # not the annotations
+    @idlib.utils.cache_result
     def has_data(self):
         """ do we have access to protocol data?
             regardless of the reason for lack of access, we need
@@ -447,7 +463,7 @@ def toposort(pool):
     return out
 
 
-class AnnoCounts:
+class AnnoCounts:  # FIXME surely this should be a subclass of pool to avoid reindex
     """ number of annotations matching some criteria """
 
     def __init__(self, pool):
@@ -482,7 +498,7 @@ class AnnoCounts:
 
     def with_min_annos_end(self, minimum_annotation_count=None):  # FIXME not sure if want?
         hhs = self.with_protc_tags_or_reply()
-        idn = IdNormalization(hhs)
+        idn = IdNormalization(Pool(hhs))
         return idn.annos_end(minimum_annotation_count)
 
     def document_stats(self, *args, minimum_annotation_count=None):
@@ -493,7 +509,7 @@ class AnnoCounts:
         rows = []
         for f in self.fs:
             hhs = f()
-            idn = IdNormalization(hhs)
+            idn = IdNormalization(Pool(hhs))
             if not rows:
                 column_header = ('name', 'doc', *idn.column_header())
                 column_description = ('doc', 'doc', *idn.column_description())
@@ -525,8 +541,9 @@ class AnnoCounts:
 class IdNormalization:
     """ number of unique documents for a set of annotations using certain criteria """
 
-    def __init__(self, hypothesis_helpers):  # FIXME this should take a pool !!!
-        self.hhs = hypothesis_helpers
+    def __init__(self, pool):
+        self._pool = pool
+        self.hhs = self._pool._annos
 
     @idlib.utils.cache_result
     def annos_start(self):  # TODO
