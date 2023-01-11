@@ -78,7 +78,8 @@ class Main(clif.Dispatcher):
 
         # also in sparcur pipelines
         annos = [ptcdoc.Annotation(a) for a in get_annos()]
-        idn = ptcdoc.IdNormalization(annos)
+        pool = ptcdoc.Pool(annos)
+        idn = ptcdoc.IdNormalization(pool)
         protc.reset(reset_annos_dict=True)  # apparently we have to do this here ?? stale data or something?
 
         [protc(a, annos) for a in annos]
@@ -90,7 +91,8 @@ class Main(clif.Dispatcher):
 
             if None in idints:
                 nones = idints.pop(None)
-                nidn = ptcdoc.IdNormalization(nones)
+                npool = ptcdoc.Pool(nones)
+                nidn = ptcdoc.IdNormalization(npool)
                 idints.update(nidn.normalized())
 
             pidints = {k:[protc.byId(a.id) for a in v] for k, v in idints.items()}
