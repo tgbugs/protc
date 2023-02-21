@@ -17,7 +17,7 @@ from datetime import datetime
 from itertools import chain
 import rdflib
 from pyontutils.core import makePrefixes, OntId, OntGraph
-from pyontutils.utils import async_getter, noneMembers, allMembers, anyMembers
+from pyontutils.utils import noneMembers, allMembers, anyMembers
 from htmlfn import atag
 from pyontutils.hierarchies import creatTree
 from pyontutils.scigraph_client import Vocabulary
@@ -1674,9 +1674,9 @@ def main():
 
 
 def _more_main():
+    from pyontutils.asyncd import Async, deferred
     input_text_args = [(basic_start(a).strip(),) for a in annos if 'protc:input' in a.tags or 'protc:output' in a.tags]
-    async_getter(sgv.findByTerm, input_text_args)  # prime the cache FIXME issues with conflicting loops...
-
+    Async()(deferred(sgv.findByTerm)(*ita) for ita in input_text_args)  # prime the cache FIXME issues with conflicting loops...
     irs = sorted(inputRefs(annos))
 
     trees = makeAst()
