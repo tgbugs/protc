@@ -612,12 +612,20 @@ class Hybrid(HypothesisHelper):
 
     @property
     def rchildren(self):
+        yield from self._rchildren_gen(set())
+
+    def _rchildren_gen(self, seen=None):
+        seen.add(self)  # cycles woo
         for child in self.children:
-            yield child
-            yield from child.children
+            if child not in seen:
+                yield child
+                yield from child._rchildren_gen(seen=seen)
 
     @property
-    def children(self):  # TODO various protc:implied- situations...
+    def children(self):
+        yield from self._children_gen()
+
+    def _children_gen(self, orig=False):  # TODO various protc:implied- situations...
         #if anyMembers(self.tags, *('protc:implied-' + s for s in ('input', 'output', 'aspect'))):  # FIXME hardcoded fix
             #if self.parent is None:
                 #breakpoint()
@@ -646,7 +654,7 @@ class Hybrid(HypothesisHelper):
             # this is an example of how to inject a reply as a child
             yield from self.parent.direct_children
 
-        elif 'protc:implied-aspect' in self.tags:# or 'protc:implied-context' in self.tags:
+        elif 'protc:implied-aspect' in self.tags and 'annotation-tags:replace' not in self.tags:# or 'protc:implied-context' in self.tags:
             # this is an example of how to inject a reply as a parent
             if self.parent is not None:
                 # if you don't set hasAstParent big desync between astParents and hasAstParent
@@ -655,12 +663,44 @@ class Hybrid(HypothesisHelper):
                 yield self.parent
             else:
                 logd.warning(f'protc:implied-aspect not used in a reply! {self.htmlLink}')
-        elif self._anno.is_reply() and noneMembers(self.tags, *self._lift_reply_tags):
+        elif not orig and anyMembers(self.tags, *self._splice_tags):  # FIXME need a "real" children vs corrected children
+            # example of how to lift a node all the way to the top of a tree
+            if self._spliceParents:
+                _seen = {self}
+                parent = next(iter(self._spliceParents))  # only take the first parent
+                # right now we only have single length splices, otherwise we would
+                # need to unify all the parent lookups and check whether the parent
+                # was in the ast or not, so there is only a single spliced out node
+                # and then we folow the astParents hierarchy
+
+                # if there are multiple techniques in a tree the are
+                # all pulled out to their own seprate top level
+
+                # FIXME surely issues with ordering where the parents
+                # will not be in the parent index ???
+                while parent not in _seen:
+                    _seen.add(parent)
+                    if parent.astParents:
+                        parent = next(iter(parent.astParents))
+                # only log id to avoid recursion when printing
+                #log.debug(parent.id)  # XXX wow this gets called a LOT
+                yield parent
+        elif self._anno.is_reply() and (
+                noneMembers(self.tags, *self._lift_reply_tags) or
+                anyMembers(self.tags, 'annotation-tags:replace')):
             # the only replies that are allowed to have children are the lift tag replies
             return
         else:
             yield from self.direct_children
 
+    _splice_es = set()
+    @property
+    def _spliceParents(self):
+        if self.id in self._splice_parents:
+            return self._splice_parents[self.id]
+        return self._splice_es
+
+    _splice_parents = {}
     @property
     def direct_children(self):
         _ian = self.isAstNode
@@ -670,6 +710,21 @@ class Hybrid(HypothesisHelper):
                 if 'annotation-children:delete' not in self._tags:
                     logd.warning(f'child of {self._repr} {id_} does not exist!')
                 continue
+
+            if anyMembers(child.tags, *self._splice_tags):
+                # since ilxtr:technique is not an ast node it won't set hasAstParent
+                # TODO lift it out of the hierarchy, to accomplish this need astParent probably
+                #yield child  # don't set ast parent because it will be lifted out, but we do need to find the parent so we can lift out? maybe?
+                # can't yield child here because it creates a cycle might need a separate spliced out index or something?
+                if child.id not in self._splice_parents:
+                    self._splice_parents[child.id] = set()
+                self._splice_parents[child.id].add(self)
+                for splice_child in child._children_gen(orig=True):
+                    #if splice_child is not self:  # FIXME ARGH recursion
+                    splice_child.hasAstParent = True
+                    yield splice_child
+                continue
+
             for reply in child.replies:  # because we cannot reference replies directly in the client >_<
                 if reply.isAstNode and anyMembers(reply.tags, *self._lift_reply_tags):
                     # FIXME assignment happens called every time :/
@@ -697,6 +752,8 @@ class Hybrid(HypothesisHelper):
                 self.__class__._astParentIndex[child.id].add(self)
         else:  # XXX keep an inventory of cases where there nonAst children
             for child in self.children:
+                if isinstance(child, str):
+                    breakpoint()
                 if child.id not in self.__class__._nonAstParentIndex:
                     self.__class__._nonAstParentIndex[child.id] = set()
                 self.__class__._nonAstParentIndex[child.id].add(self)
@@ -715,6 +772,7 @@ class Hybrid(HypothesisHelper):
         # the link will be broken, and this is almost always due to annotation tagging
         # removing the isAstNode check in here resolves the mismatch between p.astParents and p.hasAstParent
         # all the remiaining mismatched cases were in the not isAstNode category anyway
+        # FIXME return type heterogneity !!!!!!!!!
         if self.id in self.__class__._astParentIndex:
             return self.__class__._astParentIndex[self.id]
 
@@ -773,6 +831,7 @@ class Hybrid(HypothesisHelper):
         #if childs: childs += '\n'
         notes = '\n\n'.join(self.curatorNotes)
         prefixes = {f'{self.classn}:':True,
+                    'updated:':self.updated,
                     'parent:':self.parent,
                     'value:':self.value,
                     'AstN?:':True,
@@ -814,6 +873,8 @@ class Hybrid(HypothesisHelper):
         link = atag(self.shareLink, self.id, new_tab=True) if html else self.shareLink
         title_text = row(f'{self.classn}:', lambda:f"{link}{SPACE}{self._repr}")
 
+        updated_text = row('updated:', lambda:str(self.updated))
+
         #ast_text = '' if html else row('AstN?:', lambda:str(self.isAstNode))[1:]
 
         exact_text = row('exact:', lambda:linewrap(self.exact, align, space=SPACE, depth=depth, ind=ind))
@@ -850,6 +911,7 @@ class Hybrid(HypothesisHelper):
         return ''.join((details, summary,
                         startbar,
                         title_text,
+                        updated_text,
                         parent_id,
                         value_text,
                         notes_text,
@@ -1272,6 +1334,7 @@ class protc(AstGeneric):
                                                #TODO we need more here...
                                                ))
     _lift_reply_tags = tuple(f'protc:implied-{t}' for t in ('aspect', 'input', 'output'))  # TODO figure out if we need to add vary and others
+    _splice_tags = ('ilxtr:technique',)
     _manual_fix = {
         # FIXME param: vs protc: for fuzzy-quantity, the fuz is not handled
         # by the param parser atm so keeping it in protc for now ...
