@@ -222,6 +222,7 @@ class Hybrid(HypothesisHelper):
     _tagIndex = {}
     _replies = {}
     _astParentIndex = {}
+    _nonAstParentIndex = {}
 
     def __new__(cls, anno, annos):
         """ namespace with the colon to make it simple to allow
@@ -338,6 +339,7 @@ class Hybrid(HypothesisHelper):
 
     @property
     def isAstNode(self):
+        # FIXME allows replies with matching tags through ???
         additional_tags = self.additional_tags
         return (self.prefix_ast is not None
                 and noneMembers(self._tags, *self.control_tags)
@@ -424,7 +426,9 @@ class Hybrid(HypothesisHelper):
                 *('protc:implied-' + s
                   # FIXME hardcoded fix
                   for s in ('input', 'output', 'aspect', 'section', 'vary'))):
-            value, children_text = self._fix_implied_input()
+            value, children_text = self._fix_implied_input()  # HACK that routinely fails
+            if self._anno.is_reply() and not value and self.text:
+                return self.text
             if value:
                 return value
 
@@ -441,7 +445,7 @@ class Hybrid(HypothesisHelper):
         elif self._type == 'pagenote':
             return ''
         else:
-            raise ValueError(f'{self.shareLink} {self.id} has no text and no exact and is not a reply.')
+            raise ValueError(f'{self.htmlLink} {self.id} has no text and no exact and is not a reply.')
 
     @property
     def tags(self):
@@ -618,10 +622,21 @@ class Hybrid(HypothesisHelper):
             #if self.parent is None:
                 #breakpoint()
                 #raise ValueError(f'protc:implied-* does not have a parrent? Did you mistag?')
+
+        # FIXME not sure if want? ok to show children independent of astChildren
+        # children is a pre-ast thing, or rather ast/ir/sexps are all tangled up
+        # terminologically here
+        #for _t in self.tags:  # prefix_skip_tags do not have children
+        #    for _prefix in self.prefix_skip_tags:
+        #        if _t.startswith(_prefix):
+        #            return
+
+        _ian = self.isAstNode
         if 'protc:aspect' in self.tags:
             for reply in self.replies:
-                if 'protc:implied-vary' in reply.tags:
-                    reply.hasAstParent = True
+                if 'protc:implied-vary' in reply.tags:  # FIXME wait does implied vary invert order or not ???
+                    if _ian:
+                        reply.hasAstParent = True
                     yield reply
                     break
             else:
@@ -634,15 +649,21 @@ class Hybrid(HypothesisHelper):
         elif 'protc:implied-aspect' in self.tags:# or 'protc:implied-context' in self.tags:
             # this is an example of how to inject a reply as a parent
             if self.parent is not None:
+                # if you don't set hasAstParent big desync between astParents and hasAstParent
+                if _ian:
+                    self.parent.hasAstParent = True
                 yield self.parent
             else:
                 logd.warning(f'protc:implied-aspect not used in a reply! {self.htmlLink}')
-
+        elif self._anno.is_reply() and noneMembers(self.tags, *self._lift_reply_tags):
+            # the only replies that are allowed to have children are the lift tag replies
+            return
         else:
             yield from self.direct_children
 
     @property
     def direct_children(self):
+        _ian = self.isAstNode
         for id_ in self._children_ids:
             child = self.getObjectById(id_)
             if child is None:
@@ -650,8 +671,13 @@ class Hybrid(HypothesisHelper):
                     logd.warning(f'child of {self._repr} {id_} does not exist!')
                 continue
             for reply in child.replies:  # because we cannot reference replies directly in the client >_<
-                if 'protc:implied-aspect' in reply.tags:# or 'protc:implied-context' in reply.tags:
-                    self.hasAstParent = True  # FIXME called every time :/
+                if reply.isAstNode and anyMembers(reply.tags, *self._lift_reply_tags):
+                    # FIXME assignment happens called every time :/
+                    # XXX warning this has first one wins behavior so multiple implied things
+                    # on a singel annotation currently does not work as desired
+                    if _ian:
+                        reply.hasAstParent = True  # the reply is now above the child but is itself a child of self
+                        child.hasAstParent = True  # the child has the reply as a its parent
                     yield reply
                     child = None  # inject the implied aspect between the input and the parameter
                     break
@@ -659,7 +685,8 @@ class Hybrid(HypothesisHelper):
             if child is not None: # sanity
                 # FIXME FIXME FIXME XXX do not call this on in sparc cases
                 # everything runs backwards there (oops) can fix it in the data
-                child.hasAstParent = True  # FIXME called every time :/
+                if _ian:
+                    child.hasAstParent = True  # FIXME called every time :/
                 yield child  # buildAst will have a much eaiser time operating on these single depth childs
 
     def _addAstParent(self):
@@ -668,6 +695,11 @@ class Hybrid(HypothesisHelper):
                 if child.id not in self.__class__._astParentIndex:
                     self.__class__._astParentIndex[child.id] = set()
                 self.__class__._astParentIndex[child.id].add(self)
+        else:  # XXX keep an inventory of cases where there nonAst children
+            for child in self.children:
+                if child.id not in self.__class__._nonAstParentIndex:
+                    self.__class__._nonAstParentIndex[child.id] = set()
+                self.__class__._nonAstParentIndex[child.id].add(self)
 
     def _delAddParent(self):
         if self.isAstNode:
@@ -677,15 +709,34 @@ class Hybrid(HypothesisHelper):
     @property
     def astParents(self):
         # note that all children have to be run first so that the connections are present
-        if self.isAstNode:
-            # TODO handle cases where non-top forms have no parent
-            # should probably warn
-            if self.id in self.__class__._astParentIndex:
-                return self.__class__._astParentIndex[self.id]
+        # TODO handle cases where non-top forms have no parent should probably warn
+        # XXX NOTE non ast nodes can have ast parents and we want to be able to find them
+        # when we do exports we filter by isAstNode, but if we have the sneeky bits in between
+        # the link will be broken, and this is almost always due to annotation tagging
+        # removing the isAstNode check in here resolves the mismatch between p.astParents and p.hasAstParent
+        # all the remiaining mismatched cases were in the not isAstNode category anyway
+        if self.id in self.__class__._astParentIndex:
+            return self.__class__._astParentIndex[self.id]
+
+    @property
+    def nonAstParents(self):
+        # note that all children have to be run first so that the connections are present
+        if self.id in self.__class__._nonAstParentIndex:
+            return self.__class__._nonAstParentIndex[self.id]
 
     @property
     def needsParent(self):
         return self.isAstNode and not self.hasAstParent and self.astType in self._needParent
+
+    @property
+    def missingParent(self):
+        # should be a syntax warning in racket to indicate partial completeness
+        return self.needsParent and not self.hasAstParent
+
+    @property
+    def astTopLevelReply(self):
+        # if this is true it is a bug
+        return self._anno.is_reply() and self.isAstNode and noneMembers(self.tags, *self._lift_reply_tags) and not self.hasAstParent
 
     _repr_join = '\n'
 
@@ -1220,6 +1271,7 @@ class protc(AstGeneric):
                                                'telos',
                                                #TODO we need more here...
                                                ))
+    _lift_reply_tags = tuple(f'protc:implied-{t}' for t in ('aspect', 'input', 'output'))  # TODO figure out if we need to add vary and others
     _manual_fix = {
         # FIXME param: vs protc: for fuzzy-quantity, the fuz is not handled
         # by the param parser atm so keeping it in protc for now ...
@@ -1287,6 +1339,11 @@ class protc(AstGeneric):
             value = self.value
             if value == '':  # breaks the parser :/
                 return ''
+            elif value.startswith('RRID:'):
+                # XXX FIXME not sure if these should be params/invariants or what
+                # but they definitely should not be parsed e.g. protc.byId('fCEQnKfrEemrzhdZkE3DKw')
+                return ParameterValue(True, json.dumps(value), None, self.linePreLen)
+
             cleaned = value.strip()
             cleaned = value.replace('\xA0', ' ')
             for child in self.children:  # TODO
