@@ -3,7 +3,7 @@
 (require racket/contract
          ;scribble/srcdoc
          ;(for-doc scribble/base scribble/manual)
-         protc/export
+         protc/private/export
          ;protc/utils  ; this is private ...
          rdf/utils
          protc/private/utils
@@ -33,7 +33,7 @@
          ;has-member
          define-relation
          define-aspect
-         export
+         (rename-out [protc-export export])
          invariant
 
          lookup

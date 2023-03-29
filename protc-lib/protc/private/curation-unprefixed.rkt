@@ -3,6 +3,7 @@
 (require
  ;"direct-model.rkt"
  ;rdf/utils
+ (only-in "identifier-functions.rkt" hyp:)
  (for-syntax
   racket/base
   racket/path
@@ -13,7 +14,9 @@
   ;(except-in "direct-model.rkt" #%top)
   "syntax-classes.rkt"))
 
-(provide (all-defined-out))
+(provide
+ hyp: ; FIXME needed for how we handle prov, not strictly required
+ (all-defined-out))
 
 ;;; ontology tags
 
@@ -79,6 +82,11 @@
                    #:fix #f])
      ;(println #'(errors ...))
      #'(begin errors ...)]))
+
 (module+ test
   (circular-link no-type (cycle 'lol1 'lol2)))
 
+(define-syntax (param:parse-failure stx) ; FIXME param: namespace ? also FIXME not a exporting correctly? ; uh does it need to be defined in the kernel?
+  (syntax-parse stx
+    [(_ body ...)
+     #'(quote (param:parse-failure body ...))]))

@@ -30,12 +30,32 @@
 
 ; aspect and input are the only 2 that need to lift units out
 
+(define-syntax (transform-verb stx)
+  (syntax-parse stx
+    [(_ body ...)
+     #'(quote (transform-verb body ...))]))
+
+(define-syntax (executor stx) ; rarely used explicit mention of who should be doing what
+  ; TODO
+  (syntax-parse stx
+    [(_ body ...)
+     #'(quote (executor body ...))]))
+
 (define-syntax (executor-verb stx)
   (syntax-parse stx
     [act:sc-cur-executor-verb
-     ;; TODO check whether the verb is know or whether we need to
-     ;; add it to a list of unspecified terms
-     #'act]))
+     ; TODO check whether the verb is know or whether we need to
+     ; add it to a list of unspecified terms
+     #; ; XXX DO NOT DO THIS it will go infinite and there is no warning!
+     #'act
+     ; TODO verbs need macros that will expand them to their correct form
+     ; we can do that in racket, but it escapes the dsl
+     ; (ev "anes" (input "animal") (input "anesth")) ; the asymmetry is troublesome
+     ; should be animal be the black box here? do we need primary-participant?
+     ; XXX assume that verbs are normalized, error if a transformer is not defined or something ? order matters or type matters if we have it?
+     ;#:with sigh (if #'act.prov (begin (println (list 'wat #'act.prov)) #'(#:prov act.prov)) #f)
+     #'(transform-verb act.name (~? (~@ #:prov act.prov))
+        act.body ...)]))
 
 (define-syntax (actualize stx)
   (syntax-parse stx
@@ -61,26 +81,27 @@
                   ;(~? body (raise-syntax-error "HOW?!")) ...
                   )
      ]))
+
 (module+ test
   ; default interpretation of nested inputs is a make spec that only lists inputs
-  (input "top level thing" (hyp: 'p)
-         (input "input to tlt 1" (hyp: '1))
-         (input "input to tlt 2" (hyp: '2))))
+  (input "top level thing" #:prov (hyp: 'p)
+         (input "input to tlt 1" #:prov (hyp: '1))
+         (input "input to tlt 2" #:prov (hyp: '2))))
 
 (define-syntax (output stx)
   (syntax-parse stx
     #:datum-literals (hyp: quote spec make)
     #:literal-sets (protc-fields protc-ops)  ; whis this not working?
-    [(_ (~or* name:str term:sc-cur-term) (hyp: (quote id))
+    [(_ (~or* name:nestr term:sc-cur-term) (~optional (~seq #:prov prov:sc-cur-hyp))
         (~alt unconv:str
               asp:sc-cur-aspect
               inv:sc-cur-invariant
               par:sc-cur-parameter*
               bbc:sc-cur-bbc
               input:expr) ...)
-     #:with spec-name (if (number? (syntax-e #'id))
-                          (fmtid "_~a" #'id)  ; recall that #'_id doesn't work because the type is not strictly known
-                          #'id)
+     #:with spec-name (if (number? (syntax-e #'prov.id))
+                          (fmtid "_~a" #'prov.id)  ; recall that #'_id doesn't work because the type is not strictly known
+                          #'prov.id)
      #:with black-box (if (attribute name)
                           (datum->syntax #'name (string->symbol (syntax-e #'name)))
                           ; FIXME type vs token ...
@@ -89,7 +110,7 @@
                           )
      #'(define-make (spec-name black-box)
          "this is a docstring from curation!"
-         #:prov (hyp: 'id)
+         #:prov (hyp: prov.id)
          ;#:vars (what is the issue here folks)
          ; othis stuff works at top level ...
          ;#:inputs (input ...)
@@ -99,9 +120,9 @@
          )
      ]))
 (module+ test
-  (output "thing" (hyp: 'prov-a)
+  (output "thing" #:prov (hyp: 'prov-a)
           (parameter* (quantity 100 (unit 'meters 'milli))
-                      (hyp: 'prov-b)))
+                      #:prov (hyp: 'prov-b)))
   )
 
 (define-syntax (black-box-component stx)
@@ -115,20 +136,20 @@
   ; since it indicates that FOR THE SAME SUBJECT all of these values
   ; are to be explored
   (syntax-parse stx
-    #:datum-literals (hyp: quote)
-    [(_ (~or* name:str term:sc-cur-term) (hyp: (quote id))
+    ;#:datum-literals (hyp: quote)
+    [(_ (~or* name:nestr term:sc-cur-term) (~optional (~seq #:prov prov:sc-cur-hyp))
         (~alt unconv:str
               par:sc-cur-parameter*
               inv:sc-cur-invariant) ...)
      #`(quote #,stx)]))
 (module+ test
-  (vary "variable-name" (hyp: '-1)
-        (parameter* (quantity 10) (hyp: '-10)))
-  (vary "variable-name" (hyp: '-2)
-        (invariant (quantity 20) (hyp: '-11)))
-  (vary "variable-name" (hyp: '-3)
-        (parameter* (quantity 10) (hyp: '-12))
-        (invariant (quantity 20) (hyp: '-13))))
+  (vary "variable-name" #:prov (hyp: '-1)
+        (parameter* (quantity 10) #:prov (hyp: '-10)))
+  (vary "variable-name" #:prov (hyp: '-2)
+        (invariant (quantity 20) #:prov (hyp: '-11)))
+  (vary "variable-name" #:prov (hyp: '-3)
+        (parameter* (quantity 10) #:prov (hyp: '-12))
+        (invariant (quantity 20) #:prov (hyp: '-13))))
 
 (define-syntax (aspect stx)
   (syntax-parse stx
@@ -186,31 +207,31 @@
                                        #:fix #t])
      #'(begin errors ...)]))
 (module+ test
-  (aspect "mass" (hyp: '0))
-  (aspect "test-unconv" (hyp: 'lol) "unconverted")
-  (aspect "test-measure" (hyp: 'lol)
-          (*measure "measure something!" (hyp: 'hrm)))
+  (aspect "mass" #:prov (hyp: '0))
+  (aspect "test-unconv" #:prov (hyp: 'lol) "unconverted")
+  (aspect "test-measure" #:prov (hyp: 'lol)
+          (*measure "measure something!" #:prov (hyp: 'hrm)))
   (aspect "bob"
-          (hyp: '1)
+          #:prov (hyp: '1)
           (parameter*
            (quantity
             10
             (unit 'kelvin 'milli))
-           (hyp: '2)))
+           #:prov (hyp: '2)))
   (aspect "holding potential"
-          (hyp: '3)
-          (vary "holding-potential" (hyp: '3.5)
+          #:prov (hyp: '3)
+          (vary "holding-potential" #:prov (hyp: '3.5)
                 (parameter*
                  (quantity -70 (unit 'volts 'milli))
-                 (hyp: '4))
+                 #:prov (hyp: '4))
                 (parameter*
                  (quantity -50 (unit 'volts 'milli))
-                 (hyp: '5))))
+                 #:prov (hyp: '5))))
   (aspect "angle"
-          (hyp: 'yes)
-          (black-box-component "start from here thing" (hyp: 'asdf))  ; TODO auto lift?
-          (parameter* (expr (range (quantity 1) (quantity 2 (unit 'meters 'mega)))) (hyp: 'fdsa)))
-  (aspect "sagittal" (hyp: 'asdf)
+          #:prov (hyp: 'yes)
+          (black-box-component "start from here thing" #:prov (hyp: 'asdf))  ; TODO auto lift?
+          (parameter* (expr (range (quantity 1) (quantity 2 (unit 'meters 'mega)))) #:prov (hyp: 'fdsa)))
+  (aspect "sagittal" #:prov (hyp: 'asdf)
           ; OK
           ; this is ok because the spatial-1d aspect is the direct connection to the parameter*
           ; and thus the plane of section is assumed to give unambiguously the axis normal to it
@@ -230,13 +251,13 @@
           ; if we are specifying a spatial-2d then minimally we need two aspects, one that is spatial-1d
           ; e.g. sagittal is (plane-normal-to medial-lateral-axis) or (plane-coplanar-with a-p d-v)
           ; if our black box is known to be a plane (which it might not) then we only need (a-p d-v)
-          (aspect "thick" (hyp: 'fdsa)
+          (aspect "thick" #:prov (hyp: 'fdsa)
                   (parameter*
-                   (quantity 8 (unit 'meters 'micro)) (hyp: 'a))))
-  (aspect "will fail multibody" (hyp: 'asdf)
-          (parameter* (quantity 1) (hyp: '1))
-          (parameter* (quantity 2) (hyp: '2)))
-  (aspect (term ilxtr:lol "lol" #:original "laugh out loud") (hyp: '0))
+                   (quantity 8 (unit 'meters 'micro)) #:prov (hyp: 'a))))
+  (aspect "will fail multibody" #:prov (hyp: 'asdf)
+          (parameter* (quantity 1) #:prov (hyp: '1))
+          (parameter* (quantity 2) #:prov (hyp: '2)))
+  (aspect (term ilxtr:lol "lol" #:original "laugh out loud") #:prov (hyp: '0))
   #;
   (aspect "some aspect" (hyp: 'asdf)
           (no-how-error)))
@@ -269,12 +290,12 @@
      #`(quote #,stx)]))
 
 (module+ test
-  (parameter* (quantity 100 (unit 'meters 'milli)) (hyp: 'prov-0))
-  (output "thing" (hyp: 'prov-1)
-          (parameter* (quantity 100 (unit 'meters 'milli)) (hyp: 'prov-2)))
+  (parameter* (quantity 100 (unit 'meters 'milli)) #:prov (hyp: 'prov-0))
+  (output "thing" #:prov (hyp: 'prov-1)
+          (parameter* (quantity 100 (unit 'meters 'milli)) #:prov (hyp: 'prov-2)))
   (check-exn exn:fail:syntax? (thunk
                                (convert-syntax-error
-                                (parameter* 100 (unit 'meters 'milli) (hyp: 'prov-1))))))
+                                (parameter* 100 (unit 'meters 'milli) #:prov (hyp: 'prov-1))))))
 
 (define (objective* text prov) #f)
 (define (telos text prov) #f)
@@ -315,12 +336,12 @@
        #''thing.lifted]))
 
   (check-exn exn:fail:syntax? (thunk
-                               (convert-syntax-error
+                               (convert-syntax-error ; FIXME false aliasing here ... where (hyp: '0) is incorrectly accepted
                                 (test (parameter* (hyp: '0) (quantity 10 (unit 'meters)))))))
 
   (test (invariant (quantity 10 (unit meters)) (hyp: '0)))
 
-  (input "thing" (hyp: '1) (parameter* (quantity 10 (unit meters)) (hyp: '2)))
+  (input "thing" #:prov (hyp: '1) (parameter* (quantity 10 (unit meters)) #:prov (hyp: '2)))
 
   (define-syntax (unit-> stx)
     (syntax-parse stx

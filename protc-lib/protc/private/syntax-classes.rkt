@@ -68,6 +68,7 @@ All actualize sections should specify a variable name that will be used in inher
          racket/syntax
          syntax/parse
          (only-in racket/class class? object?)
+         (only-in racket/string non-empty-string?)
          'prims
          (for-template 'prims racket/base syntax/parse)
          (for-syntax 'prims
@@ -89,6 +90,19 @@ All actualize sections should specify a variable name that will be used in inher
 (module+ test
   (require rackunit
            racket/function))
+
+(define-syntax-class nestr
+  (pattern string:str
+           #:do [(unless (non-empty-string? (syntax-e #'string))
+                   (raise-syntax-error
+                    'empty-string "empty string not allowed in this context"
+                    this-syntax #'string))]))
+
+(module+ test
+  (syntax-parse #'"hello" [string:nestr #t])
+  (syntax-parse #'"1" [string:nestr #t])
+  (check-exn exn:fail:syntax? (thunk (syntax-parse #'"" [string:nestr #t])))
+  )
 
 (define-syntax-class message-struct-sc
   (pattern (-name:id body-pattern ...)
@@ -391,6 +405,9 @@ All actualize sections should specify a variable name that will be used in inher
 ; ideally these should be drawn from aspect definitions at syntax time
 
 (define-syntax (define-literal-set-from-units stx)
+  ;; FIXME we kind of need a way to make these user extensible, however they still need to be formal?
+  ;; I think we are likely to address this when we start working to define everything in terms of the
+  ;; count aspect over some thing
   (syntax-parse stx
     [(_ name)
      (define units
@@ -527,19 +544,26 @@ All actualize sections should specify a variable name that will be used in inher
            #:attr normalized #'(dilution low high)
            ))
 
+(define-syntax-class sc-ratio ; TODO
+  #:datum-literals (ratio param:ratio)
+  (pattern ((~or* ratio param:ratio) numerator:integer denominator:integer)
+           #:attr aspect #'"ratio"
+           #:attr normalized #'(ratio numerator demoninator)
+           ))
+
 (define-syntax-class sc-quantity
   #:datum-literals (quantity param:quantity
                     fuzzy-quantity protc:fuzzy-quantity
                     dimensions param:dimensions
                     expr param:expr)
   #:local-conventions ([body expr])
-  (pattern ((~or* param:quantity quantity) value:number (~optional (~or* unit:sc-unit unit-expr:sc-unit-expr)))
+  (pattern ((~or* param:quantity quantity) (~or* value:number (param:expr math-expr)) (~optional (~or* unit:sc-unit unit-expr:sc-unit-expr)))
            ; FIXME we do not want units to be optional, this is a bug in param:dimensions
            #:attr aspect (datum->syntax this-syntax
                                         (symbol->string
                                          (unit->aspect
                                           (syntax->datum #'(~? unit.ident (~? unit-expr.unit null))))))
-           #:attr normalized #'(quantity value (~? unit (~? unit-expr null))))
+           #:attr normalized #'(quantity (~? value) (~? math-expr) (~? unit (~? unit-expr null))))
   (pattern ((~or* protc:fuzzy-quantity fuzzy-quantity) fuzzy-value:str aspect:str)
            #:attr unit #f
            #:attr unit-expr #f
@@ -581,18 +605,21 @@ All actualize sections should specify a variable name that will be used in inher
 ;;; curation syntax classes 
 
 (define-syntax-class sc-cur-term
-  #:datum-literals (term)
-  (pattern (term curie:identifier label:string #:original value:str)))
+  #:datum-literals (term) ; FIXME label should probably be keyworded
+  (pattern (term curie:identifier (~or* label:string #f) #:original value:str)))
 
 (define-syntax-class sc-cur-hyp
   #:datum-literals (hyp: quote)
   ; add additional valid prov identifiers here
   ; FIXME somehow this didn't error on (hyp: 5) instead of (hyp: '5) ???
-  (pattern (hyp: (quote hypothesis-urlsafe-uuid))))
+  (pattern (hyp: (quote id)))) ; was hypothesis-urlsafe-uuid but that is super annoying to type
 
 (define-syntax-class sc-cur-fail
-  #:datum-literals (param:parse-failure)
-  (pattern (param:parse-failure)))
+  #:datum-literals (param:parse-failure parse-failure)
+  (pattern ((~or* param:parse-failure parse-failure)
+            (~optional (~seq #:prov prov:sc-cur-hyp))
+            ; TODO figure out what to do with these fellows
+            body ...)))
 
 (define-syntax-class sc-cur-circular-link
   #:datum-literals (circular-link cycle)
@@ -604,7 +631,7 @@ All actualize sections should specify a variable name that will be used in inher
 (define-syntax-class sc-cur-todo
   #:datum-literals (TODO)
   (pattern (TODO text:str
-                 prov:sc-cur-hyp
+                 (~optional (~seq #:prov prov:sc-cur-hyp))
                  body:expr ...)))
 
 (define-syntax (define-sc-aspect-lift stx)
@@ -616,9 +643,9 @@ All actualize sections should specify a variable name that will be used in inher
          #:literals (aspect-lifted)
          #:datum-literals (oper-name alt ...)
          (pattern ((~or* oper-name alt ...)
-                   (~or* quantity:sc-quantity dil:sc-dilution boo:sc-bool fail:sc-cur-fail)
+                   (~or* quantity:sc-quantity dil:sc-dilution dil:sc-ratio boo:sc-bool fail:sc-cur-fail)
                    (~optional rest)
-                   prov:sc-cur-hyp)
+                   (~optional (~seq #:prov prov:sc-cur-hyp)))
                   #:attr lifted ;(syntax/loc this-syntax
                   #'(aspect-lifted (-~? fail
                                         (-~? boo.value  ; FIXME these have to be inside an aspect
@@ -627,7 +654,7 @@ All actualize sections should specify a variable name that will be used in inher
                                                        (raise-syntax-error
                                                         'no-unit "quantity missing unit"
                                                         this-syntax (~? quantity))))))
-                                   prov
+                                   (-~? #:prov prov) ; FIXME this is going to break due to missing #:prov probably
                                    (oper-name 'lifted (-~? quantity.normalized
                                                            (-~?
                                                             dil.normalized
@@ -684,7 +711,7 @@ All actualize sections should specify a variable name that will be used in inher
   #:datum-literals (*measure protc:*measure)
   (pattern ((~or* *measure protc:*measure)
             text:str
-            prov:sc-cur-hyp
+            (~optional (~seq #:prov prov:sc-cur-hyp))
             body ...)) ; TODO 
   )
 
@@ -700,7 +727,7 @@ All actualize sections should specify a variable name that will be used in inher
   #:datum-literals (calculate protc:calculate)
   (pattern ((~or* calculate protc:calculate)
             text:str
-            prov:sc-cur-hyp
+            (~optional (~seq #:prov prov:sc-cur-hyp))
             body ...)) ; TODO 
   )
 
@@ -710,8 +737,8 @@ All actualize sections should specify a variable name that will be used in inher
 (define-syntax-class sc-cur-bbc
   #:datum-literals (bbc black-box-component protc:black-box-component)
   (pattern ((~or* bbc black-box-component protc:black-box-component)
-            (~or* name:str term:sc-cur-term)
-            prov:sc-cur-hyp
+            (~or* name:nestr term:sc-cur-term)
+            (~optional (~seq #:prov prov:sc-cur-hyp))
             ; TODO I think we only allow nested bbcs which are implicitly interpreted as a
             ; part-of hierarchy and I think that might be able to act as inputs to other
             ; steps? or do we not want to support that since you could specify a step that
@@ -723,6 +750,7 @@ All actualize sections should specify a variable name that will be used in inher
             ; hand one might also want to specify "bread with holes that are less than .5
             ; cm in diameter" with a telos "so that the jelly doesn't leak through"
             (~alt child:sc-cur-bbc
+                  fail:sc-cur-fail
                   asp:sc-cur-aspect
                   ; FIXME do we restrict the aspect structure here?  OR should we only
                   ; allow aspects to have bbcs as context?  in other words, we need a way
@@ -804,8 +832,8 @@ All actualize sections should specify a variable name that will be used in inher
 (define-syntax-class sc-cur-vary
   #:datum-literals (vary protc:vary protc:implied-vary)
   (pattern  ((~or* vary protc:vary protc:implied-vary)
-             name:str
-             prov:sc-cur-hyp
+             name:nestr
+             (~optional (~seq #:prov prov:sc-cur-hyp))
              (~alt unconv:str
                    inv:sc-cur-invariant
                    par:sc-cur-parameter*) ...)))
@@ -813,13 +841,14 @@ All actualize sections should specify a variable name that will be used in inher
 (define-syntax-class sc-cur-aspect
   #:datum-literals (aspect protc:aspect implied-aspect protc:implied-aspect)
   (pattern ((~or* aspect protc:aspect implied-aspect protc:implied-aspect)
-            (~or* name:str term:sc-cur-term)
-            prov:sc-cur-hyp
+            (~or* name:nestr term:sc-cur-term)
+            (~optional (~seq #:prov prov:sc-cur-hyp))
             (~alt
              (~between (~or* asp:sc-cur-aspect
                              cnt:sc-cur-context
                              bbc:sc-cur-bbc) 0 +inf.0)
-             (~once (~or* unconv:str
+             (~once (~or* unconv:str ; FIXME this isn't actually ~once due to the ... ???
+                          fail:sc-cur-fail
                           inv:sc-cur-invariant
                           par:sc-cur-parameter*
                           mes:sc-cur-*measure
@@ -834,8 +863,8 @@ All actualize sections should specify a variable name that will be used in inher
            #:attr warning #f)
 
   (pattern ((~or* aspect protc:aspect implied-aspect protc:implied-aspect)
-            (~or* name:str term:sc-cur-term)
-            prov:sc-cur-hyp
+            (~or* name:nestr term:sc-cur-term)
+            (~optional (~seq #:prov prov:sc-cur-hyp))
             (~between (~or* asp:sc-cur-aspect
                             cnt:sc-cur-context
                             bbc:sc-cur-bbc) 0 +inf.0) ...)
@@ -888,8 +917,8 @@ All actualize sections should specify a variable name that will be used in inher
 (define-syntax-class sc-cur-aspect-bad
   #:datum-literals (aspect protc:aspect protc:implied-aspect)
   (pattern ((~or* aspect protc:aspect protc:implied-aspect)
-            (~or* name:str term:sc-cur-term)
-            prov:sc-cur-hyp
+            (~or* name:nestr term:sc-cur-term)
+            (~optional (~seq #:prov prov:sc-cur-hyp))
             (~alt
              (~between (~or* asp:sc-cur-aspect cnt:sc-cur-context bbc:sc-cur-bbc) 0 +inf.0)
              (~between (~or unconv:str
@@ -909,8 +938,8 @@ All actualize sections should specify a variable name that will be used in inher
   ; and also have multiple context participants with their own aspects
   #:datum-literals (context protc:context protc:implied-context)
   (pattern ((~or* context protc:context protc:implied-context)
-            (~optional (~or* name:str term:sc-cur-term))
-            prov:sc-cur-hyp  ; for context can just have the link if child is input or bbc
+            (~optional (~or* name:nestr term:sc-cur-term))
+            (~optional (~seq #:prov prov:sc-cur-hyp))  ; for context can just have the link if child is input or bbc
             (~or* unconv:str
                   bbc:sc-cur-bbc
                   ; TODO determine what else can go as context and specifically whether
@@ -935,7 +964,7 @@ All actualize sections should specify a variable name that will be used in inher
 (define-syntax-class sc-cur-executor-verb
   #:datum-literals (executor-verb protc:executor-verb)
   (pattern ((~or* executor-verb protc:executor-verb)
-            name:str prov:sc-cur-hyp body:expr ...)))
+            name:nestr (~optional (~seq #:prov prov:sc-cur-hyp)) body:expr ...)))
 
 (define-syntax-class sc-cur-qualifiable
   (pattern (~or* inp:sc-cur-input
@@ -966,7 +995,7 @@ All actualize sections should specify a variable name that will be used in inher
   #:datum-literals (telos protc:telos)
   (pattern ((~or* telos protc:telos)
             text:str
-            prov:sc-cur-hyp
+            (~optional (~seq #:prov prov:sc-cur-hyp))
             child:sc-cur-qualifiable ...)))
 
 (define-syntax-class sc-cur-many
@@ -993,7 +1022,7 @@ All actualize sections should specify a variable name that will be used in inher
   #:datum-literals (many protc:many)
   (pattern ((~or* many protc:many)
             (~or* inp:sc-cur-input bbc:sc-cur-bbc)  ; one at a time here
-            prov:sc-cur-hyp
+            (~optional (~seq #:prov prov:sc-cur-hyp))
             (~optional par:sc-cur-parameter*)
             )))
 
@@ -1004,14 +1033,14 @@ All actualize sections should specify a variable name that will be used in inher
             (~or* "must" "should" "when" "unless"
                   "seems to work better when"
                   "you can not do this")
-            prov:sc-cur-hyp
+            (~optional (~seq #:prov prov:sc-cur-hyp))
             child:sc-cur-qualifiable ...)))
 
 (define-syntax-class sc-cur-input
   #:datum-literals (input protc:input protc:implied-input)
   (pattern ((~or* input protc:input protc:implied-input)
-            (~or* name:str term:sc-cur-term)
-            prov:sc-cur-hyp
+            (~or* name:nestr term:sc-cur-term)
+            (~optional (~seq #:prov prov:sc-cur-hyp))
             (~alt ;inv/par:sc-cur-inv/par
              unconv:str
              crc:sc-cur-circular-link  ; FIXME need to deal with this properly
@@ -1026,7 +1055,7 @@ All actualize sections should specify a variable name that will be used in inher
              ; TODO tighter restrictions needed here
              #;body:expr) ...
             )
-           #:attr prov-id (attribute prov.hypothesis-urlsafe-uuid)
+           #:attr prov-id (attribute prov.id)
            #:attr term-label (attribute term.label)
            #:attr (inv-lifted 1) (attribute inv.lifted)
            #:attr (par-lifted 1) (attribute par.lifted)

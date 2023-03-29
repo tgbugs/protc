@@ -8,7 +8,7 @@
 ; FIXME do we parameterize here or what?
 
 (define-id-funcs
-  [hyp "https://hyp.is/"]
+  [hyp "https://hyp.is/"] ; FIXME this causes issues with prov syntax overlay ... or does it?
   [hypa "https://hypothes.is/a/"]
   [hyp.api "https://hypothes.is/api/annotations/"]
   [DOI "https://doi.org/"]

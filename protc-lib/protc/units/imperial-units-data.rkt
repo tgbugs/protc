@@ -15,5 +15,6 @@
   (DPI . pixels-per-inch) ; dpi lowercase is dry pints apparently ? pint uses pixels-per-inch
   (Fr . french-gauge)  ; also Fg and F but F has many collisions with degrees-fahrenheit
   (G . birmingham-gauge)
+  (mmHg . millimeters-hg)
   )
 )
