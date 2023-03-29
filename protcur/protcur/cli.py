@@ -9,7 +9,7 @@ Options:
     -o --output-type=OTYPE    output type [default: lang]
                               options: lang top less need
     -t --output-format=OFMT   output format [default: rkt]
-                              options: rkt  html
+                              options: rkt prot html
 
 """
 
@@ -84,6 +84,10 @@ class Main(clif.Dispatcher):
 
         [protc(a, annos) for a in annos]
 
+        if self.options.debug:
+            from .analysis import cleanup2023
+            cleanup2023(protc, annos, pool, idn)
+
         path = Path(self.options.path)
 
         if self.options.output_format == 'prot':
@@ -124,7 +128,9 @@ class Main(clif.Dispatcher):
                     hid = k
                 else:
                     id = k.asUri()
-                    hid = k.uri_human.asUri()
+                    hid = (k.uri_human_html
+                           if hasattr(k, 'uri_human_html')
+                           else k.uri_human).asUri()
                 return f'\n  #:id {id}\n  #:hid {hid}\n  #:anno-count {len(v)}{ds}'  # FIXME non pio ids can have () etc. in them
 
             body = '\n'.join([

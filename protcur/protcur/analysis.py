@@ -1687,6 +1687,115 @@ def test_annos(annos):
                                        'tags':['protc:parameter*']}))
 
 
+def cleanup2023(protc, annos, pool, idn):
+    # replies at top level (bad)
+    #oops = [p for p in protc if p.isAstNode and
+            #p._anno.is_reply() and
+            #not [t for t in p.tags if t.startswith('protc:implied-')]]
+    atlp = [p for p in protc if p.astTopLevelReply]
+    # missing parents
+    mps = [p for p in protc if p.needsParent and not p.hasAstParent]
+
+    # mismatch between hasAstParent and astParents
+    confusion = [p for p in protc if bool(p.hasAstParent) != bool(p.astParents)]
+    assert not confusion  # sometimes we are sometimes we aren't
+    con_nohas = [p for p in confusion if not p.hasAstParent]  # now resolved
+    con_nopar = [p for p in confusion if not p.astParents]
+    # con_nopar has a major fraction of ilxtr:technique tags
+    from collections import defaultdict
+    dd = defaultdict(list)
+    _  = [dd.__getitem__(t).append(c) for c in con_nopar for t in c.tags]
+    connex = dict(dd)
+    lc = {k:len(v) for k, v in connex.items()}
+
+    so = set(p.id for p in atlp)
+    mo = set(p.id for p in mps)
+    bo = so & mo
+    so_is_subset = bo == so
+
+    # things not of concern
+    nan_nap = [p for p in protc if not p.isAstNode and p.nonAstParents]  # one case no issue
+    an_ap = [p for p in protc if p.isAstNode and p.astParents]  # many cases default expected
+    # things of potential concern
+    # now that hasAstParent is reliable we can use it to
+    # check cases where not isAstNode and hasAstParent which
+    # would indicate a missing tag of some kind
+    # not ast node but ast parent, which it turns out is identical to con_nopar
+    nan_bap = [p for p in protc if not p.isAstNode and p.hasAstParent]
+    proof = set(con_nopar) == set(nan_bap)  # now no longer matches
+    # since asParents doesn't require the caller to be an astNode
+    # which is the correct and more consistent approach
+    an_nap = [p for p in protc if p.isAstNode and p.nonAstParents]
+    # breakdown of an_nap issues, ilxtr:technique making up the bulk
+    an_nap_mult = [a for a in an_nap if [p for p in a.nonAstParents if len(p.tags) > 1]]
+    an_nap_sing = [a for a in an_nap if [p for p in a.nonAstParents if len(p.tags) == 1]]
+    an_nap_none = [a for a in an_nap if [p for p in a.nonAstParents if len(p.tags) == 0]]
+    mult_ps = set(p for a in an_nap_mult for p in a.nonAstParents)
+    sing_ps = set(p for a in an_nap_sing for p in a.nonAstParents)
+    none_ps = set(p for a in an_nap_none for p in a.nonAstParents)
+    mult_ts = set(t for p in mult_ps for t in p.tags)
+    sing_ts = set(t for p in sing_ps for t in p.tags)
+    assert not set(nan_bap) & set(an_nap)  # should be an is the empty set
+    # things of actual concern
+    naps = set(p for a in an_nap for p in a.nonAstParents)
+    # ast -> non -> ast cases
+    # FIXME and we aren't even considering cases where the might be
+    # ast -> non -> non -> ast fortunately we know that that doesn't
+    # happen because there is only a single non -> non case
+    problems = [n for n in nan_bap if n in naps]
+    # the children render in the here string meaning they are quite lost
+    # looks like most are from ilxtr:technique interposing, I think that
+    # can be resolved
+    btags = set(t for p in problems for t in p.tags)
+    argh = [p for n in problems for p in n.astParents]
+
+    broken = atlp, problems
+    incomplete = mps,
+
+    # check for duplicates
+    dd = defaultdict(list)
+    for a in annos:
+        if a.is_annotation():
+            dd[(a.exact, a.prefix, a.suffix)].append(a)
+    raw_all_dupes = dict(dd)
+    raw_dupes = [v for k, v in raw_all_dupes.items() if len(v) > 1]
+    # ok, wow well, there are 3538 of these using the strictest possible matching rule
+    hrm = set(len(d) for d in raw_dupes)
+    # see what has high dupe counts, looks like materials tables mostly
+    # or theme and variations kinds of stuff e.g. buffers with sigh differences
+    # e.g. from text that was copied between protocols
+    [(len(v), k) for k, v in raw_all_dupes.items() if len(v) > 10]
+    dd = defaultdict(list)
+    for a in annos:
+        if a.is_annotation():
+            dd[(a.uri_api_int, a.exact, a.prefix, a.suffix)].append(a)
+    raw_doc_dupes = dict(dd)
+    doc_dupes = [v for k, v in raw_doc_dupes.items() if len(v) > 1 if k[0] is not None]
+    # restricting within a single paper puts us at 2818
+    # diff tells us how many excess annotations were made 3265
+    # XXX NOTE some of these are probably intentional and are input/output duals
+    # on the other hand ... even in non pio protocols there is repeated text
+    total_dupe_annos = sum(len(v) for v in doc_dupes)
+    diff = total_dupe_annos - len(doc_dupes)
+    not_pio = [v for k, v in raw_doc_dupes.items() if len(v) > 1 if k[0] is None]
+    a, b = not_pio[0]
+    c, d = protc.byId(a.id), protc.byId(b.id)
+    a._row['target'][0]['selector'][0] == b._row['target'][0]['selector'][0]
+    # probably can't use this for the ones that were anchored to pio app because
+    # the range selector changes
+
+    # techniques
+    # finally found them
+    from collections import Counter
+    techs = [p for p in protc if 'ilxtr:technique' in p.tags]
+
+    texacts = sorted([p.value.strip().lower() for p in techs])
+    tc = Counter(texacts)
+    tc.most_common()
+    tch = sorted([t for t in techs if list(t.children)], key=lambda p:len(list(p.rchildren)))
+    breakpoint()
+
+
 def main():
     from time import sleep, time
     from pprint import pformat
