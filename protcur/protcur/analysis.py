@@ -1609,7 +1609,8 @@ class ParameterValue:
             rest = ''  # in the even that None shows up
 
         if not success:
-            out = f'{v}{self.NL}{indent}{rest}'
+            # always wrap rest in (rest ...) to keep the syntax consistent
+            out = f'{v}{self.NL}{indent}(rest{self.SPACE}{rest})'
         else:
             out = v + (f'{self.NL}{indent}(rest{self.SPACE}{rest})' if rest else '')
 
