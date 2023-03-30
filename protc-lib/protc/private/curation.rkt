@@ -3,12 +3,14 @@
 (require
  "direct-model.rkt"
  rdf/utils
+ "curation-unprefixed.rkt"
  (for-syntax
   racket/base
   racket/path
   racket/syntax
   syntax/parse
   "utils.rkt"
+  #;
   "identifier-functions.rkt"
   (except-in "direct-model.rkt" #%top)
   "syntax-classes.rkt"))
@@ -32,10 +34,30 @@
 
 ; aspect and input are the only 2 that need to lift units out
 
-(define-syntax (input-instance stx)
-  (syntax-parse stx
+(define-syntax (qualifier stx) ; very rare
+  (syntax-parse stx ; TODO
     [(_ body ...)
      #'(quote (input-instance body ...))]))
+
+(define-syntax (input-instance stx)
+  (syntax-parse stx ; TODO
+    [(_ body ...)
+     #'(quote (input-instance body ...))]))
+
+(define-syntax (output-instance stx)
+  (syntax-parse stx ; TODO
+    [(_ body ...)
+     #'(quote (input-instance body ...))]))
+
+(define-syntax (symbolic-input stx)
+  (syntax-parse stx ; TODO
+    [(_ body ...)
+     #'(quote (symbolic-input body ...))]))
+
+(define-syntax (symbolic-output stx)
+  (syntax-parse stx ; TODO
+    [(_ body ...)
+     #'(quote (symbolic-output body ...))]))
 
 (define-syntax (transform-verb stx)
   (syntax-parse stx
@@ -98,12 +120,16 @@
          (input "input to tlt 2" #:prov (hyp: '2))))
 
 (define-syntax (output stx)
+  ; FIXME use the syntax class to avoid duplication probably
   (syntax-parse stx
     #:datum-literals (hyp: quote spec make)
-    #:literal-sets (protc-fields protc-ops)  ; whis this not working?
-    #:literals (input)
+    #:literal-sets (#;ls-output-nest protc-fields protc-ops)  ; whis this not working?
+    ; FIXME so #:literals works but  #:literal-sets doesn't SIGH SIGH SIGH
+    #:literals (input circular-link black-box-component objective* aspect invariant parameter* TODO output parser-failure)
     [(_ (~or* name:nestr term:sc-cur-term) (~optional (~seq #:prov prov:sc-cur-hyp))
         (~alt unconv:str
+             ((~or* input circular-link black-box-component objective* aspect invariant parameter* TODO output parser-failure)
+              checked-by-their-own-macros ...)
               asp:sc-cur-aspect
               inv:sc-cur-invariant
               par:sc-cur-parameter*
@@ -125,7 +151,10 @@
               ; and I do it at this stage becuase the right time to do this is when converting from
               ; protc/ur to direct-model or protc/base or whatever because this is the point at
               ; which we know that things should be flattened and how they were originally nested
-              out:sc-cur-output #;
+              out:sc-cur-output
+              obj:sc-cur-objective*
+              fail:sc-cur-fail
+              #;
               other:expr) ...)
      #:with spec-name (if (attribute prov.id)
                           (if (number? (syntax-e #'prov.id))

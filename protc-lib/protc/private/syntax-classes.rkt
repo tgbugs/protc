@@ -744,19 +744,20 @@ All actualize sections should specify a variable name that will be used in inher
             ; pumpkin) which would be done via a qualifier on the black box on the other
             ; hand one might also want to specify "bread with holes that are less than .5
             ; cm in diameter" with a telos "so that the jelly doesn't leak through"
-            (~alt child:sc-cur-bbc
-                  fail:sc-cur-fail
-                  asp:sc-cur-aspect
-                  ; FIXME do we restrict the aspect structure here?  OR should we only
-                  ; allow aspects to have bbcs as context?  in other words, we need a way
-                  ; to know whether the bbc has a parent that is the primary input, or
-                  ; whether it is the black box complement (environment) TODO require
-                  ; non-recursive definition of bbcs in this hierarchy so that a location
-                  ; aspect can use previously definted components that are local to the
-                  ; context without risk of collision
-                  par:sc-cur-parameter*
-                  inv:sc-cur-invariant
-                  ) ...))
+            (~alt
+             unconv:str
+             child:sc-cur-bbc
+             fail:sc-cur-fail
+             asp:sc-cur-aspect
+             ; FIXME do we restrict the aspect structure here?  OR should we only
+             ; allow aspects to have bbcs as context?  in other words, we need a way
+             ; to know whether the bbc has a parent that is the primary input, or
+             ; whether it is the black box complement (environment) TODO require
+             ; non-recursive definition of bbcs in this hierarchy so that a location
+             ; aspect can use previously definted components that are local to the
+             ; context without risk of collision
+             par:sc-cur-parameter*
+             inv:sc-cur-invariant) ...))
   )
 
 (module+ test
@@ -1054,13 +1055,15 @@ All actualize sections should specify a variable name that will be used in inher
              crc:sc-cur-circular-link  ; FIXME need to deal with this properly
              inp:sc-cur-input  ; allow nested inputs, will probably need to split spec vs impl here
              bbc:sc-cur-bbc
+             obj:sc-cur-objective* ; FIXME this would be the way make this but I'm seeing the "why actualize this"
              qal:sc-cur-any-qualifier
              ;exv:sc-cur-executor-verb
              asp:sc-cur-aspect
              inv:sc-cur-invariant
              par:sc-cur-parameter*
              tod:sc-cur-todo
-             out:sc-cur-output) ...)
+             out:sc-cur-output
+             fail:sc-cur-fail) ...)
            #:attr prov-id (attribute prov.id)
            #:attr term-label (attribute term.label)
            ))
@@ -1082,7 +1085,9 @@ All actualize sections should specify a variable name that will be used in inher
             (~optional (~seq #:prov prov:sc-cur-hyp))
             body:expr ...)))
 
+;; TODO really need a (dereference 'prov) id for things that appear more than once
 (define-syntax-class sc-cur-input
+  ; FIXME it remains super annoying that failure to match a syntax class acts like a json schema failure and doesn't report the deepest point reached
   #:datum-literals (input protc:input protc:implied-input) ; FIXME TODO make this work with the (prefix-in) require combinator?
   ;#:literals (input implied-input) ; grrrrrrrrrrrrrrr
   ; syntax classes enforce the literal structure, but they can't reference the actual
@@ -1094,13 +1099,16 @@ All actualize sections should specify a variable name that will be used in inher
              unconv:str
              crc:sc-cur-circular-link  ; FIXME need to deal with this properly
              inp:sc-cur-input  ; allow nested inputs, will probably need to split spec vs impl here
+             inpi:sc-cur-input-instance ; more like input-type in its usage here, but understandable
+             obj:sc-cur-objective*
              bbc:sc-cur-bbc
              qal:sc-cur-any-qualifier
-             exv:sc-cur-executor-verb
+             ;exv:sc-cur-executor-verb
              asp:sc-cur-aspect
              inv:sc-cur-invariant
              par:sc-cur-parameter*
              tod:sc-cur-todo
+             fail:sc-cur-fail
              ; TODO tighter restrictions needed here
              #;body:expr) ...
             )

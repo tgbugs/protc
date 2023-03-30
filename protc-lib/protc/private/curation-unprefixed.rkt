@@ -90,3 +90,5 @@
   (syntax-parse stx
     [(_ body ...)
      #'(quote (param:parse-failure body ...))]))
+
+(define parser-failure (make-rename-transformer #'param:parser-failure)) ; avoid issues with syntax classes and colons ;_;
