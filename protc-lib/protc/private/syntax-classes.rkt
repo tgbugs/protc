@@ -92,17 +92,12 @@ All actualize sections should specify a variable name that will be used in inher
            racket/function))
 
 (define-syntax-class nestr
-  (pattern string:str
-           #:do [(unless (non-empty-string? (syntax-e #'string))
-                   (raise-syntax-error
-                    'empty-string "empty string not allowed in this context"
-                    this-syntax #'string))]))
+  (pattern string:str #:fail-unless (non-empty-string? (syntax-e #'string)) "empty string not allowed in this context"))
 
 (module+ test
   (syntax-parse #'"hello" [string:nestr #t])
   (syntax-parse #'"1" [string:nestr #t])
-  (check-exn exn:fail:syntax? (thunk (syntax-parse #'"" [string:nestr #t])))
-  )
+  (check-exn exn:fail:syntax? (thunk (syntax-parse #'"" [string:nestr #t]))))
 
 (define-syntax-class message-struct-sc
   (pattern (-name:id body-pattern ...)
@@ -839,8 +834,9 @@ All actualize sections should specify a variable name that will be used in inher
                    par:sc-cur-parameter*) ...)))
 
 (define-syntax-class sc-cur-aspect
-  #:datum-literals (aspect protc:aspect implied-aspect protc:implied-aspect)
-  (pattern ((~or* aspect protc:aspect implied-aspect protc:implied-aspect)
+  #:datum-literals (aspect protc:aspect protc:implied-aspect)
+  ; reminder, don't need unprefixed implied- because if you are unprefixed you are writing the protocl directly
+  (pattern ((~or* aspect protc:aspect protc:implied-aspect)
             (~or* name:nestr term:sc-cur-term)
             (~optional (~seq #:prov prov:sc-cur-hyp))
             (~alt
@@ -862,7 +858,7 @@ All actualize sections should specify a variable name that will be used in inher
             )
            #:attr warning #f)
 
-  (pattern ((~or* aspect protc:aspect implied-aspect protc:implied-aspect)
+  (pattern ((~or* aspect protc:aspect protc:implied-aspect)
             (~or* name:nestr term:sc-cur-term)
             (~optional (~seq #:prov prov:sc-cur-hyp))
             (~between (~or* asp:sc-cur-aspect
@@ -964,7 +960,19 @@ All actualize sections should specify a variable name that will be used in inher
 (define-syntax-class sc-cur-executor-verb
   #:datum-literals (executor-verb protc:executor-verb)
   (pattern ((~or* executor-verb protc:executor-verb)
-            name:nestr (~optional (~seq #:prov prov:sc-cur-hyp)) body:expr ...)))
+            name:nestr
+            (~optional (~seq #:prov prov:sc-cur-hyp))
+            #; #; ; FIXME for now leave it at body because executor
+                  ; verb binds completely random things and having it
+                  ; unpack will show which ones are not property
+                  ; structured i.e. because an aspect would be lifted
+                  ; to top level
+            (~alt
+             unconv:str
+             inp:sc-cur-input
+             out:sc-cur-output
+             ) ...
+            body:expr ...)))
 
 (define-syntax-class sc-cur-qualifiable
   (pattern (~or* inp:sc-cur-input
@@ -1036,8 +1044,49 @@ All actualize sections should specify a variable name that will be used in inher
             (~optional (~seq #:prov prov:sc-cur-hyp))
             child:sc-cur-qualifiable ...)))
 
+(define-syntax-class sc-cur-output
+  #:datum-literals (output protc:output protc:implied-output)
+  (pattern ((~or* output protc:output protc:implied-output)
+            (~or* name:nestr term:sc-cur-term)
+            (~optional (~seq #:prov prov:sc-cur-hyp))
+            (~alt
+             unconv:str
+             crc:sc-cur-circular-link  ; FIXME need to deal with this properly
+             inp:sc-cur-input  ; allow nested inputs, will probably need to split spec vs impl here
+             bbc:sc-cur-bbc
+             qal:sc-cur-any-qualifier
+             ;exv:sc-cur-executor-verb
+             asp:sc-cur-aspect
+             inv:sc-cur-invariant
+             par:sc-cur-parameter*
+             tod:sc-cur-todo
+             out:sc-cur-output) ...)
+           #:attr prov-id (attribute prov.id)
+           #:attr term-label (attribute term.label)
+           ))
+
+(define-syntax-class sc-cur-objective*
+  ; TODO
+  #:datum-literals (objective* protc:objective*)
+  (pattern ((~or* objective* protc:objective*)
+            (~or* name:nestr term:sc-cur-term)
+            (~optional (~seq #:prov prov:sc-cur-hyp))
+            body:expr ...)))
+
+
+(define-syntax-class sc-cur-input-instance
+  ; TODO
+  #:datum-literals (input-instance protc:input-instance)
+  (pattern ((~or* input-instance protc:input-instance)
+            (~or* name:nestr term:sc-cur-term)
+            (~optional (~seq #:prov prov:sc-cur-hyp))
+            body:expr ...)))
+
 (define-syntax-class sc-cur-input
-  #:datum-literals (input protc:input protc:implied-input)
+  #:datum-literals (input protc:input protc:implied-input) ; FIXME TODO make this work with the (prefix-in) require combinator?
+  ;#:literals (input implied-input) ; grrrrrrrrrrrrrrr
+  ; syntax classes enforce the literal structure, but they can't reference the actual
+  ; syntax that they constrain, which is beyond annoying due to the prefix-in issues
   (pattern ((~or* input protc:input protc:implied-input)
             (~or* name:nestr term:sc-cur-term)
             (~optional (~seq #:prov prov:sc-cur-hyp))

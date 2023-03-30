@@ -15,6 +15,8 @@
 
 (provide (all-defined-out)
          (rename-out [input implied-input]  ; this does not prevent the export of input as input
+                     [aspect implied-aspect]
+                     [output implied-output]
                      #; ; not entirely clear how we want to deal with #%top
                      [rdf-top #%top])
          (all-from-out "direct-model.rkt"))
@@ -29,6 +31,11 @@
           (for-syntax racket/function)))
 
 ; aspect and input are the only 2 that need to lift units out
+
+(define-syntax (input-instance stx)
+  (syntax-parse stx
+    [(_ body ...)
+     #'(quote (input-instance body ...))]))
 
 (define-syntax (transform-verb stx)
   (syntax-parse stx
@@ -54,8 +61,10 @@
      ; should be animal be the black box here? do we need primary-participant?
      ; XXX assume that verbs are normalized, error if a transformer is not defined or something ? order matters or type matters if we have it?
      ;#:with sigh (if #'act.prov (begin (println (list 'wat #'act.prov)) #'(#:prov act.prov)) #f)
-     #'(transform-verb act.name (~? (~@ #:prov act.prov))
-        act.body ...)]))
+     #'(begin ; FIXME TODO in the absense of a working implementation of transform-verb at least make sure that we expand and evaluate nested forms
+         (transform-verb act.name (~? (~@ #:prov act.prov)))
+         act.body ...
+         )]))
 
 (define-syntax (actualize stx)
   (syntax-parse stx
@@ -74,7 +83,7 @@
                           ; FIXME spaces!?
                           (datum->syntax #'sec.term (string->symbol (syntax-e #'sec.term-label)))
                           )
-     #'(actualize black-box #:prov (hyp: 'sec.prov-id)
+     #'(actualize black-box (~? (~@ #:prov sec.prov))
                   (~? sec.inv-lifted) ...
                   (~? sec.par-lifted) ...
                   (~? sec.asp (raise-syntax-error "HOW?!")) ...
@@ -92,37 +101,71 @@
   (syntax-parse stx
     #:datum-literals (hyp: quote spec make)
     #:literal-sets (protc-fields protc-ops)  ; whis this not working?
+    #:literals (input)
     [(_ (~or* name:nestr term:sc-cur-term) (~optional (~seq #:prov prov:sc-cur-hyp))
         (~alt unconv:str
               asp:sc-cur-aspect
               inv:sc-cur-invariant
               par:sc-cur-parameter*
               bbc:sc-cur-bbc
-              input:expr) ...)
-     #:with spec-name (if (number? (syntax-e #'prov.id))
-                          (fmtid "_~a" #'prov.id)  ; recall that #'_id doesn't work because the type is not strictly known
-                          #'prov.id)
+              in:sc-cur-input
+              ; FIXME allowing nested outputs is a problem because because those are defacto
+              ; a new nested protocol burried inside a step of a single other protocol
+              ; while in principle it would be nice to allow such nesting, it would mean that
+              ; nested outputs would need scoping rules, which we are not prepared to deal with
+              ; that kind of composition is also problematic because there are implicit order
+              ; restrictions on processes that are nested in this way, finally lifting outputs
+              ; out to the top level is not exactly straight forward but can be done where the
+              ; output spec will be replaced by a reference to the output type as an input
+              ; in short, for now we are going to leave those as syntax errors because they are
+              ; nightmares to deal with and they break expansion of spec via define-make due to
+              ; nesting begins inside the #:input keyword of define-make (it seems)
+              ; XXX preserving the comments above with a note that I ended up implementing
+              ; lifting them out to top level and adding the nested outputs to the inputs list
+              ; and I do it at this stage becuase the right time to do this is when converting from
+              ; protc/ur to direct-model or protc/base or whatever because this is the point at
+              ; which we know that things should be flattened and how they were originally nested
+              out:sc-cur-output #;
+              other:expr) ...)
+     #:with spec-name (if (attribute prov.id)
+                          (if (number? (syntax-e #'prov.id))
+                           (fmtid "_~a" #'prov.id)  ; recall that #'_id doesn't work because the type is not strictly known
+                           #'prov.id)
+                          (fmtid "spec-~a" ; FIXME we need gensym here too
+                                 (if (attribute name)
+                                     #'name
+                                     (datum->syntax #'term (string->symbol (syntax-e #'term.label)))))
+                          )
      #:with black-box (if (attribute name)
                           (datum->syntax #'name (string->symbol (syntax-e #'name)))
                           ; FIXME type vs token ...
                           ; FIXME spaces!?
-                          (datum->syntax #'term (string->symbol (syntax-e #'term.label)))
+                          (datum->syntax #'term (string->symbol (syntax-e #'term.label))) ; FIXME term.label can be false
                           )
-     #'(define-make (spec-name black-box)
-         "this is a docstring from curation!"
-         #:prov (hyp: prov.id)
-         ;#:vars (what is the issue here folks)
-         ; othis stuff works at top level ...
-         ;#:inputs (input ...)
-         ;#:constraints ((~? asp) ... (~? par) ...)
-         #:inputs (input ...)
-         #:constraints ((~? asp) ... (~? par.lifted) ... (~? inv.lifted) ...)
+     #'(begin
+         (define-make (spec-name black-box)
+          "this is a docstring from curation!"
+          (~? (~@ #:prov prov))
+          ;#:vars (what is the issue here folks)
+          ; othis stuff works at top level ...
+          ;#:inputs (input ...)
+          ;#:constraints ((~? asp) ... (~? par) ...)
+          #:inputs (in ... (input out.name (~? (~@ #:prov out.prov))) ...)
+          #:constraints ((~? asp) ... (~? par.lifted) ... (~? inv.lifted) ...)
+          ;other ...
+           )
+         out ...
          )
      ]))
+
 (module+ test
   (output "thing" #:prov (hyp: 'prov-a)
           (parameter* (quantity 100 (unit 'meters 'milli))
                       #:prov (hyp: 'prov-b)))
+  ;#; ; now illegal
+  (output "t1"
+          (output "t2")
+          )
   )
 
 (define-syntax (black-box-component stx)

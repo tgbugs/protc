@@ -615,6 +615,13 @@ should be considered to be completely hocus pocus IF they are stored
                                   (.docstring . (~? docstring ""))
                                   (.specs ,@(name-get))))
      #'(begin
+         ; if you get an expression context issue here it is likely
+         ; because something that expands to make is not being moved
+         ; up to the top level
+
+         ; DO NOT try to fix the issue by using lexical scope instead,
+         ; it can trigger infinite looping because name-get will not
+         ; be bound in a scope where the macroexpander can find it
          (define name-stx #'export-stx)
          (define name-ast
            '(data export-stx))
@@ -703,7 +710,7 @@ should be considered to be completely hocus pocus IF they are stored
                                    )
                           ;(.inputs (~? (~@ input ...)))
                           (.outputs name)
-                          (.constraints (~? (~@ ,constraint ...)))  ; principle of least surprise fails for ~optional but not for ~or* ???
+                          (.constraints (~? (~@ ,constraint ...)))  ; principle of least surprise fails for ~optional but not for ~or* ??? ; FIXME these dont' get evaluated ...
                           (.vars (~? (~@ var ...)))  ; TODO these need to be requested before export to pdf
                           (.measures (~? (~@ (constrained-input aspect* ...) ...)))
                           (.steps (~? (~@ step.instruction ...)))  ; FIXME if you see ?: attribute contains non-list value it is because you missed ~?
@@ -717,6 +724,7 @@ should be considered to be completely hocus pocus IF they are stored
                           ; FIXME this fall through means that fail-unless syle errors
                           ; just keep parsing and we end up with name errors
                           )
+     #:with recurse stx
      #:with name-binding (let* ([-name #'name]
                                 [-name-stx #'name-stx])
                            (if (identifier-binding #'name)
@@ -730,27 +738,30 @@ should be considered to be completely hocus pocus IF they are stored
                                    (define name-ast '(data export-stx))
                                    (define name specification-phase))))
 
-     (if (identifier-binding #'name-get)
-         #'(begin
-             ;(~? no-bb-yet)
-             (name-add 'spec/name)
-             ;name-impls-stx
-             (define-for-syntax name-impls-data '())
-             (define-syntax (name-impls-add stx)
-               (syntax-parse stx
-                 [(_ value)
-                  #'(begin-for-syntax
-                      (set! name-impls-data (cons value name-impls-data)))]))
-             (define-syntax (name-impls-get stx)  ; this works, but name-get without parens does not
-               #`(quote #,name-impls-data))
-             ;(provide spec/name)
-             (define spec/name
-               `export-stx))
-         #`(begin
-             (spec (black-box name thing))
-             ; recursion here ...
-             #,stx))
-     ]
+     ; probably want to look into syntax-local-make-definition-context when we do this for real
+     (if (identifier-binding #'spec/name)
+         #'(begin) ; we've already defined the subtree and the reference will be there
+         ; this is a deficiency in how we deal with duplicate parent nodes in the pipelines
+         (if (identifier-binding #'name-get)
+             #'(begin
+                 ;(~? no-bb-yet)
+                 (name-add 'spec/name)
+                 ;name-impls-stx
+                 (define-for-syntax name-impls-data '())
+                 (define-syntax (name-impls-add stx)
+                   (syntax-parse stx
+                     [(_ value)
+                      #'(begin-for-syntax
+                          (set! name-impls-data (cons value name-impls-data)))]))
+                 (define-syntax (name-impls-get stx)  ; this works, but name-get without parens does not
+                   #`(quote #,name-impls-data))
+                 ;(provide spec/name)
+                 (define spec/name
+                   `export-stx))
+             #`(begin ; define the black box first if it has not already been named
+                 (spec (black-box name thing))
+                 recurse ; watch out for silent infinite loops here if the conditional is wrong
+                 )))]
     [(_ (~or (measure name ...+ aspect)  ; we forth now
              (>^> name ...+ aspect)
              (*: name ...+ aspect)
