@@ -84,11 +84,9 @@
      #'(begin errors ...)]))
 
 (module+ test
-  (circular-link no-type (cycle 'lol1 'lol2)))
+  (circular-link no-type (cycle lol1 lol2 lol3)))
 
 (define-syntax (param:parse-failure stx) ; FIXME param: namespace ? also FIXME not a exporting correctly? ; uh does it need to be defined in the kernel?
   (syntax-parse stx
     [(_ body ...)
      #'(quote (param:parse-failure body ...))]))
-
-(define parser-failure (make-rename-transformer #'param:parser-failure)) ; avoid issues with syntax classes and colons ;_;

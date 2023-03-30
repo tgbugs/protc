@@ -13,6 +13,7 @@
   #;
   "identifier-functions.rkt"
   (except-in "direct-model.rkt" #%top)
+  ;"curation-unprefixed.rkt"
   "syntax-classes.rkt"))
 
 (provide (all-defined-out)
@@ -25,24 +26,55 @@
 
 (module+ test
   (require rackunit
-          "utils.rkt"
-          "syntax-classes.rkt"
-          syntax/parse
-          racket/function
-          syntax/macro-testing
-          (for-syntax racket/function)))
+           "utils.rkt"
+           "syntax-classes.rkt"
+           syntax/parse
+           racket/function
+           syntax/macro-testing
+           (for-syntax racket/function))
+  (define-syntax (check-fail-syntax stx)
+    (syntax-parse stx
+      [(_ body)
+       #'(check-exn exn:fail:syntax? (thunk (convert-syntax-error body)))
+       ])))
 
 ; aspect and input are the only 2 that need to lift units out
 
-(define-syntax (qualifier stx) ; very rare
-  (syntax-parse stx ; TODO
-    [(_ body ...)
-     #'(quote (input-instance body ...))]))
+(define-syntax (make-placeholder-syntax stx)
+  (syntax-parse stx
+    [(_ stx-name)
+     #:with elip (datum->syntax this-syntax '...)
+     #'(define-syntax (stx-name stx)
+         (syntax-parse stx ; TODO
+           [(_ name (~optional (~seq #:prov prov)) body elip)
+            #'(begin
+                (quote (stx-name name (~? (~@ #:prov prov))))
+                body elip)]))]))
 
+; TODO for all of these
+(make-placeholder-syntax black-box)
+(make-placeholder-syntax input-instance)
+(make-placeholder-syntax output-instance)
+(make-placeholder-syntax symbolic-input)
+(make-placeholder-syntax symbolic-output)
+(make-placeholder-syntax executor) ; rare
+(make-placeholder-syntax qualifier) ; rare
+(make-placeholder-syntax objective*)
+(make-placeholder-syntax telos)
+
+(define (order) #f)
+(define (repeate) #f)
+
+(define (references-for-use) #f)
+(define (references-for-evidence) #f)
+
+#|
+#;
 (define-syntax (input-instance stx)
   (syntax-parse stx ; TODO
-    [(_ body ...)
-     #'(quote (input-instance body ...))]))
+    [(_ name (~optional (~seq #:prov prov)) body ...)
+     #'(begin (input-instance body ...))]))
+
 
 (define-syntax (output-instance stx)
   (syntax-parse stx ; TODO
@@ -59,16 +91,17 @@
     [(_ body ...)
      #'(quote (symbolic-output body ...))]))
 
-(define-syntax (transform-verb stx)
-  (syntax-parse stx
-    [(_ body ...)
-     #'(quote (transform-verb body ...))]))
-
 (define-syntax (executor stx) ; rarely used explicit mention of who should be doing what
   ; TODO
   (syntax-parse stx
     [(_ body ...)
      #'(quote (executor body ...))]))
+|#
+
+(define-syntax (transform-verb stx)
+  (syntax-parse stx
+    [(_ body ...)
+     #'(quote (transform-verb body ...))]))
 
 (define-syntax (executor-verb stx)
   (syntax-parse stx
@@ -90,11 +123,46 @@
 
 (define-syntax (actualize stx)
   (syntax-parse stx
+    [(_ black-box:id
+        (~optional (~seq #:prov prov:sc-cur-hyp))
+        body ...)
+     #'(begin ; XXX for now expand the rest of the forms so we get error messages
+         'black-box ; XXX many name errors for internal black boxes need to add binding context
+         body ...)]
+    #;
     [thing #;(_ wut:id (~optional (~seq #:prov prov)) rest:expr ...)
            #''thing]))
 
 (define-syntax (input stx)
   (syntax-parse stx
+    #:disable-colon-notation
+    #:conventions (conv-ur-parts)
+    #:literals (TODO aspect black-box-component circular-link input invariant objective* output parameter* param:parse-failure)
+    [(_ (~or* name term)
+        (~optional (~seq #:prov prov))
+        (~alt unconv
+              (~and (aspect _ ...) asp)
+              (~and (invariant _ ...) inv) ; things that we are going to transform at this level can't just be check by their own macros probably
+              (~and (parameter* _ ...) par)
+              (~and
+               ((~or* TODO aspect black-box-component circular-link input invariant objective* output parameter* param:parser-failure)
+                _ ...)
+               nexpr)) ...)
+     #:with black-box (if (attribute name)
+                          (datum->syntax #'name (string->symbol (syntax-e #'name)))
+                          ; FIXME type vs token ...
+                          ; FIXME spaces!?
+                          (datum->syntax #'term (string->symbol (syntax-e #'term.label)))
+                          )
+     #'(actualize black-box (~? (~@ #:prov prov))
+                  (~? inv.lifted) ...
+                  (~? par.lifted) ...
+                  (~? asp (raise-syntax-error "HOW?!")) ...
+                  (~? nexpr (raise-syntax-error "HOW?!")) ...
+                  )
+
+     ]
+    #;
     [sec:sc-cur-input
      ; OK is there a way to reference down two dots?
      ; no, you have to do the renaming inside the syntax class
@@ -117,24 +185,47 @@
   ; default interpretation of nested inputs is a make spec that only lists inputs
   (input "top level thing" #:prov (hyp: 'p)
          (input "input to tlt 1" #:prov (hyp: '1))
-         (input "input to tlt 2" #:prov (hyp: '2))))
+         (input "input to tlt 2" #:prov (hyp: '2)))
+
+  (check-exn
+   exn:fail:syntax?
+   (thunk
+    (convert-syntax-error
+     (parameter* "p1" 'wat))))
+
+  (check-exn
+   exn:fail:syntax?
+   (thunk
+    (convert-syntax-error
+     (input "i1"
+            (aspect "a1"
+                    (parameter* "p1"
+                                'oops-i-have-a-body
+                                )
+                    )
+
+            ))))
+  )
 
 (define-syntax (output stx)
   ; FIXME use the syntax class to avoid duplication probably
   (syntax-parse stx
-    #:datum-literals (hyp: quote spec make)
+    #:disable-colon-notation
     #:literal-sets (#;ls-output-nest protc-fields protc-ops)  ; whis this not working?
     ; FIXME so #:literals works but  #:literal-sets doesn't SIGH SIGH SIGH
-    #:literals (input circular-link black-box-component objective* aspect invariant parameter* TODO output parser-failure)
-    [(_ (~or* name:nestr term:sc-cur-term) (~optional (~seq #:prov prov:sc-cur-hyp))
-        (~alt unconv:str
-             ((~or* input circular-link black-box-component objective* aspect invariant parameter* TODO output parser-failure)
-              checked-by-their-own-macros ...)
-              asp:sc-cur-aspect
-              inv:sc-cur-invariant
-              par:sc-cur-parameter*
-              bbc:sc-cur-bbc
-              in:sc-cur-input
+    #:conventions (conv-ur-parts)
+    #:literals (TODO aspect black-box-component circular-link input invariant objective* output parameter* param:parse-failure)
+    [(_ (~or* name term) (~optional (~seq #:prov prov))
+        (~alt unconv
+              (~and (input _ ...) in)
+              (~and (output _ ...) out)
+              (~and (aspect _ ...) asp)
+              (~and (parameter* _ ...) par)
+              (~and (invariant _ ...) inv)
+              ((~or* TODO aspect black-box-component circular-link input invariant objective* output parameter* param:parse-failure)
+               ; if a syntax class does not match above we want to fall through here and still match so that we
+               ; can get a clear error message as far down the hierarchy as possible
+               nbody ...)
               ; FIXME allowing nested outputs is a problem because because those are defacto
               ; a new nested protocol burried inside a step of a single other protocol
               ; while in principle it would be nice to allow such nesting, it would mean that
@@ -151,9 +242,6 @@
               ; and I do it at this stage becuase the right time to do this is when converting from
               ; protc/ur to direct-model or protc/base or whatever because this is the point at
               ; which we know that things should be flattened and how they were originally nested
-              out:sc-cur-output
-              obj:sc-cur-objective*
-              fail:sc-cur-fail
               #;
               other:expr) ...)
      #:with spec-name (if (attribute prov.id)
@@ -191,7 +279,6 @@
   (output "thing" #:prov (hyp: 'prov-a)
           (parameter* (quantity 100 (unit 'meters 'milli))
                       #:prov (hyp: 'prov-b)))
-  ;#; ; now illegal
   (output "t1"
           (output "t2")
           )
@@ -208,24 +295,63 @@
   ; since it indicates that FOR THE SAME SUBJECT all of these values
   ; are to be explored
   (syntax-parse stx
-    ;#:datum-literals (hyp: quote)
     [(_ (~or* name:nestr term:sc-cur-term) (~optional (~seq #:prov prov:sc-cur-hyp))
-        (~alt unconv:str
-              par:sc-cur-parameter*
-              inv:sc-cur-invariant) ...)
+        (~or*
+         (~seq unconv:str ...)
+         (~seq inv:sc-cur-invariant ...)
+         (~seq par:sc-cur-parameter* ...)))
      #`(quote #,stx)]))
+
 (module+ test
   (vary "variable-name" #:prov (hyp: '-1)
         (parameter* (quantity 10) #:prov (hyp: '-10)))
   (vary "variable-name" #:prov (hyp: '-2)
         (invariant (quantity 20) #:prov (hyp: '-11)))
-  (vary "variable-name" #:prov (hyp: '-3)
-        (parameter* (quantity 10) #:prov (hyp: '-12))
-        (invariant (quantity 20) #:prov (hyp: '-13))))
+  (check-exn
+   exn:fail:syntax?
+   (thunk
+    (convert-syntax-error
+     (vary "variable-name" #:prov (hyp: '-3)
+           (parameter* (quantity 10) #:prov (hyp: '-12))
+           (invariant (quantity 20) #:prov (hyp: '-13)))))))
 
 (define-syntax (aspect stx)
   (syntax-parse stx
-    #:datum-literals (hyp: quote)
+    #:disable-colon-notation
+    #:local-conventions ([nexpr expr])
+    #:conventions (conv-ur-parts)
+    #:literals (TODO aspect black-box-component circular-link input invariant *measure output parameter* param:parse-failure vary)
+    [(_ (~or* name term) (~optional (~seq #:prov prov))
+        (~alt unconv
+              ; note that the syntax class is vastly more complex right now because it tries to accomodate
+              ; the case where aspect might also be a parent class, I'm 99% sure that we want a seprate
+              ; tag for that, it still an aspect but possibly multi-aspect or something like that so that
+              ; it is quick to check the tag, though obviously syntax-parse can bse used to support both
+              ; patterns under a single tag, I'm pretty sure we don't want to do that
+              (~and (aspect _ ...) asp) ; this case doesn't usually appear in the anno derived protcur set
+              (~and (parameter* _ ...) par)
+              (~and (invariant _ ...) inv)
+              (~and (vary _ ...) var)
+              (~and
+               ((~or* TODO aspect circular-link invariant *measure parameter* param:parse-failure vary)
+                ; if a syntax class does not match above we want to fall through here and still match so that we
+                ; can get a clear error message as far down the hierarchy as possible
+                _ ...)
+               nexpr) ; bind the name so nested expansion can continue
+              #;
+              other:expr) ...)
+     #:with recurse stx
+     #'(begin
+         (quote recurse)
+         asp ...
+         par ...
+         inv ...
+         var ...
+         nexpr ...
+         )]))
+
+(define-syntax (aspect-alt stx)
+  (syntax-parse stx
     [section:sc-cur-aspect
      #:with (errors ...)
      (make-errors [(or (attribute section.asp)
@@ -278,6 +404,7 @@
                                        #:kind protc-warning  ; TODO
                                        #:fix #t])
      #'(begin errors ...)]))
+
 (module+ test
   (aspect "mass" #:prov (hyp: '0))
   (aspect "test-unconv" #:prov (hyp: 'lol) "unconverted")
@@ -290,7 +417,7 @@
             10
             (unit 'kelvin 'milli))
            #:prov (hyp: '2)))
-  (aspect "holding potential"
+  (aspect-alt "holding potential"
           #:prov (hyp: '3)
           (vary "holding-potential" #:prov (hyp: '3.5)
                 (parameter*
@@ -299,7 +426,7 @@
                 (parameter*
                  (quantity -50 (unit 'volts 'milli))
                  #:prov (hyp: '5))))
-  (aspect "angle"
+  (aspect-alt "angle"
           #:prov (hyp: 'yes)
           (black-box-component "start from here thing" #:prov (hyp: 'asdf))  ; TODO auto lift?
           (parameter* (expr (range (quantity 1) (quantity 2 (unit 'meters 'mega)))) #:prov (hyp: 'fdsa)))
@@ -356,6 +483,10 @@
     [_:sc-cur-invariant
      #`(quote #,stx)]))
 
+(module+ test
+  (invariant (param:parse-failure less than half that of) (rest "less than half that of"))
+  (check-fail-syntax (invariant (param:parse-failure less than half that of) "less than half that of")))
+
 (define-syntax (result stx)
   (syntax-parse stx
     [_:sc-cur-result
@@ -365,20 +496,11 @@
   (parameter* (quantity 100 (unit 'meters 'milli)) #:prov (hyp: 'prov-0))
   (output "thing" #:prov (hyp: 'prov-1)
           (parameter* (quantity 100 (unit 'meters 'milli)) #:prov (hyp: 'prov-2)))
-  (check-exn exn:fail:syntax? (thunk
-                               (convert-syntax-error
-                                (parameter* 100 (unit 'meters 'milli) #:prov (hyp: 'prov-1))))))
-
-(define (objective* text prov) #f)
-(define (telos text prov) #f)
-
-(define (order) #f)
-(define (repeate) #f)
-
-(define (references-for-use) #f)
-(define (references-for-evidence) #f)
-
-(define (black-box) #f)
+  (check-exn
+   exn:fail:syntax?
+   (thunk
+    (convert-syntax-error
+     (parameter* 100 (unit 'meters 'milli) #:prov (hyp: 'prov-1))))))
 
 ;;; TODO
 
@@ -411,7 +533,7 @@
                                (convert-syntax-error ; FIXME false aliasing here ... where (hyp: '0) is incorrectly accepted
                                 (test (parameter* (hyp: '0) (quantity 10 (unit 'meters)))))))
 
-  (test (invariant (quantity 10 (unit meters)) (hyp: '0)))
+  (test (invariant (quantity 10 (unit meters)) #:prov (hyp: '0)))
 
   (input "thing" #:prov (hyp: '1) (parameter* (quantity 10 (unit meters)) #:prov (hyp: '2)))
 

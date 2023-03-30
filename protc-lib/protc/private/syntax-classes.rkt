@@ -618,10 +618,11 @@ All actualize sections should specify a variable name that will be used in inher
 
 (define-syntax-class sc-cur-circular-link
   #:datum-literals (circular-link cycle)
-  (pattern (circular-link type (cycle id-1 id-2))
+  (pattern (circular-link type (cycle id-n ...))
            #:attr warning (datum->syntax this-syntax
-                                         (apply format "WARNING: circular link ~a (cycle ~a ~a)"
-                                                 (map syntax->datum (list #'type #'id-1 #'id-2))))))
+                                         (format "WARNING: circular link ~a ~a"
+                                                 (syntax->datum #'type)
+                                                 (cons 'cycle (syntax->datum #'(id-n ...)))))))
 
 (define-syntax-class sc-cur-todo
   #:datum-literals (TODO)
@@ -632,14 +633,16 @@ All actualize sections should specify a variable name that will be used in inher
 (define-syntax (define-sc-aspect-lift stx)
   (syntax-parse stx
     ;#:datum-literals (aspect)
+    #:datum-literals (rest)
     [(_ name oper-name alt ...)
      #:with -~? (datum->syntax this-syntax '~?)
+     #:with elip+ (datum->syntax this-syntax '...+)
      #'(define-syntax-class name
          #:literals (aspect-lifted)
          #:datum-literals (oper-name alt ...)
          (pattern ((~or* oper-name alt ...)
                    (~or* quantity:sc-quantity dil:sc-dilution dil:sc-ratio boo:sc-bool fail:sc-cur-fail)
-                   (~optional rest)
+                   (~optional (rest parse-rest elip+))
                    (~optional (~seq #:prov prov:sc-cur-hyp)))
                   #:attr lifted ;(syntax/loc this-syntax
                   #'(aspect-lifted (-~? fail
@@ -830,14 +833,15 @@ All actualize sections should specify a variable name that will be used in inher
   (pattern  ((~or* vary protc:vary protc:implied-vary)
              name:nestr
              (~optional (~seq #:prov prov:sc-cur-hyp))
-             (~alt unconv:str
-                   inv:sc-cur-invariant
-                   par:sc-cur-parameter*) ...)))
+             (~or*
+              (~seq unconv:str ...)
+              (~seq inv:sc-cur-invariant ...)
+              (~seq par:sc-cur-parameter* ...)))))
 
 (define-syntax-class sc-cur-aspect
-  #:datum-literals (aspect protc:aspect protc:implied-aspect)
+  #:datum-literals (aspect protc:aspect protc:implied-aspect aspect-alt)
   ; reminder, don't need unprefixed implied- because if you are unprefixed you are writing the protocl directly
-  (pattern ((~or* aspect protc:aspect protc:implied-aspect)
+  (pattern ((~or* aspect protc:aspect protc:implied-aspect aspect-alt)
             (~or* name:nestr term:sc-cur-term)
             (~optional (~seq #:prov prov:sc-cur-hyp))
             (~alt
@@ -859,7 +863,7 @@ All actualize sections should specify a variable name that will be used in inher
             )
            #:attr warning #f)
 
-  (pattern ((~or* aspect protc:aspect protc:implied-aspect)
+  (pattern ((~or* aspect protc:aspect protc:implied-aspect aspect-alt)
             (~or* name:nestr term:sc-cur-term)
             (~optional (~seq #:prov prov:sc-cur-hyp))
             (~between (~or* asp:sc-cur-aspect
@@ -912,8 +916,8 @@ All actualize sections should specify a variable name that will be used in inher
      [thing:sc-cur-aspect #t]))
   )
 (define-syntax-class sc-cur-aspect-bad
-  #:datum-literals (aspect protc:aspect protc:implied-aspect)
-  (pattern ((~or* aspect protc:aspect protc:implied-aspect)
+  #:datum-literals (aspect protc:aspect protc:implied-aspect aspect-alt)
+  (pattern ((~or* aspect protc:aspect protc:implied-aspect aspect-alt)
             (~or* name:nestr term:sc-cur-term)
             (~optional (~seq #:prov prov:sc-cur-hyp))
             (~alt
@@ -1181,3 +1185,27 @@ All actualize sections should specify a variable name that will be used in inher
 (define-syntax-class sc-provide-for-export
   #:datum-literals (for-export)  ; FIXME
   (pattern (for-export provide-spec ...)))
+
+(define-conventions conv-ur-parts
+  [name nestr]
+  [term sc-cur-term]
+  [prov sc-cur-hyp]
+  [unconv str]
+  [in sc-cur-input]
+  [out sc-cur-output]
+  [asp sc-cur-aspect]
+  [inv sc-cur-invariant]
+  [par sc-cur-parameter*]
+  [bbc sc-cur-bbc]
+  [crc sc-cur-circular-link]
+  [ipi sc-cur-input-instance]
+  [obj sc-cur-objective*]
+  [qal sc-cur-any-qualifier]
+  [exv sc-cur-executor-verb]
+  [tod sc-cur-todo]
+  [var sc-cur-vary]
+  [fail sc-cur-fail]
+
+  #; ; not implemented
+  [bb sc-cur-bb]
+  )
