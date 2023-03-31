@@ -137,15 +137,16 @@
   (syntax-parse stx
     #:disable-colon-notation
     #:conventions (conv-ur-parts)
-    #:literals (TODO aspect black-box-component circular-link input invariant objective* output parameter* param:parse-failure)
+    #:literals (TODO aspect aspect-vary black-box-component circular-link input invariant objective* output parameter* param:parse-failure)
     [(_ (~or* name term)
         (~optional (~seq #:prov prov))
         (~alt unconv
               (~and (aspect _ ...) asp)
+              (~and (aspect-vary _ ...) asv)
               (~and (invariant _ ...) inv) ; things that we are going to transform at this level can't just be check by their own macros probably
               (~and (parameter* _ ...) par)
               (~and
-               ((~or* TODO aspect black-box-component circular-link input invariant objective* output parameter* param:parser-failure)
+               ((~or* TODO aspect aspect-vary black-box-component circular-link input invariant objective* output parameter* param:parser-failure)
                 _ ...)
                nexpr)) ...)
      #:with black-box (if (attribute name)
@@ -158,6 +159,7 @@
                   (~? inv.lifted) ...
                   (~? par.lifted) ...
                   (~? asp (raise-syntax-error "HOW?!")) ...
+                  (~? asv (raise-syntax-error "HOW?!")) ...
                   (~? nexpr (raise-syntax-error "HOW?!")) ...
                   )
 
@@ -314,6 +316,16 @@
      (vary "variable-name" #:prov (hyp: '-3)
            (parameter* (quantity 10) #:prov (hyp: '-12))
            (invariant (quantity 20) #:prov (hyp: '-13)))))))
+
+(define-syntax (aspect-vary stx)
+  (syntax-parse stx
+    #:disable-colon-notation
+    #:conventions (conv-ur-parts)
+    [(_ (~or* name term) (~optional (~seq #:prov prov))
+        body ...)
+     #'(aspect
+        (~? name ) (~? term) (~? (~@ #:prov prov))
+        (vary "gensyn or something" body ...))]))
 
 (define-syntax (aspect stx)
   (syntax-parse stx

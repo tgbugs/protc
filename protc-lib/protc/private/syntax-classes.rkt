@@ -752,6 +752,7 @@ All actualize sections should specify a variable name that will be used in inher
              child:sc-cur-bbc
              fail:sc-cur-fail
              asp:sc-cur-aspect
+             asv:sc-cur-aspect-vary
              ; FIXME do we restrict the aspect structure here?  OR should we only
              ; allow aspects to have bbcs as context?  in other words, we need a way
              ; to know whether the bbc has a parent that is the primary input, or
@@ -838,6 +839,16 @@ All actualize sections should specify a variable name that will be used in inher
               (~seq inv:sc-cur-invariant ...)
               (~seq par:sc-cur-parameter* ...)))))
 
+(define-syntax-class sc-cur-aspect-vary
+  #:datum-literals (protc:aspect-vary)
+  (pattern  ((~or* aspect-vary)
+             (~or* name:nestr term:sc-cur-term)
+             (~optional (~seq #:prov prov:sc-cur-hyp))
+             (~or*
+              (~seq unconv:str ...)
+              (~seq inv:sc-cur-invariant ...)
+              (~seq par:sc-cur-parameter* ...)))))
+
 (define-syntax-class sc-cur-aspect
   #:datum-literals (aspect protc:aspect protc:implied-aspect aspect-alt)
   ; reminder, don't need unprefixed implied- because if you are unprefixed you are writing the protocl directly
@@ -846,6 +857,7 @@ All actualize sections should specify a variable name that will be used in inher
             (~optional (~seq #:prov prov:sc-cur-hyp))
             (~alt
              (~between (~or* asp:sc-cur-aspect
+                             asv:sc-cur-aspect-vary
                              cnt:sc-cur-context
                              bbc:sc-cur-bbc) 0 +inf.0)
              (~once (~or* unconv:str ; FIXME this isn't actually ~once due to the ... ???
@@ -867,6 +879,7 @@ All actualize sections should specify a variable name that will be used in inher
             (~or* name:nestr term:sc-cur-term)
             (~optional (~seq #:prov prov:sc-cur-hyp))
             (~between (~or* asp:sc-cur-aspect
+                            asv:sc-cur-aspect-vary
                             cnt:sc-cur-context
                             bbc:sc-cur-bbc) 0 +inf.0) ...)
            #:attr inv #f
@@ -921,7 +934,10 @@ All actualize sections should specify a variable name that will be used in inher
             (~or* name:nestr term:sc-cur-term)
             (~optional (~seq #:prov prov:sc-cur-hyp))
             (~alt
-             (~between (~or* asp:sc-cur-aspect cnt:sc-cur-context bbc:sc-cur-bbc) 0 +inf.0)
+             (~between (~or* asp:sc-cur-aspect
+                             asv:sc-cur-aspect-vary
+                             cnt:sc-cur-context
+                             bbc:sc-cur-bbc) 0 +inf.0)
              (~between (~or unconv:str
                          inv:sc-cur-invariant
                          par:sc-cur-parameter*
@@ -1063,6 +1079,7 @@ All actualize sections should specify a variable name that will be used in inher
              qal:sc-cur-any-qualifier
              ;exv:sc-cur-executor-verb
              asp:sc-cur-aspect
+             asv:sc-cur-aspect-vary
              inv:sc-cur-invariant
              par:sc-cur-parameter*
              tod:sc-cur-todo
@@ -1109,6 +1126,7 @@ All actualize sections should specify a variable name that will be used in inher
              qal:sc-cur-any-qualifier
              ;exv:sc-cur-executor-verb
              asp:sc-cur-aspect
+             asv:sc-cur-aspect-vary
              inv:sc-cur-invariant
              par:sc-cur-parameter*
              tod:sc-cur-todo
@@ -1194,6 +1212,7 @@ All actualize sections should specify a variable name that will be used in inher
   [in sc-cur-input]
   [out sc-cur-output]
   [asp sc-cur-aspect]
+  [asv sc-cur-aspect-vary]
   [inv sc-cur-invariant]
   [par sc-cur-parameter*]
   [bbc sc-cur-bbc]
