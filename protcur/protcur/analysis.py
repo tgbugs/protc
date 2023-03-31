@@ -336,12 +336,17 @@ class Hybrid(HypothesisHelper):
 
         return self._additional_tags
 
+    @property
+    def isOrphanReply(self):
+        # XXX FIXME what happens if an intervening parent reply is deleted?
+        return self._anno.is_reply() and self.parent is None
 
     @property
     def isAstNode(self):
         # FIXME allows replies with matching tags through ???
         additional_tags = self.additional_tags
         return (self.prefix_ast is not None
+                and not self.isOrphanReply
                 and noneMembers(self._tags, *self.control_tags)
                 and all(noneMembers(tag, *self.prefix_skip_tags) for tag in self.tags)
                 and (any(tag.startswith(self.prefix_ast) for tag in self.tags)
@@ -432,7 +437,7 @@ class Hybrid(HypothesisHelper):
             if value:
                 return value
 
-        if (self.text and
+        if (self.text.strip() and  # watch out for those invisible charachters!
             not self.text.startswith('**https://hyp.is') and  # markdown madness
             not self.text.startswith('https://hyp.is')):
             if 'RRID' not in self.text:
@@ -459,6 +464,7 @@ class Hybrid(HypothesisHelper):
                     add_tags.extend(corrections[1:])
                 if op == 'replace':
                     ignore_tags.extend(self._cleaned__tags)  # FIXME recursion error
+                    ignore_tags.extend(self._map_tags)
                 elif op == 'delete':
                     ignore_tags.extend(corrections[1:])
 
@@ -467,7 +473,7 @@ class Hybrid(HypothesisHelper):
             # note that tag being in map tags is not exclusive
             # use case is .e.g being able to run and old and new
             # tag at the same time during a tag renaming cycle
-            if tag in self._map_tags:
+            if tag in self._map_tags and tag not in ignore_tags:
                 out.append(self._map_tags[tag])
 
             if tag not in ignore_tags:
@@ -798,12 +804,13 @@ class Hybrid(HypothesisHelper):
 
     _repr_join = '\n'
 
-    def __repr__(self, depth=0, nparens=0, cycle=tuple(), html=False, number='*', ind=4):
+    def __repr__(self, depth=0, nparens=0, cycle=tuple(), html=False, number='*', ind=4, inhere=False):
         #SPACE = '&nbsp;' if html else ' '
+        embed_link = self.shareLink if self._repr_share_use_share else self.htmlLink
         SPACE = '\xA0' if html else ' '
         NL = '<br>\n' if html else '\n'
         if self in cycle:
-            log.warning(f'CYCLE DETECTED {self.shareLink} {self._repr}')
+            log.warning(f'CYCLE DETECTED {embed_link} {self._repr}')
             return f'{NL}{SPACE * ind * (depth + 1)}* {cycle[0].id} has a circular reference with this node {self.id}'
             return ''  # prevent loops
         else:
@@ -815,7 +822,7 @@ class Hybrid(HypothesisHelper):
         # prefix test
         lct = list(self._cleaned_tags)
 
-        children = sorted(self.children)
+        children = sorted(self.children, key=lambda c: (not c.isAstNode, c))
         #children = set(c for c in self.children if c != self.parent)
         # avoid accidental recursion with replies of depth 1 TODO WE NEED TO GO DEEPER
         #and not print(cycle.id, self.id, self.shareLink))
@@ -826,8 +833,10 @@ class Hybrid(HypothesisHelper):
         _replies = [r for r in self.replies if r not in children]
         lenchilds = len(children) + len(_replies)
         more = f' {lenchilds} ...' if lenchilds else ' ...'
-        childs = ''.join(c.__repr__(depth + 1, nparens=nparens, cycle=cycle, html=html) for c in children)
-                         #if not print(c.id))
+        childs = ''.join(
+            c.__repr__(depth + 1, nparens=nparens, cycle=cycle, html=html, inhere=inhere)
+            for c in children)
+        #if not print(c.id))
         #if childs: childs += '\n'
         notes = '\n\n'.join(self.curatorNotes)
         prefixes = {f'{self.classn}:':True,
@@ -870,7 +879,7 @@ class Hybrid(HypothesisHelper):
 
         startbar = f'{startn}{SPACE * (((ind + len(start)) * depth) - 1)}{number:-<10}{more:->10}'
 
-        link = atag(self.shareLink, self.id, new_tab=True) if html else self.shareLink
+        link = atag(embed_link, self.id, new_tab=True) if html else embed_link
         title_text = row(f'{self.classn}:', lambda:f"{link}{SPACE}{self._repr}")
 
         updated_text = row('updated:', lambda:str(self.updated))
@@ -888,7 +897,7 @@ class Hybrid(HypothesisHelper):
 
         tagcor = row('tag_corrs:', lambda:str(self.tag_corrections))
 
-        replies = ''.join(r.__repr__(depth + 1, cycle=cycle, html=html)
+        replies = ''.join(r.__repr__(depth + 1, cycle=cycle, html=html, inhere=inhere)
                           for r in _replies)
                           #if not print(cycle.id, self.id, self.shareLink))
         rep_ids = row('replies:', lambda:' '.join(r._repr for r in _replies))
@@ -1047,8 +1056,10 @@ class AstGeneric(Hybrid):
                 if tag in tags:
                     if (suffix in ('input', 'implied-input') and
                         not self.hasAstParent and
+                        not [t for t in tags if t.startswith('sparc:')] and
                         list(self.children)):
-                        self._was_input = True  # FIXME make this clearer
+                        self._was_input = True  # FIXME make this clearer, yeah no kidding
+                        # FIXME also, this needs to create the dual, not just convert probably?
                         return 'protc:output'
                     else:
                         return tag
@@ -1097,8 +1108,10 @@ class AstGeneric(Hybrid):
             #return False
 
     _repr_join = ''
+    _repr_share_use_share = True
 
-    def __repr__(self, depth=1, nparens=1, plast=True, top=True, cycle=tuple(), html=False, number='*'):
+    def __repr__(self, depth=1, nparens=1, plast=True, top=True, cycle=tuple(), html=False, number='*', inhere=False):
+        embed_link = self.shareLink if self._repr_share_use_share else self.htmlLink
         debug = f'  ; {depth}'
         out = ''
         NL = '<br>\n' if html else '\n'
@@ -1130,11 +1143,12 @@ class AstGeneric(Hybrid):
                     log.warning(f'unhandled type for {self._repr} {self.tags}')
 
                 close = CLOSE * (nparens - 1)
-                out = super().__repr__(html=html, number=number, depth=depth, nparens=0)
+                out = super().__repr__(html=html, number=number, depth=depth, nparens=0, inhere=True)
                 mnl = '\n' if depth == 1 else ''
                 here_string_marker = '----'
-                _use_hstr = (not self.astType and (self.parent and self.parent.astType
-                                                   or not self.parent))
+                _use_hstr = (not self.astType and
+                             (self.parent and self.parent.astType
+                              or not self.parent) and not inhere)
                 _os = f'#<<{here_string_marker}' if _use_hstr else ''
                 _cs = f'\n{here_string_marker}\n' if _use_hstr else ''
                 return out if html else (mnl +
@@ -1155,7 +1169,7 @@ class AstGeneric(Hybrid):
         if html:
             value = color(value, count=1)
         self.linePreLen += self.indentDepth  # doing the children now we bump back up
-        link = self.shareLink
+        link = embed_link
         if html: link = atag(link, link, new_tab=True)
 
         csuf = f';{SPACE}{link}'
@@ -1183,7 +1197,8 @@ class AstGeneric(Hybrid):
                                        plast=new_plast,
                                        top=False,
                                        cycle=cycle + (self,),
-                                       html=html)
+                                       html=html,
+                                       inhere=inhere)
                     elif cycle not in _cycles:
                         _cycles.append(cycle)
                         #print('Circular link in', self.shareLink)
@@ -1344,8 +1359,12 @@ class protc(AstGeneric):
 
         'ice-cold':('protc:fuzzy-quantity', '"ice cold"', '"temperature"'),
 
+        'warm': ('protc:fuzzy-quantity', '"warm"', '"temperature"'),  # implicitly from warmed to be greater than room temperature
+
         'overnight':('protc:fuzzy-quantity', '"overnight"', '"duration"'),
         'over night':('protc:fuzzy-quantity', '"overnight"', '"duration"'),
+
+        'fresh':('protc:fuzzy-quantity', '"fresh"', '"age"'),  # ie (time-since-creation thing) < duration-after-which-no-longer-fresh
 
         'water':('protc:fuzzy-quantity', '"water"', '"immersion-type"'),
         'oil':('protc:fuzzy-quantity', '"oil"', '"immersion-type"'),
@@ -1353,7 +1372,8 @@ class protc(AstGeneric):
         'several thousand':('protc:fuzzy-quantity', '"several thousand"', '"ammount"'),  # FIXME vs count
         'unk':('protc:fuzzy-quantity', '"unknown"', '"unknown"'),
     }
-    _map_tags = {'sparc:Tool': 'protc:input',
+    _map_tags = {'sparc:Tool': 'protc:input',  # FIXME why is this mapping as an output !??!?!
+                 # answer: trying to be smart converting input to output
                  'sparc:Reagent': 'protc:input',
                  'sparc:Sample': 'protc:input',
                  #'sparc:OrganismSubject': '',
@@ -1425,6 +1445,8 @@ class protc(AstGeneric):
                         return dt
 
             while cleaned and not success:
+                # FIXME this produces bad an unexpected issues with
+                # gobbleing for e.g. mistagged inputs that contain a number
                 try:
                     _, v, rest = parameter_expression(cleaned)
                     if v_orig is None:
@@ -1605,14 +1627,15 @@ class ParameterValue:
 
         if rest:
             rest = json.dumps(rest)  # slower but at least correct :/
+            # always wrap rest in (rest ...) to keep the syntax consistent
+            _rest = f'(rest{self.SPACE}{rest})'
         else:
-            rest = ''  # in the even that None shows up
+            _rest = ''  # in the even that None shows up
 
         if not success:
-            # always wrap rest in (rest ...) to keep the syntax consistent
-            out = f'{v}{self.NL}{indent}(rest{self.SPACE}{rest})'
+            out = f'{v}{self.NL}{indent}{_rest}'
         else:
-            out = v + (f'{self.NL}{indent}(rest{self.SPACE}{rest})' if rest else '')
+            out = v + (f'{self.NL}{indent}{_rest}' if rest else '')
 
         return out
 
@@ -1752,6 +1775,9 @@ def cleanup2023(protc, annos, pool, idn):
 
     broken = atlp, problems
     incomplete = mps,
+
+    # orphan replies
+    orph = [p for p in protc if p.isOrphanReply]
 
     # check for duplicates
     dd = defaultdict(list)

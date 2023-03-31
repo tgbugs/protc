@@ -7,7 +7,7 @@ Usage:
 Options:
     -d --debug
     -o --output-type=OTYPE    output type [default: lang]
-                              options: lang top less need
+                              options: lang top flat need
     -t --output-format=OFMT   output format [default: rkt]
                               options: rkt prot html
 
@@ -53,7 +53,7 @@ class Main(clif.Dispatcher):
             return make_ast(everything, ast)
 
         elif fmt == 'rkt':
-            output_name = {'lang': 'protcurLang',
+            output_name = {'lang': 'protcurLang',  # this is no parent effectively
                            'top': 'topLevel',
                            'flat': 'flatall',
                            'need': 'parentneed',
@@ -84,12 +84,15 @@ class Main(clif.Dispatcher):
 
         [protc(a, annos) for a in annos]
 
+        protc._repr_share_use_share = False  # html
+
         if self.options.debug:
             from .analysis import cleanup2023
             cleanup2023(protc, annos, pool, idn)
 
         path = Path(self.options.path)
 
+        # TODO avoid duplicates and serialize just pointers if nested body is already present
         if self.options.output_format == 'prot':
             idints = idn._uri_api_ints()
 
@@ -140,8 +143,9 @@ class Main(clif.Dispatcher):
                 f.write(body)
 
         else:
+            out = self._output()
             with open(path, 'wt') as f:
-                f.write(self._output())
+                f.write(out)
 
     def export(self):
         from protcur.config import auth
