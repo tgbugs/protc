@@ -124,7 +124,8 @@
 (define-syntax (expr stx)
   (syntax-parse stx
     [_:sc-cur-expr
-     #`(quote #,stx)  ; TODO
+     #:with recurse stx
+     #'(quote recurse) ; TODO
      ]))
 
 (define-syntax (dimensions stx)
@@ -138,29 +139,34 @@
 (define-syntax (prefix-unit stx)
   (syntax-parse stx
     [(_ unit-base:sc-unit-name)
-     #`(quote #,stx)  ; TODO
+     #:with recurse stx
+     #'(quote recurse) ; TODO
      ]))
 
 (define-syntax (unit stx) ; FIXME required with wrong prefix (i.e. protc: instead of param:) ???
   (syntax-parse stx
     [(_ unit-base:sc-unit-name (~optional unit-prefix:sc-prefix-name))
-     #`(quote #,stx)  ; TODO
+     #:with recurse stx
+     #'(quote recurse) ; TODO
      ]))
 
 (define-syntax (unit-expr stx) ; FIXME param: protc: confusion here as well
   (syntax-parse stx
     [unit-expr:sc-unit-expr
-     #`(quote #,stx)  ; TODO
+     #:with recurse stx
+     #'(quote recurse) ; TODO
      ]))
 
 (define-syntax (ratio stx)
   (syntax-parse stx
     [rat:sc-ratio
-     #`(quote #,stx)  ; TODO
+     #:with recurse stx
+     #'(quote recurse) ; TODO
      ]))
 
 (define-syntax (dilution stx)
   (syntax-parse stx
     [dil:sc-dilution
-     #`(quote #,stx)  ; TODO
+     #:with recurse stx
+     #'(quote recurse) ; TODO
      ]))

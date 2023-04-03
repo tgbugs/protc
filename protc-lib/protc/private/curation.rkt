@@ -602,21 +602,22 @@
 
 (define-for-syntax (r-*measure stx)
   (syntax-parse stx
-    [_:sc-cur-*measure
-     #`(quote #,stx)]))
+    [_:sc-cur-*measure ; FIXME woefully incomplete
+     #:with recurse stx
+     #'(quote recurse) ; TODO
+     ]))
 
 (define-syntax (calculate stx)
   (syntax-parse stx
     [_:sc-cur-calculate
-     #`(quote #,stx)]))
+     #:with recurse stx
+     #'(quote recurse) ; TODO
+     ]))
 
 (define-syntax (version stx)
   #''TODO)
 
 (define-syntax (i-have-no-idea stx)
-  #''TODO)
-
-(define-syntax (para:dilution stx)
   #''TODO)
 
 (module+ test
