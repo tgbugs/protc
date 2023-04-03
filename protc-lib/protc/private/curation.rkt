@@ -38,13 +38,71 @@
        #'(check-exn exn:fail:syntax? (thunk (convert-syntax-error body)))
        ])))
 
+
+;;; set up for using literal sets
+;;  mflatt suggested the technique of expanding to the real
+;;  implementation and referencing the literal set literas inside
+;;  the literal set definition still has to come last
+
+(define-syntax (for-ls stx)
+  (syntax-parse stx
+    [(_ name)
+     #:with r-name (fmtid "r-~a" #'name)
+     #'(define-syntax (name stx) (r-name stx))]))
+
+(for-ls aspect)
+(for-ls aspect-vary)
+(for-ls vary)
+(for-ls black-box)
+(for-ls black-box-component)
+(for-ls input)
+(for-ls output)
+(for-ls executor)
+(for-ls executor-verb)
+(for-ls input-instance)
+(for-ls symbolic-input)
+(for-ls symbolic-output)
+(for-ls qualifier)
+(for-ls objective*)
+(for-ls telos)
+(for-ls *measure)
+(for-ls parameter*)
+(for-ls invariant)
+
+(begin-for-syntax
+  (define-literal-set ls-common
+    (circular-link param:parse-failure TODO))
+  (define-literal-set ls-aspect #:literal-sets
+    (ls-common)
+    (aspect aspect-vary parameter* invariant *measure vary))
+  (define-literal-set ls-asp-etc #:literal-sets
+    (ls-aspect) ; we allow full nesting, though syntax alone cannot check that the aspects compatible
+    ()) ; objective* ??? *measure ?
+  (define-literal-set ls-vary #:literal-sets
+    (ls-common)
+    (parameter* invariant))
+  (define-literal-set ls-input #:literal-sets
+    (ls-asp-etc)
+    (input black-box-component objective*))
+  (define-literal-set ls-output #:literal-sets
+    (ls-asp-etc)
+    (input output black-box-component objective*))
+  (define-literal-set ls-executor-verb #:literal-sets
+    (ls-common)
+    ()) ; XXX currently has no restrictions which is a problem
+  (define-literal-set ls-para-invar #:literal-sets
+    (ls-common)
+    () ; TODO quantities etc
+    )
+  )
+
 ; aspect and input are the only 2 that need to lift units out
 
-(define-syntax (make-placeholder-syntax stx)
+(define-syntax (make-placeholder-dostx stx)
   (syntax-parse stx
     [(_ stx-name)
      #:with elip (datum->syntax this-syntax '...)
-     #'(define-syntax (stx-name stx)
+     #'(define-for-syntax (stx-name stx)
          (syntax-parse stx ; TODO
            [(_ name (~optional (~seq #:prov prov)) body elip)
             #'(begin
@@ -52,15 +110,15 @@
                 body elip)]))]))
 
 ; TODO for all of these
-(make-placeholder-syntax black-box)
-(make-placeholder-syntax input-instance)
-(make-placeholder-syntax output-instance)
-(make-placeholder-syntax symbolic-input)
-(make-placeholder-syntax symbolic-output)
-(make-placeholder-syntax executor) ; rare
-(make-placeholder-syntax qualifier) ; rare
-(make-placeholder-syntax objective*)
-(make-placeholder-syntax telos)
+(make-placeholder-dostx r-black-box)
+(make-placeholder-dostx r-input-instance)
+(make-placeholder-dostx r-output-instance)
+(make-placeholder-dostx r-symbolic-input)
+(make-placeholder-dostx r-symbolic-output)
+(make-placeholder-dostx r-executor) ; rare
+(make-placeholder-dostx r-qualifier) ; rare
+(make-placeholder-dostx r-objective*)
+(make-placeholder-dostx r-telos)
 
 (define (order) #f)
 (define (repeate) #f)
@@ -68,42 +126,12 @@
 (define (references-for-use) #f)
 (define (references-for-evidence) #f)
 
-#|
-#;
-(define-syntax (input-instance stx)
-  (syntax-parse stx ; TODO
-    [(_ name (~optional (~seq #:prov prov)) body ...)
-     #'(begin (input-instance body ...))]))
-
-
-(define-syntax (output-instance stx)
-  (syntax-parse stx ; TODO
-    [(_ body ...)
-     #'(quote (input-instance body ...))]))
-
-(define-syntax (symbolic-input stx)
-  (syntax-parse stx ; TODO
-    [(_ body ...)
-     #'(quote (symbolic-input body ...))]))
-
-(define-syntax (symbolic-output stx)
-  (syntax-parse stx ; TODO
-    [(_ body ...)
-     #'(quote (symbolic-output body ...))]))
-
-(define-syntax (executor stx) ; rarely used explicit mention of who should be doing what
-  ; TODO
-  (syntax-parse stx
-    [(_ body ...)
-     #'(quote (executor body ...))]))
-|#
-
 (define-syntax (transform-verb stx)
   (syntax-parse stx
     [(_ body ...)
      #'(quote (transform-verb body ...))]))
 
-(define-syntax (executor-verb stx)
+(define-for-syntax (r-executor-verb stx)
   (syntax-parse stx
     [act:sc-cur-executor-verb
      ; TODO check whether the verb is know or whether we need to
@@ -133,11 +161,11 @@
     [thing #;(_ wut:id (~optional (~seq #:prov prov)) rest:expr ...)
            #''thing]))
 
-(define-syntax (input stx)
+(define-for-syntax (r-input stx)
   (syntax-parse stx
     #:disable-colon-notation
     #:conventions (conv-ur-parts)
-    #:literals (TODO aspect aspect-vary black-box-component circular-link input invariant objective* output parameter* param:parse-failure)
+    #:literal-sets (ls-input)
     [(_ (~or* name term)
         (~optional (~seq #:prov prov))
         (~alt unconv
@@ -209,14 +237,13 @@
             ))))
   )
 
-(define-syntax (output stx)
+(define-for-syntax (r-output stx)
   ; FIXME use the syntax class to avoid duplication probably
   (syntax-parse stx
     #:disable-colon-notation
-    #:literal-sets (#;ls-output-nest protc-fields protc-ops)  ; whis this not working?
+    #:literal-sets (ls-output protc-fields protc-ops)  ; whis this not working?
     ; FIXME so #:literals works but  #:literal-sets doesn't SIGH SIGH SIGH
     #:conventions (conv-ur-parts)
-    #:literals (TODO aspect black-box-component circular-link input invariant objective* output parameter* param:parse-failure)
     [(_ (~or* name term) (~optional (~seq #:prov prov))
         (~alt unconv
               (~and (input _ ...) in)
@@ -286,22 +313,24 @@
           )
   )
 
-(define-syntax (black-box-component stx)
+(define-for-syntax (r-black-box-component stx)
   (syntax-parse stx
     [section:sc-cur-bbc
     #'(quote section)  ; TODO FIXME
     ]))
 
-(define-syntax (vary stx)
+(define-for-syntax (r-vary stx)
   ; when used inside an aspect this will be lifted and loop inverted
   ; since it indicates that FOR THE SAME SUBJECT all of these values
   ; are to be explored
   (syntax-parse stx
+    #:literal-sets (ls-vary)
     [(_ (~or* name:nestr term:sc-cur-term) (~optional (~seq #:prov prov:sc-cur-hyp))
         (~or*
          (~seq unconv:str ...)
-         (~seq inv:sc-cur-invariant ...)
-         (~seq par:sc-cur-parameter* ...)))
+         (~seq (~and (invariant _ ...) inv:sc-cur-invariant) ...)
+         (~seq (~and (parameter* _ ...) par:sc-cur-parameter*) ...)))
+     ; TODO lift and transform ? likely need the syntax class attrs for that
      #`(quote #,stx)]))
 
 (module+ test
@@ -317,7 +346,7 @@
            (parameter* (quantity 10) #:prov (hyp: '-12))
            (invariant (quantity 20) #:prov (hyp: '-13)))))))
 
-(define-syntax (aspect-vary stx)
+(define-for-syntax (r-aspect-vary stx)
   (syntax-parse stx
     #:disable-colon-notation
     #:conventions (conv-ur-parts)
@@ -327,12 +356,12 @@
         (~? name ) (~? term) (~? (~@ #:prov prov))
         (vary "gensyn or something" body ...))]))
 
-(define-syntax (aspect stx)
+(define-for-syntax (r-aspect stx)
   (syntax-parse stx
     #:disable-colon-notation
     #:local-conventions ([nexpr expr])
     #:conventions (conv-ur-parts)
-    #:literals (TODO aspect black-box-component circular-link input invariant *measure output parameter* param:parse-failure vary)
+    #:literal-sets (ls-aspect)
     [(_ (~or* name term) (~optional (~seq #:prov prov))
         (~alt unconv
               ; note that the syntax class is vastly more complex right now because it tries to accomodate
@@ -485,12 +514,12 @@
      #`(quote #,stx)  ; TODO
      ]))
 
-(define-syntax (parameter* stx)
+(define-for-syntax (r-parameter* stx)
   (syntax-parse stx
     [_:sc-cur-parameter*
      #`(quote #,stx)]))
 
-(define-syntax (invariant stx)
+(define-for-syntax (r-invariant stx)
   (syntax-parse stx
     [_:sc-cur-invariant
      #`(quote #,stx)]))
@@ -516,7 +545,7 @@
 
 ;;; TODO
 
-(define-syntax (*measure stx)
+(define-for-syntax (r-*measure stx)
   (syntax-parse stx
     [_:sc-cur-*measure
      #`(quote #,stx)]))
