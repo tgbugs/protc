@@ -9,6 +9,7 @@
   racket/path
   racket/syntax
   syntax/parse
+  syntax/warn
   "utils.rkt"
   ;"identifier-functions.rkt"
   ;(except-in "direct-model.rkt" #%top)
@@ -86,7 +87,80 @@
 (module+ test
   (circular-link no-type (cycle lol1 lol2 lol3)))
 
-(define-syntax (param:parse-failure stx) ; FIXME param: namespace ? also FIXME not a exporting correctly? ; uh does it need to be defined in the kernel?
+(define-syntax (rest stx)
+  ; TODO this should produce a warning
+  (syntax-warn
+   stx
+   (syntax-warning
+    #:message (format "incomplete parse: ~s")
+    #:stx stx
+    #:kind #'protc/ur-warning)))
+
+(provide ; FIXME move these all to their own file param.rkt probably
+ (prefix-out param: parse-failure)
+ (prefix-out param: dimensions)
+ (prefix-out param: expr)
+ (prefix-out param: quantity)
+ (prefix-out param: ratio)
+ (prefix-out param: prefix-unit)
+ (prefix-out param: unit)
+ (prefix-out param: unit-expr))
+
+(define-syntax (parse-failure stx) ; FIXME param: namespace ? also FIXME not a exporting correctly? ; uh does it need to be defined in the kernel?
   (syntax-parse stx
     [(_ body ...)
      #'(quote (param:parse-failure body ...))]))
+
+(define-syntax (quantity stx)
+  (syntax-parse stx
+    [(~and
+      _:sc-quantity
+      (_ body ...))
+     #:with recurse stx
+     #'(begin ; TODO
+         (quote recurse)
+         body ...)]))
+
+(define-syntax (expr stx)
+  (syntax-parse stx
+    [_:sc-cur-expr
+     #`(quote #,stx)  ; TODO
+     ]))
+
+(define-syntax (dimensions stx)
+  (syntax-parse stx ; we don't have a standalone syntax class for these, and they are what they are usually
+    [(_ body:expr ...)
+     #:with recurse stx
+     #'(begin ; TODO
+         (quote recurse)
+         body ...)]))
+
+(define-syntax (prefix-unit stx)
+  (syntax-parse stx
+    [(_ unit-base:sc-unit-name)
+     #`(quote #,stx)  ; TODO
+     ]))
+
+(define-syntax (unit stx) ; FIXME required with wrong prefix (i.e. protc: instead of param:) ???
+  (syntax-parse stx
+    [(_ unit-base:sc-unit-name (~optional unit-prefix:sc-prefix-name))
+     #`(quote #,stx)  ; TODO
+     ]))
+
+(define-syntax (unit-expr stx) ; FIXME param: protc: confusion here as well
+  (syntax-parse stx
+    [unit-expr:sc-unit-expr
+     #`(quote #,stx)  ; TODO
+     ]))
+
+(define-syntax (ratio stx)
+  (syntax-parse stx
+    [rat:sc-ratio
+     #`(quote #,stx)  ; TODO
+     ]))
+
+(define-syntax (dilution stx)
+  (syntax-parse stx
+    [dil:sc-dilution
+     #`(quote #,stx)  ; TODO
+     ]))

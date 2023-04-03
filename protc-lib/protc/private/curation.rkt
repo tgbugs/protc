@@ -44,31 +44,39 @@
 ;;  implementation and referencing the literal set literas inside
 ;;  the literal set definition still has to come last
 
-(define-syntax (for-ls stx)
+(define-syntax (define-r-syntax-form stx)
   (syntax-parse stx
     [(_ name)
      #:with r-name (fmtid "r-~a" #'name)
      #'(define-syntax (name stx) (r-name stx))]))
 
-(for-ls aspect)
-(for-ls aspect-vary)
-(for-ls vary)
-(for-ls black-box)
-(for-ls black-box-component)
-(for-ls input)
-(for-ls output)
-(for-ls executor)
-(for-ls executor-verb)
-(for-ls input-instance)
-(for-ls symbolic-input)
-(for-ls symbolic-output)
-(for-ls qualifier)
-(for-ls objective*)
-(for-ls telos)
-(for-ls *measure)
-(for-ls parameter*)
-(for-ls invariant)
+(define-syntax (define-r-syntax-forms stx)
+  (syntax-parse stx
+    [(_ name ...)
+     #'(begin
+         (define-r-syntax-form name) ...)]))
 
+(define-r-syntax-forms
+ aspect
+ aspect-vary
+ vary
+ black-box
+ black-box-component
+ input
+ output
+ executor
+ executor-verb
+ input-instance
+ symbolic-input
+ symbolic-output
+ qualifier
+ objective*
+ telos
+ *measure
+ parameter*
+ invariant)
+
+;;; define the literal sets
 (begin-for-syntax
   (define-literal-set ls-common
     (circular-link param:parse-failure TODO))
@@ -87,6 +95,9 @@
   (define-literal-set ls-output #:literal-sets
     (ls-asp-etc)
     (input output black-box-component objective*))
+  (define-literal-set ls-black-box-component #:literal-sets
+    (ls-asp-etc)
+    ())
   (define-literal-set ls-executor-verb #:literal-sets
     (ls-common)
     ()) ; XXX currently has no restrictions which is a problem
@@ -95,6 +106,25 @@
     () ; TODO quantities etc
     )
   )
+
+#; ; TODO this won't work unless we move all members of conv-ur-parts into this file
+(begin-for-syntax
+  (define-syntax-class sc-cur-bbc
+    #:disable-colon-notation
+    #:conventions (conv-ur-parts)
+    #:literal-sets (ls-black-box-component)
+    (pattern (black-box-component
+              (~or name term)
+              (~optional (~seq #:prov prov))
+              (~alt
+               unconv
+               bbc
+               fail
+               asp
+               asv
+               par
+               inv) ...
+              ))))
 
 ; aspect and input are the only 2 that need to lift units out
 
@@ -211,6 +241,14 @@
                   )
      ]))
 
+(define-syntax (fuzzy-quantity stx) ; FIXME why the heck is this one in the protc: namespace ...
+  (syntax-parse stx
+    [(~and
+      _:sc-quantity
+      (_ fuzzy-value:str aspect-value:str)) ; TODO look for results of (define-fuzzy-quantity ...) to see if we know how to expand it
+     #:with recurse stx
+     #'(quote recurse)]))
+
 (module+ test
   ; default interpretation of nested inputs is a make spec that only lists inputs
   (input "top level thing" #:prov (hyp: 'p)
@@ -235,6 +273,19 @@
                     )
 
             ))))
+  ;; examples
+  (check-fail-syntax
+   (aspect "duration"
+           (input "mouse")))
+
+  (input "mouse"
+         (aspect "mass"
+                 (parameter* (quantity 40 (unit 'grams)))))
+
+  (parameter* (param:dimensions (param:quantity 1 (param:unit 'meters 'milli))
+                                (param:quantity 9 (param:unit 'meters 'milli))))
+  (invariant (fuzzy-quantity "room temperature" "temperature"))
+  (parameter* (param:quantity 10000 (param:prefix-unit 'fold)))
   )
 
 (define-for-syntax (r-output stx)
@@ -502,27 +553,31 @@
   (aspect "some aspect" (hyp: 'asdf)
           (no-how-error)))
 
-(define-syntax (unit stx)
-  (syntax-parse stx
-    [(_ unit-base:sc-unit-name (~optional unit-prefix:sc-prefix-name))
-     #`(quote #,stx)  ; TODO
-     ]))
-
-(define-syntax (unit-expr stx)
-  (syntax-parse stx
-    [(_ unit-expr:sc-unit-expr)
-     #`(quote #,stx)  ; TODO
-     ]))
-
 (define-for-syntax (r-parameter* stx)
   (syntax-parse stx
-    [_:sc-cur-parameter*
-     #`(quote #,stx)]))
+    #:literals (rest)
+    [(~and
+      all:sc-cur-parameter*
+      (_ value:expr
+         (~optional (rest parse-rest ...+))
+         (~optional (~seq #:prov prov))))
+     #:with recurse stx
+     #'(begin
+         (quote recurse)
+         value)]))
 
 (define-for-syntax (r-invariant stx)
   (syntax-parse stx
-    [_:sc-cur-invariant
-     #`(quote #,stx)]))
+    #:literals (rest)
+    [(~and
+      all:sc-cur-invariant
+      (_ value:expr
+         (~optional (rest parse-rest ...+))
+         (~optional (~seq #:prov prov))))
+     #:with recurse stx
+     #'(begin
+         (quote recurse)
+         value)]))
 
 (module+ test
   (invariant (param:parse-failure less than half that of) (rest "less than half that of"))

@@ -515,7 +515,9 @@ All actualize sections should specify a variable name that will be used in inher
   ; convert to intermediate repr
   ; then probably feed it into the conversion function
   ; check on rosette interop to kill 2 birds with 1 stone
-  'joules)
+  ;'joules
+  expr
+  )
 
 (define-syntax-class sc-unit-expr
   #:datum-literals (param:unit-expr unit-expr)
@@ -590,7 +592,7 @@ All actualize sections should specify a variable name that will be used in inher
      [expr:sc-quantity #t])))
 
 (define-syntax-class sc-cur-oper
-  (pattern (oper:id (~or* expr:sc-cur-oper quant:sc-quantity) ...)))
+  (pattern (oper:id (~or* expr:sc-cur-oper num:number quant:sc-quantity) ...)))
 
 (define-syntax-class sc-cur-expr
   #:datum-literals (expr param:expr)
