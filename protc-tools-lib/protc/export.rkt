@@ -38,6 +38,7 @@
          scribble->html
          scribble->tex
          scribble->pdf
+         ast->html
          export
          export-file
          get-user
@@ -167,13 +168,13 @@
 (define (scribble->html parts-list #:name [file-name "test-protc-output"])
   (render parts-list
           (list (format "~a.html" file-name))
-          #:dest-dir "html"
+          #:dest-dir "protc-export"
           #:render-mixin html:render-mixin))
 
 (define (scribble->tex parts-list #:name [file-name "test-protc-output"])
   (render parts-list
           (list (format "~a.tex" file-name))
-          #:dest-dir "html"
+          #:dest-dir "protc-export"
           #:render-mixin latex:render-mixin))
 
 (define (scribble->pdf parts-list
@@ -182,7 +183,7 @@
                        )
   (render parts-list
           (list (format "~a.pdf" file-name))
-          #:dest-dir "html"
+          #:dest-dir "protc-export"
           #:render-mixin (if xelatex
                              pdf:xelatex-render-mixin  ; FIXME broken?
                              pdf:render-mixin)
@@ -409,7 +410,7 @@
                 '(("a" ("1" "2" "3") ("YA DONE GOOFED"))))
   )
 
-(define (protc->scribble ast #:user [export-user null])
+(define (protc->scribble ast #:user [export-user #f])
   ; TODO target is probably needed here? inversion of control or if statement?
   ; https://docs.racket-lang.org/scribble/core.html#(part._.Structure_.Reference)
   ; https://docs.racket-lang.org/scribble/pict_2.png map protc to this model
@@ -446,10 +447,11 @@
   (define sub-style (style #f '(unnumbered)))
   (define style-current protc-style)
   (define maybe-user-qr
-    (if (null? export-user) ""
+    (if export-user
         (let ([filename "/tmp/user-qr.png"])
           (make-qrcode (user-orcid export-user) 'L #:filename filename)
-          (image filename #:scale 0.25 #;#:style #;'center))))
+          (image filename #:scale 0.25 #;#:style #;'center))
+        ""))
 
   (define sub-protocols 
     (let ([fs (apply append (map flatten-subs subprotocols))])
@@ -493,11 +495,11 @@
                                 )
                      )]
           [blocks (let ([base (list
-                               (para (~a "Executor: " (if (null? export-user)
-                                                          "____________________"
+                               (para (~a "Executor: " (if export-user
                                                           (~a (user-name export-user)
                                                               " "
-                                                              (user-orcid export-user))))
+                                                              (user-orcid export-user))
+                                                          "____________________"))
                                      ;(image "/home/tom/pictures/ZjL1bb3.jpg") ; no step on senk
                                      maybe-user-qr
                                      )

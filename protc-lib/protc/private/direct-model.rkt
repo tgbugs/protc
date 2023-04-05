@@ -34,6 +34,7 @@
          define-relation
          define-aspect
          (rename-out [protc-export export])
+         protc-export-type
          invariant
 
          lookup

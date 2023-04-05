@@ -289,7 +289,13 @@ All actualize sections should specify a variable name that will be used in inher
 
 (define-syntax-class sc-step-ref
   (pattern instruction:str
-           #:attr name (datum->syntax #'instruction (format "~a-wat" (gensym)))
+           #:attr name #f
+           #:attr name-fake ; name implies that it is bound as an identifier, since we don't lift strings to define them as implicit steps first things break, for now leave name empty until we can figure out a better way
+           #; ; both approaches causes syntax-local-value: unbound identifier: #<syntax g239023-wat-stx> issues
+           ; that are exceedingly confusing and hard to debug
+           (datum->syntax #'instruction (format "~a-wat" (gensym)))
+           ; this one at least will provide some context for the step name, though confusion if steps have the same text
+           (fmtid "~a-step-ref" #'instruction)
            #; #; ; I love that double sexp comments like this work
            #:do ((println #'instruction))
            #;

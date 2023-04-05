@@ -94,8 +94,25 @@
        )
       )
 
+; raco protc export -f pdf test-export.rkt
+; raco protc export -f html test-export.rkt
+(provide protc-for-export)  ; TODO compiled protc modules should export this automatically
 (define protc-for-export
   (list spec/*test-connected-pair))
-(provide protc-for-export)  ; TODO compiled protc modules should export this automatically
-(define spec/*test-connected-pair-ast spec/*test-connected-pair)
-(export spec/*test-connected-pair 'html #;'pdf)
+
+(module+ export
+  (define spec/*test-connected-pair-ast spec/*test-connected-pair)
+  (define out
+    (parameterize ([protc-export-type
+                    'html-live
+                    #;
+                    'pdf
+                    #;
+                    's-exp])
+      (export spec/*test-connected-pair)))
+  (with-output-to-file "/tmp/test-protc-html-output.html" #:exists 'replace
+    (λ () (display out)))
+  (for [(type '(html pdf tex))]
+    (parameterize ([protc-export-type type])
+      (export spec/*test-connected-pair)))
+  )
