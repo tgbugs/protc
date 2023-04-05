@@ -11,21 +11,45 @@
   (provide protc-module-wrapper)
   (define (protc-module-wrapper read-module)
     (syntax-parse (read-module)
+      #:disable-colon-notation
+      #:datum-literals (protcur:protocol)
+      #:local-conventions
+      ([protocol-module-name id]
+       [pid id]
+       [hid id]
+       [ac number]
+       [did id])
       [(module mod-name mod-path
-         (#%module-begin form ...))
+         (#%module-begin
+          (~alt
+           (protcur:protocol ; support for protcur:protocol -> module conversion
+            protocol-module-name
+            (~optional (~seq #:id pid))
+            (~optional (~seq #:hid hid))
+            (~optional (~seq #:anno-count ac))
+            (~optional (~seq #:datasets (did ...)))
+            body ...)
+           form) ...))
        #:with mod-name-out (format-id #'mod-name
                                       #:source #'mod-name
                                       "protc-export-~a" (syntax-e #'mod-name))
-       (datum->syntax this-syntax
-                      (syntax-e (strip-context
-                                 #'(module mod-name mod-path
-                                     (#%module-begin
-                                      ; fun stuff here?
-                                      (provide (except-out (all-defined-out)
-                                                           protc-module-out)
-                                               (rename-out [protc-module-out mod-name-out]))
-                                      protc-module-end  ; implicit from provide.rkt
-                                      form ...
-                                      ))))
-                      this-syntax
-                      this-syntax)])))
+       (datum->syntax
+        this-syntax
+        (syntax-e (strip-context
+                   #'(module mod-name mod-path
+                       (#%module-begin
+                        ; fun stuff here?
+                        (provide (except-out (all-defined-out)
+                                             protc-module-out)
+                                 (rename-out [protc-module-out mod-name-out]))
+                        protc-module-end  ; implicit from provide.rkt
+                        (module protocol-module-name protc/ur
+                          (~? (define :id 'pid))
+                          (~? (define :hid 'hid))
+                          (~? (define :anno-count ac))
+                          (~? (define :datasets '(did ...)))
+                          body ...) ...
+                        form ...
+                        ))))
+        this-syntax
+        this-syntax)])))

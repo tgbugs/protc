@@ -7,7 +7,6 @@
  (for-syntax
   racket/base
   racket/path
-  racket/syntax
   syntax/parse
   syntax/warn
   "utils.rkt"
@@ -170,3 +169,4 @@
      #:with recurse stx
      #'(quote recurse) ; TODO
      ]))
+

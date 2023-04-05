@@ -4,14 +4,42 @@
 
 (require protc/private/kernel
          protc/private/provide
-         protc/private/curation
-         protc/private/curation-unprefixed
-         #;base)
+         (only-in
+          protc/private/curation
+          aspect
+          aspect-vary
+          vary
+          black-box
+          black-box-component
+          input
+          output
+          executor
+          executor-verb
+          input-instance
+          symbolic-input
+          symbolic-output
+          qualifier
+          objective*
+          telos
+          *measure
+          parameter*
+          invariant
 
-(provide (all-from-out protc/private/kernel
-                       protc/private/curation-unprefixed
-                       protc/private/provide  ; FIXME required for kenel.rkt??
-                       )
+          implied-aspect
+          implied-input
+          implied-output
+          fuzzy-quantity
+          )
+         protc/private/curation-unprefixed
+         )
+
+(provide (all-from-out
+          protc/private/curation-unprefixed
+          protc/private/provide  ; FIXME required for kenel.rkt??
+          )
+         #%module-begin provide #%datum define list require module #%app except-out all-defined-out rename-out
+         #%top-interaction #%top quote
+         module->exports
          (prefix-out protc: (all-from-out protc/private/curation)))
 
 (module reader syntax/module-reader protc/ur
@@ -25,5 +53,4 @@
                                     (default-filter default key)
                                     )))
         #:module-wrapper protc-module-wrapper
-        (require protc/private/reader
-                 (submod protc/private/kernel module-wrapper)))
+        (require (submod protc/private/kernel module-wrapper)))
