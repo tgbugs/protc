@@ -127,16 +127,24 @@ class Main(clif.Dispatcher):
                     ds = ''
 
                 if type(k) == str:
-                    id =  k
-                    hid = k
+                    nk = f'|{k}|' if  [p for p in '()[]{}' if p in k] else k
+                    id =  nk
+                    hid = nk
                 else:
                     id = k.asUri()
                     hid = (k.uri_human_html
                            if hasattr(k, 'uri_human_html')
                            else k.uri_human).asUri()
-                return f'\n  #:id {id}\n  #:hid {hid}\n  #:anno-count {len(v)}{ds}'  # FIXME non pio ids can have () etc. in them
 
-            body = '\n'.join([
+                if 'protocols.io' in id:
+                    modname = f'pio:{k.identifier_int}'
+                else:
+                    modname = id  # XXX not the best option ...
+
+                return f' {modname}\n  #:id {id}\n  #:hid {hid}\n  #:anno-count {len(v)}{ds}'  # FIXME non pio ids can have () etc. in them
+
+            body = '#lang protc/ur\n'
+            body += '\n'.join([
                 f'(protcur:protocol{kr(k, v)}{vr(v)}\n)'
                 for k, v in sorted(pidints.items(), key=lambda kv: len(kv[1]))])
             with open(path, 'wt') as f:
