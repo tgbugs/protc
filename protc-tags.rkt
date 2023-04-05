@@ -124,7 +124,7 @@
 (tag-doc 'protc:objective '(typo)
          "typo do not display in list")
 (tag-doc 'protc:objective* '(ilxtr:parameter ilxtr:intention ilxtr:goal)
-         "An ill-defined parameter. Goal of the steps outlined [compare 'cryoprotectant' with 'bath changing times were minimized' >> maybe we need to distinguish instructions from goals? how vs nature of what?]")
+         "An ill-defined parameter. A free text description of an end state that needs an operational definition. Usually composed of more fundamental parts, protc:black-box-component, protc:aspect, and protc:parameter* values to be actualized. Goal of the steps outlined [compare 'cryoprotectant' with 'bath changing times were minimized' >> maybe we need to distinguish instructions from goals? how vs nature of what?]")
 (tag-doc 'protc:operator '(ilxtr:symbolicFunction)
          "Steps involving addition, division, subtraction, multiplication.")
 (tag-doc 'protc:order '(protc:control-flow)
