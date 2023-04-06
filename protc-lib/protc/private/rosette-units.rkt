@@ -84,7 +84,7 @@
     [(_ name:id)
      ; surely there is a better way...
      #'((λ () (define-symbolic name real?) name))]))
-  
+
 `(test: kilo multiplier ,(get-multiplier 'k))
 
 (define-syntax (assert-unit stx)
@@ -313,7 +313,7 @@
             number)
           maybe-number)
       maybe-number))
-  
+
 (define (pass-knowns function kwargs)
   (define-values (keywords all-keywords) (procedure-keywords function))
   (pretty-print
@@ -321,7 +321,7 @@
    ; it is append* which is not a relevant here
    (flatten (for/list ([kw all-keywords]
                        [arg (map exact->inexact kwargs)]) `(,kw ,arg))))
-  
+
   ;(pretty-print all-keywords)
   ;(pretty-print keywords)
   (keyword-apply all-knowns
@@ -343,7 +343,7 @@ This function should be wrapped with make-func-safe"
 
   ; TODO support mM input?
   ; TODO we should be able to use a computer algebra system to align the equations for us?
-  (clear-asserts!)  ; FIXME may not want this if we generate a module?
+  (clear-vc!)  ; FIXME may not want this if we generate a module?
 
   ;(define-symbolic mol real?)
 
@@ -408,7 +408,7 @@ This function should be wrapped with make-func-safe"
   (define new-func (make-keyword-procedure
                     (λ (kw kwargs . rest)
                       ; clear asserts here
-                      ;(clear-asserts!)
+                      ;(clear-vc!)
                       ;; inject all-knows
                       ;()
                       (let-values ([(keyword-list arg-list) (for/lists (l0 l1)
@@ -436,7 +436,7 @@ This function should be wrapped with make-func-safe"
 (define (-solve-N #:N [N (sym N)] #:kg [kg (sym kg)]
                   ; YES WE CAN! :D convert this into something auto generated! :)
                   #:m [m (sym m)] #:s [s (sym s)] #:g [g (sym g)])
-  (clear-asserts!)
+  (clear-vc!)
   ;(define-symbolic g real?)
   ;(assert (= (kilo g) kg))
   (define kwargs (list N g kg m s))
@@ -479,7 +479,7 @@ This function should be wrapped with make-func-safe"
   ; are tracked by the caller and this function doesn't have to know anything about them
   #;
   (define-symbolic ml/kg/h real?)
-  (clear-asserts!)
+  (clear-vc!)
   ; 30 ml/kg/hour -> how many ml in 3 hours for 100kg? (* 30 3 100) = 9000ml = 9L
   #;
   (assert (= 30 ml/kg/h))  ; FIXME vs volume/mass/duration n I don't think we can
@@ -559,7 +559,7 @@ This function should be wrapped with make-func-safe"
      #:with (variable-keyword ...) (map (compose string->keyword symbol->string)
                                         (syntax->datum #'(variable ...)))
      #'(λ (#:invariant invariant-value (~@ variable-keyword [variable-value (sym variable)]) ...)
-         (clear-asserts!)
+         (clear-vc!)
          (define-symbolic variable real?) ...
          (define-symbolic equation-invariant real?)
          (assert (and (< 0 variable) ...))
@@ -577,7 +577,7 @@ This function should be wrapped with make-func-safe"
                                         (syntax->datum #'(variable ...))) ;; TODO check if the syntax loc is tracked
      #;(map (λ (v) (format-id v)) (syntax->datum #'(variable ...)))
      #'(λ (#:invariant invariant-value (~@ variable-keyword [variable-value (sym variable)]) ...)
-         (clear-asserts!)
+         (clear-vc!)
          (define-symbolic variable real?) ...
          (define-symbolic equation-invariant real?)
          (assert (and (< 0 variable) ...))
@@ -613,7 +613,7 @@ This function should be wrapped with make-func-safe"
      #;(map (λ (v) (format-id v)) (syntax->datum #'(variable ...)))
      (pp
      #'(λ (#:invariant invariant-value (~@ variable-keyword [variable-value (sym variable)]) ...)
-         (clear-asserts!)
+         (clear-vc!)
          (define-symbolic variable real?) ...
          (define-symbolic equation-invariant real?)
          (assert (and (< 0 variable) ...))
@@ -625,7 +625,7 @@ This function should be wrapped with make-func-safe"
          (begin0
              (model (solve null))
            (when #t  ; TODO are there use cases where we don't want to clear asserts?
-             (clear-asserts!))))
+             (clear-vc!))))
      )
      ]
     #; ; TODO
@@ -673,7 +673,7 @@ This function should be wrapped with make-func-safe"
   )
 
 (module+ new-simple
-  (clear-asserts!)
+  (clear-vc!)
 
   ; a general dose per hour relation
   (define-symbolic volume real?)
@@ -690,4 +690,342 @@ This function should be wrapped with make-func-safe"
   ; to return the necessary amounts of different inputs
   (model (solve (assert (and (= invariant 30) (= mass 100) (= duration 3)))))
 
+  )
+
+(define (check-section-units units)
+  ; decompose units
+  (clear-vc!)
+  (model (solve #t))
+  )
+(module+ test-sec-units ;racket/base
+  #;
+  (require racket/match
+           racket/set
+           racket/string)
+  (define section-units-raw-1
+    '(
+      ; TODO break stages into their own variables for testing
+      ; stage 1
+      (|solute 1| . (invariant (quantity 1.2 (unit-expr (/ (unit 'moles) (unit 'liters)))))) ; don't assume  ...
+      (|solute 2| . (invariant (quantity 2.4 (unit-expr (/ (unit 'moles) (unit 'liters)))))) ; TODO variant with aspect
+
+      ))
+  (define section-units-raw-2-new
+    '(
+      ; stage 2
+      (|solute 1| . (invariant (quantity 120 (unit-expr (/ (unit 'grams) (unit 'moles))))))
+      (|solute 2| . (invariant (quantity 240 (unit-expr (/ (unit 'grams) (unit 'moles))))))
+
+      ))
+  (define section-units-raw-3-new
+    '(
+      ; stage 3
+      (solution . (parameter (quantity ??? (unit 'liters)))) ; FIXME TODO what is the right way to deal with holes like this?
+
+      ; stage 4
+      ; TODO there is no stage 4, but the implication is that all liters needs to be matched up
+      ; by a separate process, alternately downward assertion process, the problem is when the
+      ; top level parameter is missing (though that is less of an issue if we just warn)
+      ; the bigger issue is that the names we give the symbolics are not known at this stage
+      ; and we are missing the levels, so we might need to do the name generation when levels are known
+      )
+    )
+  (define section-units-raw-2 (append section-units-raw-1 section-units-raw-2-new))
+  (define section-units-raw-3 (append section-units-raw-2 section-units-raw-3-new))
+  ; FIXME TODO we are almost certainly going to have to construct rosette module or something like that and then evaluate it
+  #; ; this doesn't do what we want/need
+  (require rosette/lib/destruct)
+  ; TODO maybe we can use the destruct bit ?? no ... this isnt' it either
+  (define (transform-units raws)
+    (define all-syms (set))
+    (define (helper bb type value operator unit-bases)
+      (let ([sname (symbol->string bb)]
+            [unit-names (map symbol->string (if operator unit-bases (list unit-bases)))]
+            [vsym (symbol? value)]
+            )
+        (let (
+              [sym-asp ; this will surely fail at some point
+               (string->symbol (format "~a-~a" sname (string-join unit-names
+                                                                  (if operator
+                                                                      (symbol->string operator)
+                                                                      ""))))]
+              [sym-units (map (λ (unit-name)
+                                (string->symbol (format "~a-~a" sname unit-name)))
+                              unit-names)]
+              )
+          (set! all-syms (set-union all-syms (list->set (cons sym-asp sym-units))))
+          #; ; don't need this, we just use sym-asp in this case and the hole is there to keep syntax happy (for now until we can review the design)
+          (when vsym
+            (set! all-syms (set-add all-syms value)))
+          (list
+           (string->symbol "assert") ; now THAT is a weird issue with 'assert being detect as syntax
+           (list
+            (string->symbol "=")
+            (if vsym sym-asp value) ; yes redundant but at least a bit clearer and avoid duplicate symbols
+            sym-asp
+            (if operator (cons operator sym-units) (car sym-units))
+            )))))
+    (let* (;[all-syms (set)]
+           [asserts
+            (for/list ([raw raws])
+              (match raw
+                [(cons (var bb)
+                       (list (var type)
+                             (list quantity
+                                   (var value)
+                                   (list unit
+                                         (list quote (var unit-bases)) (var unit-suffixes) ...))))
+                 (helper bb type value #f unit-bases)]
+                [(cons (var bb)
+                       (list (var type)
+                             (list quantity
+                                   (var value)
+                                   (list unit-expr
+                                         (list (var operator)
+                                               (list unit
+                                                     (list quote (var unit-bases)) (var unit-suffixes) ...)
+                                               ...)))))
+                 (list bb type value operator unit-bases)
+                 ; NOTE value might be a variable in some cases ??? depending on how things like final-volume are set?
+                 (helper bb type value operator unit-bases)
+                 ]))])
+      `(begin
+         (clear-vc!)
+         (define-symbolic-to-list current-symbolics ,@(set->list all-syms) real?) ; TODO probably define-symbolic-list
+         (map (λ (x) (assert (< 0 x))) current-symbolics)
+         ,@asserts
+         ;current-symbolics
+         (list
+          (unspec-list-alt? current-symbolics)
+          (unspec-list? current-symbolics)
+          (underspecified? |solute 1-liters|))
+         ; TODO retain mapping of the symbolics back to the original invariants etc so we can generate good error messages
+         )))
+
+  (define section-units-1 (transform-units section-units-raw-1))
+  (define section-units-2 (transform-units section-units-raw-2))
+  (define section-units-3 (transform-units section-units-raw-3))
+  #;
+  (clear-vc!)
+  (define-namespace-anchor anc-ros-test)
+  (define ns-ros-test (namespace-anchor->namespace anc-ros-test))
+  (eval section-units-1 ns-ros-test) ; PRAISE THE RARE LEGITIMATE USE OF EVAL
+  (eval section-units-2 ns-ros-test)
+  (eval section-units-3 ns-ros-test)
+  #;
+  (underspecified? |solute 1-liters|)
+  (model (solve #t))
+  #;
+  (define current-symbolics (eval section-units ns-ros))
+  #;
+  (unspec-list? current-symbolics)
+  #;
+  (check-section-units section-units)
+  )
+
+(define-syntax (define-symbolic-to-list stx)
+  (syntax-parse stx
+    [(_ list-name:id name:id ... type:id)
+     #'(begin
+         (define-symbolic name ... type)
+         (define list-name (list name ...)))
+     ]))
+
+#;
+(require (rename-in (only-in racket/base remove) [remove racket-remove]))
+(require (rename-in (only-in racket/base member) [member racket-member]))
+(define (unspec-list-alt? lin [level 1] #:recurse [recurse #f])
+  ; so the other version of this doesn't/can't handle/detect cases where multiple symbolics might be unconstrained
+  ; the way to do this iteratively is by using with-vc to save and restore the current verification context so that
+  ; we can iteratively add assertions, test, and then restore
+
+  ; there is a secondary issue which is that there may be multiple decoupled axiom sets
+  ; which is actually something else we should test for, e.g. making the connection between
+  ; solution liters and each solute liters is not straight forward, and if there is no parent that
+  ; has a common unit, then we are out of luck and should warn that there the system of equations is segmented
+  #;
+  (displayln (list 'ula: lin))
+  (let ([mod (model (solve #t))]
+        [done '()]
+        [out #f])
+    (for/list ([sym lin])
+      (let ([sym-value (hash-ref mod sym)]
+            [next-lin
+             (for/list ([s lin] #:unless (racket-member s done)) s)
+             #;(racket-remove sym lin)])
+        #;
+        (displayln (list 'wat-1: lin))
+        #;
+        (displayln (list 'wat-2: next-lin))
+        (if (result-value
+             (with-vc
+               (if (sat? (solve (assert (= sym (add1 sym-value)))))
+                   (if recurse
+                       (begin ; don't recurse by default, if we have mismatched and no shared parent just report lack of sat for now
+                         (assert (= sym (add1 sym-value)))
+                         (let ([this-out (unspec-list-alt? next-lin (add1 level) #:recurse recurse)]) ; FIXME wouldn't values be nice here ...
+                           (if (for/or ([o this-out]) (cdr o))
+                               (set! out (cons level this-out))
+                               (set! out level)
+                               )))
+                       (set! out level))
+                   #f)))
+            (cons sym out)
+            (begin
+              (set! done (cons sym done))
+              (cons sym #f))
+            )))))
+
+(define (unspec-list? l)
+  (let ([out 0])
+    (for/or ([sym l])
+      (let* ([mod (model (solve #t))]
+             [value (hash-ref mod sym)]
+             [sat+1 (sat? (solve (assert (= sym (add1 value)))))])
+        (if sat+1 ; there might be more
+          (begin
+            (set! out (add1 out))
+            (for/or ([s l] #:unless (eq? s sym))
+              (if (sat?
+                     (solve
+                      (assert
+                       (and
+                        (= sym (add1 value))
+                        (= s (add1 (hash-ref mod s)))
+                        ))))
+                ; the return values here are 0 1 or > 1 basically
+                ; if there are multiple free variables then
+                (begin
+                  (set! out (add1 out))
+                  #t)
+                #f
+                ))
+            #t)
+          #f)))
+    out))
+
+(define-syntax (underspecified? stx) ; underconstrained?
+  "check whether there is more than one valid solution for the current vc for a given symbolic? identifier"
+  (syntax-parse stx
+    [(_ variable-name:id)
+     #'(let ([value (hash-ref (model (solve #t)) variable-name)])
+         (sat? (solve (assert (= variable-name (add1 value))))))]))
+
+(module+ hrm
+  (clear-vc!)
+  #|
+  (aspect in1 (/ moles liters)) -> (/ in1-moles in1-liters) ; error is no denominator for in1-liters or (= in1-liters 1.0) or many values ...
+  (aspect in2 (/ moles liters)) -> (/ in2-moles in2-liters) ; error is no denominator for in2-liters or (= in1-liters 1.0) or many values ...
+
+  (aspect in1 (/ grams moles))
+  (aspect in2 (/ grams moles))
+
+  (aspect out liters)
+  |#
+
+  (define-symbolic
+    in0-moles in0-liters
+    real?)
+  (assert (= 10 (/ in0-moles in0-liters)))
+  ;(assert (not (= in1-liters 1.0)))
+  ;(distinct? in1-liters)
+
+
+
+  (sat? (solve
+         (begin (assert (= )))
+               ))
+
+  #;
+  (model (solve (assert (= in1-liters 1.0))))
+  #;
+  (model (solve #t))
+  (underspecified? in0-liters)
+  (assert (= 1 in0-liters))
+  (underspecified? in0-liters)
+  (underspecified? in0-moles)
+  (unsat? (solve (assert (= 2 in0-liters))))
+  (model (solve #t))
+
+  (clear-vc!)
+
+  (define-symbolic-to-list asdf
+    out-liters
+    #| ; not in the model which causes error for hash-ref
+    in1-concentration
+    in2-molecular-weight
+    in2-concentration
+    in1-molecular-weight
+    |#
+    in1-liters
+    in2-liters
+    in1-grams
+    in2-grams
+    in1-moles
+    in2-moles
+    real?)
+  ; resolve ambiguous first within a single input
+  ; then step up to parent I think?
+  (assert ; using assume instead of assert should allow us to catch under constrained inputs
+      (and
+       ;(< 0 out-liters)
+       (< 0 in1-liters)
+       (< 0 in2-liters)
+       (< 0 in1-grams)
+       (< 0 in2-grams)
+       (< 0 in1-moles)
+       (< 0 in2-moles)))
+  (assert (< 0 out-liters))
+  #; ; no idea
+  (synthesize
+   #:forall (list out-liters)
+   #:gurantee (begin (assert (> 0 out-liters)))
+   )
+
+  (assert
+   (and
+    (= out-liters in1-liters) ; expanded
+    (= out-liters in2-liters) ; expanded
+    (/ in1-moles in1-liters) ; maybe program synthesis to solve
+    (/ in2-moles in2-liters)
+    (/ in1-grams in1-moles)
+    (/ in2-grams in2-moles) ; TODO consider (= in2-grams/moles (/ in2-grams in2-moles)) which is implicit below or in2-concentration
+    ))
+
+  (assert
+   (and
+    (= 120 (/ in1-grams in1-moles))
+    (= 240 (/ in2-grams in2-moles))
+    )
+   )
+
+  (assert
+   (and
+    (= 1.2 (/ in1-moles in1-liters)) ; FIXME no warning if htese are missing, just a lot of 1.0s getting filled in
+    (= 2.4 (/ in2-moles in2-liters))
+    ))
+
+  ; TODO look into using (complete-solution) maybe ? not sure if useful for us
+  (underspecified? out-liters)
+  (underspecified? in1-grams)
+  (underspecified? in2-grams)
+  (unspec-list? asdf)
+  (unspec-list-alt? asdf) ; could use with-vc to add constraint and then check others that were at same level, probably makes more sense to check other parameters, helpful that moles cannot be directly actualized unless you have access to crazy counting tools
+  (symbolics asdf)
+  (model (solve
+          (assert
+           (and
+            (= 2.0 out-liters)
+            ; FIXME no warning if rosette can find _some_ result that
+            ; satisfies, even if there might be _multiple_ results
+            ; because the expression is underconstrained
+            )
+           )
+          ))
+  #; ; indeed we can't know for sure which one is unconstrained, because any additional value will constrain the problem
+  (model (solve
+          (assert
+           (= 300 in1-grams)
+           )
+          ))
   )
