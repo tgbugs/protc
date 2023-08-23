@@ -25,7 +25,7 @@
     [(_ tag-name:id)
      #'(define-syntax (tag-name stx)
          (syntax-parse stx
-           [(_ content prov:sc-cur-hyp)
+           [(_ content (~optional (~seq #:prov prov)))
             #'(void)
             ])
          )]))
