@@ -7,7 +7,7 @@
 (require "../../../protc-lib/protc/units/si-prefixes-exp-data.rkt")
 (require "../../../protc-lib/protc/units/si-units-data.rkt")
 (require "../../../protc-lib/protc/units/si-units-extras.rkt")
-(require "../../../../../prot/rkt/test-params.rkt")
+(require "../../../protc-lib/protc/units/test/params.rkt")
 
 (define (include-all-cdrs alist)
   (append alist
