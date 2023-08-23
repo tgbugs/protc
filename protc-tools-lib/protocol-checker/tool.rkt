@@ -28,6 +28,7 @@
 ; needed to prevent error messages
 (define pref:close-on-reset-console? (preferences:get/set 'protcheck:CloseOnResetConsole?))
 
+#;
 (define drracket-macro-stepper-director%
   (class object% ;macro-stepper-director/process%
     (init-field filename)
@@ -152,7 +153,7 @@
         (define/public (check-language)
           (enable/disable-stuff (allow-protocol-checker?)))
 
-        (define/public (allow-macro-stepper?)
+        (define/public (allow-protocol-checker?)
           (let ([lang
                  (drracket:language-configuration:language-settings-language
                   (send (get-definitions-text) get-next-settings))])
@@ -160,23 +161,19 @@
 
         (define/private (enable/disable-stuff enable?)
           (if enable?
-            #t
-            #;
-              (begin (send macro-debug-menu-item enable #t)
-                     (unless (send macro-debug-button is-shown?)
-                       (send macro-debug-panel
-                             add-child macro-debug-button)))
-              #f
-            #;
-              (begin (send macro-debug-menu-item enable #f)
-                     (when (send macro-debug-button is-shown?)
-                       (send macro-debug-panel
-                             delete-child macro-debug-button)))))
+              (begin (send protocol-check-menu-item enable #t)
+                     (unless (send protocol-check-button is-shown?)
+                       (send protocol-check-panel
+                             add-child protocol-check-button)))
+              (begin (send protocol-check-menu-item enable #f)
+                     (when (send protocol-check-button is-shown?)
+                       (send protocol-check-panel
+                             delete-child protocol-check-button)))))
 
         (send (get-button-panel) change-children
               (lambda (_)
-                (cons macro-debug-panel
-                      (remq macro-debug-panel _))))
+                (cons protocol-check-panel
+                      (remq protocol-check-panel _))))
         (check-language)
 
         (define/public-final (protcheck:button-callback)
@@ -199,11 +196,13 @@
           (define normal-termination? #f)
           (define original-module-name-resolver #f)
 
+          #;
           (define director
             (parameterize ((current-eventspace drracket-eventspace)
                            (current-custodian drracket-custodian))
               (let ([filename (send definitions-text get-filename/untitled-name)])
                 (new drracket-macro-stepper-director% (filename filename)))))
+          #;
           (send interactions-text set-macro-stepper-director director)
 
           (define (the-module-name-resolver . args)
