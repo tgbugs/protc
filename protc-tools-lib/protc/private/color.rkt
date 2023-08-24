@@ -46,12 +46,14 @@
      (values str cat paren start end 0 'head-position)]
     [(and (eqv? mode 'head-position)
           (let ([peek (peek-string 10 0 port)])  ; FIXME this is horrible, would be better to try/catch :/
+            #; ; extremely verbose debug
             (println peek)
             (and
              (not (eof-object? peek))
              (any-head? peek))))
      (define-values (str cat paren start end)
        (protc-lexer port))
+     #; ; debug
      (displayln (list 'color?: str) (current-output-port))
      (define switch-to-racket-mode
        (let ([s0 (string-ref str 0)])
