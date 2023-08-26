@@ -159,7 +159,7 @@ class Main(clif.Dispatcher):
         from protcur.config import auth
         from hyputils.hypothesis import group_to_memfile
 
-        group_id = auth.dynamic_config.secrets('hypothesis', 'group', self.options.group_name)
+        group_id = auth.user_config.secrets('hypothesis', 'group', self.options.group_name)
         cache_file = group_to_memfile(group_id + 'protcur-cli')  # note, caching is not memoization (duh)
         self._from_cache(cache_file, group_id, auth)
 
