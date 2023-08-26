@@ -1444,6 +1444,7 @@ class protc(AstGeneric):
                     if dt in s:
                         return dt
 
+            _dt_done = False
             while cleaned and not success:
                 # FIXME this produces bad an unexpected issues with
                 # gobbleing for e.g. mistagged inputs that contain a number
@@ -1454,9 +1455,11 @@ class protc(AstGeneric):
                     if rest.strip():
                         _strv = str(v)
                         _dt = contains_dash_thing(cleaned[1:])
-                        if _dt and '^' in _strv:
-                            #log.info(cleaned)
-                            cleaned = cleaned.replace(_dt, ' - ')
+                        if _dt and '^' in _strv and not _dt_done:
+                            #log.info(f'{cleaned!r}')
+                            _bits = [_.strip() for _ in cleaned.split(_dt)]
+                            cleaned = ' - '.join(_bits)
+                            _dt_done = True
                             continue
 
                 except TypeError as e:
