@@ -223,6 +223,8 @@ class Hybrid(HypothesisHelper):
     _replies = {}
     _astParentIndex = {}
     _nonAstParentIndex = {}
+    _lift_reply_tags = tuple()
+    _splice_tags = tuple()
 
     def __new__(cls, anno, annos):
         """ namespace with the colon to make it simple to allow

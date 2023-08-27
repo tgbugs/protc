@@ -329,7 +329,8 @@ def make_app(annos):
     def route_curation():
         out = ''
         for route in 'papers', 'annotations', 'tags', 'ast', 'citations':
-            url = request.base_url + route
+            log.debug(request.base_url)
+            url = request.base_url + '/' + route
             out += f'<a href={url}>{route}</a> <br>'
         return out
 
@@ -565,12 +566,14 @@ def make_sparc(app=Flask('sparc curation services'), debug=False, comments=True)
         """ TODO not quite document level, more experiment level """
         return 'TODO'
 
-    @app.before_first_request
     def sparc_runonce():
         # populate existing iris
         # FIXME might still cause issue if someone types a new paper
         # into the url bar before updating the documents page
         hls = set(get_hypothesis_local(uri) for uri in SparcMI.uris)
+
+    with app.app_context():
+        sparc_runonce()
 
     return app
 
