@@ -586,11 +586,6 @@ def make_server_app(memfile=None, comments=True):
                                                           helpers=helpers)
     stream_thread.start()
 
-    # FIXME put this on AstGeneric
-    for t in justTags():
-        protc._tagIndex[t] = set()
-        Hybrid._tagIndex[t] = set()
-
     for h in helpers:
         h._annos_list = annos
         if not h._annos_list:
@@ -598,6 +593,17 @@ def make_server_app(memfile=None, comments=True):
             h._tagIndex['DEADBEEF'] = set()  # HACK for empty case so annos will add
         [h(a, h._annos_list) for a in h._annos_list]  # TODO stepping stone to passing annos as a dict
         [o.populateTags() for o in h]
+
+    # FIXME put this on AstGeneric
+    for t in justTags():
+        # this must run after populating the helpers otherwise
+        # e.g. Hybrid will produce counless warnings because it
+        # needs replies to populate tags
+        if t not in protc._tagIndex:
+            protc._tagIndex[t] = set()
+
+        if t not in Hybrid._tagIndex:
+            Hybrid._tagIndex[t] = set()
 
     app = make_app(annos)
     make_sparc(app, comments=comments)
