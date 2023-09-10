@@ -170,3 +170,9 @@
      #'(quote recurse) ; TODO
      ]))
 
+(define-syntax (bool stx)
+  (syntax-parse stx
+    [(_ bool:boolean)
+     #:with recurse stx
+     #'(quote recurse) ; TODO
+     ]))

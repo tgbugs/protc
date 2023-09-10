@@ -250,8 +250,6 @@
      #:with recurse stx
      #'(quote recurse)]))
 
-(define (bool value) value)
-
 (module+ test
   (aspect "ad libitum" (parameter* (bool #t))))
 
