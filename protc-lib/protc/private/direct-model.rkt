@@ -639,7 +639,8 @@ should be considered to be completely hocus pocus IF they are stored
                (datum->syntax #f name-data))
            #`(quote #,name-data))
          specialize-name)]
-    [(_ (~or* (make name (~optional spec-name)) (:> name (~optional spec-name))) ; make binds the output name as a being/symbol
+    [(_ (~optional (~seq #:no-recurse (~bind (no-recurse #'#t))) #:defaults ([no-recurse #'#f])) ; XXX hack to work around top level issues
+        (~or* (make name (~optional spec-name)) (:> name (~optional spec-name))) ; make binds the output name as a being/symbol
         ; this approach has the drawback that (make name) is now the only way to refer to this process?
         ; false, that is where impl comes in, but how do we deal with the 1000 different ways to spec
         ; (measure mouse is) ? most of the time we are not going to be 'making' mice... because we
@@ -725,25 +726,45 @@ should be considered to be completely hocus pocus IF they are stored
                           ; FIXME this fall through means that fail-unless syle errors
                           ; just keep parsing and we end up with name errors
                           )
-     #:with recurse stx
-     #:with name-binding (let* ([-name #'name]
-                                [-name-stx #'name-stx])
-                           (if (identifier-binding #'name)
-                               (if (identifier-binding #'name-stx)
-                                   #`(begin
-                                       (set! name-ast '(data export-stx))
-                                       (set! name specification-phase))
-                                   #'(define name "Name already bound to non-spec value. Will not overwrite."))
-                               #'(begin
-                                   (define name-stx #'export-stx)  ; this is ok except for the body bit...
-                                   (define name-ast '(data export-stx))
-                                   (define name specification-phase))))
+     #:with recurse
+     (if (syntax-e #'no-recurse) stx
+         #'(spec ; XXX can't use syntax->datum and then datum->syntax for this because it breaks identifier hygene
+            #:no-recurse
+            (~?
+             (make name (~? spec-name))
+             (:> name (~? spec-name)))
+            (~? docstring)
+            (~@
+             (~? (~@ #:inputs (input ...
+                               [oper constrainted-input aspect* ...] ...
+                               cur-input ...
+                               other-input ...)))
+             (~? (~@ #:constraints (constraint ...)))
+             (~? (~@ #:id identifier))
+             (~? (~@ #:prov prov))
+             (~? (.uses import ...))
+             (~? (~@ #:vars (var ...)))
+             (~? (~@ #:steps (step ...))))
+            body ...))
+     #:with name-binding
+     (let* ([-name #'name]
+            [-name-stx #'name-stx])
+       (if (identifier-binding #'name)
+           (if (identifier-binding #'name-stx)
+               #`(begin
+                   (set! name-ast '(data export-stx))
+                   (set! name specification-phase))
+               #'(define name "Name already bound to non-spec value. Will not overwrite."))
+           #'(begin
+               (define name-stx #'export-stx)  ; this is ok except for the body bit...
+               (define name-ast '(data export-stx))
+               (define name specification-phase))))
 
      ; probably want to look into syntax-local-make-definition-context when we do this for real
      (if (identifier-binding #'spec/name)
          #'(begin) ; we've already defined the subtree and the reference will be there
          ; this is a deficiency in how we deal with duplicate parent nodes in the pipelines
-         (if (identifier-binding #'name-get)
+         (if (or (identifier-binding #'name-get) (syntax-e #'no-recurse))
              #'(begin
                  ;(~? no-bb-yet)
                  (name-add 'spec/name)
@@ -759,7 +780,7 @@ should be considered to be completely hocus pocus IF they are stored
                  ;(provide spec/name)
                  (define spec/name
                    `export-stx))
-             #`(begin ; define the black box first if it has not already been named
+             #'(begin ; define the black box first if it has not already been named
                  (spec (black-box name thing))
                  recurse ; watch out for silent infinite loops here if the conditional is wrong
                  )))]
