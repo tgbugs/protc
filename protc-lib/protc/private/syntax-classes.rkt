@@ -2,7 +2,7 @@
 
 (module prims racket/base
   (require syntax/parse
-           (for-syntax racket/base syntax/parse))
+           (for-syntax racket/base (rename-in syntax/parse [expr syntax-expr])))
   (provide (all-defined-out)
            (rename-out [:* actualize]
                        [*: measure]
@@ -54,7 +54,7 @@ All actualize sections should specify a variable name that will be used in inher
 
   (define-syntax (def stx)
     (syntax-parse stx
-      [(_ name:id body:expr)
+      [(_ name:id body:syntax-expr)
        #'(define name body)]))
 
   (define-syntax (aspect-lifted stx)
@@ -66,7 +66,7 @@ All actualize sections should specify a variable name that will be used in inher
 (require racket/dict
          racket/list
          racket/syntax
-         syntax/parse
+         (rename-in syntax/parse [expr syntax-expr])
          (only-in racket/class class? object?)
          (only-in racket/string non-empty-string?)
          'prims
@@ -74,7 +74,7 @@ All actualize sections should specify a variable name that will be used in inher
          (for-syntax 'prims
                      racket/base
                      racket/list
-                     syntax/parse
+                     (rename-in syntax/parse [expr syntax-expr])
                      protc/units/si-units-data
                      protc/units/si-units-extras
                      protc/units/units-dimensionless
@@ -212,9 +212,9 @@ All actualize sections should specify a variable name that will be used in inher
 
 
 (define-syntax-class def-sc
-  #:description "(def name:id body:expr)"
+  #:description "(def name:id body:syntax-expr)"
   #:literals (def)
-  (pattern (def name:id body:expr)))
+  (pattern (def name:id body:syntax-expr)))
 
 (define-syntax-class message-sc
   #:literals (quote def)
@@ -250,7 +250,7 @@ All actualize sections should specify a variable name that will be used in inher
 (define-syntax-class sc-protc-body
   (pattern ((~alt (~optional (.invariants invariant-binding-form-nested ...))  ; FIXME nesting
                   (~optional parameters)
-                  (~optional validate/being:expr)  ; validate/being validate/being->symbol? works on both inputs and outputs and is part of define/   ; TODO this needs a generic portion to map symbols to verification funcations
+                  (~optional validate/being:syntax-expr)  ; validate/being validate/being->symbol? works on both inputs and outputs and is part of define/   ; TODO this needs a generic portion to map symbols to verification funcations
                   ;(~optional require)  ; ~or* on being->symbol and symbol->being for each name, essentially (define/symbol->being mouse) -> a function that when given 'mouse returns the protocol... can be imported by name
                   (~optional (.uses imports ...))  ; reference required by name
                   ;(~optional symbol->being)  ; (define/symbol->being thing #:name my-actualization-protocol-for-thing)
@@ -259,7 +259,7 @@ All actualize sections should specify a variable name that will be used in inher
                   (~between aspect-bindings 1 +inf.0)
                   thing:str
                   ) ...
-            body:expr ...
+            body:syntax-expr ...
             )
            #:attr invariant-binding-form (if (attribute invariant-binding-form-nested)
                                              #'(invariant-binding-form-nested ...)
@@ -270,7 +270,7 @@ All actualize sections should specify a variable name that will be used in inher
            #:attr required-symbolic-outputs '()
            )  ; FIXME TODO
 
-  (pattern lone-body:expr
+  (pattern lone-body:syntax-expr
            #:with TODO (datum->syntax this-syntax ''TODO)
            #:with input (datum->syntax this-syntax ''input)
            #:with (output ...) (datum->syntax this-syntax '(symbol/body-output-1 symbol/body-output-2))
@@ -308,7 +308,7 @@ All actualize sections should specify a variable name that will be used in inher
            #f
            #:attr [args 1] #f
            )
-  (pattern (name:id args:expr ...)
+  (pattern (name:id args:syntax-expr ...)
            #:attr instruction
            (let ([slv (syntax-local-value
                        (format-id #'name "~a-stx" (syntax-e #'name)))])
@@ -320,7 +320,7 @@ All actualize sections should specify a variable name that will be used in inher
 
 (define-syntax-class sc-being->symbol-body
   ; TODO
-  (pattern body:expr
+  (pattern body:syntax-expr
            #:attr validate #'"pull this value out pf the defined body structure"
            #:attr read #'"hrm, equally problematic"
            ))
@@ -354,7 +354,7 @@ All actualize sections should specify a variable name that will be used in inher
   (pattern (~or measure actualize make)))
 
 (define-syntax-class lol
-  (pattern thingA:expr)
+  (pattern thingA:syntax-expr)
   (pattern thingB:keyword))
 
 ;;; literal sets
@@ -558,15 +558,20 @@ All actualize sections should specify a variable name that will be used in inher
   #:datum-literals (quantity param:quantity
                     fuzzy-quantity protc:fuzzy-quantity
                     dimensions param:dimensions
-                    expr param:expr)
-  #:local-conventions ([body expr])
-  (pattern ((~or* param:quantity quantity) (~or* value:number (param:expr math-expr)) (~optional (~or* unit:sc-unit unit-expr:sc-unit-expr)))
+                    expr param:syntax-expr)
+  #:local-conventions ([body syntax-expr]
+                       [param-expression sc-cur-expr])
+  (pattern ((~or* param:quantity quantity) (~or* value:number param-expression)
+                                           (~optional (~or* unit:sc-unit unit-expr:sc-unit-expr)))
            ; FIXME we do not want units to be optional, this is a bug in param:dimensions
            #:attr aspect (datum->syntax this-syntax
                                         (symbol->string
                                          (unit->aspect
                                           (syntax->datum #'(~? unit.ident (~? unit-expr.unit null))))))
-           #:attr normalized #'(quantity (~? value) (~? math-expr) (~? unit (~? unit-expr null))))
+           #:attr normalized #'(quantity (~? value)
+                                         (~? param-expression.oper-expr)
+                                         ;(~? math-expr)
+                                         (~? unit (~? unit-expr null))))
   (pattern ((~or* protc:fuzzy-quantity fuzzy-quantity) fuzzy-value:str aspect:str)
            #:attr unit #f
            #:attr unit-expr #f
@@ -577,11 +582,13 @@ All actualize sections should specify a variable name that will be used in inher
            #:attr unit #f  ; TODO
            #:attr unit-expr #f
            #:attr normalized #'(dimesions quant ...))
-  (pattern ((~or* expr param:expr) body ...)  ; TODO ensure a check param:quantity prefixed by (
+  (pattern param-expression ; TODO ensure a check param:quantity prefixed by (
            #:attr aspect #f  ; TODO
            #:attr unit #f  ; TODO
            #:attr unit-expr #f
-           #:attr normalized #'(expr body ...))
+           ;#:attr normalized #'(expr body ...)
+           #:attr normalized #'param-expression.normalized
+           )
   )
 (module+ test
   (check-true
@@ -601,9 +608,9 @@ All actualize sections should specify a variable name that will be used in inher
   (pattern (oper:id (~or* expr:sc-cur-oper num:number quant:sc-quantity) ...)))
 
 (define-syntax-class sc-cur-expr
-  #:datum-literals (expr param:expr)
-  (pattern ((~or* expr param:expr) oper-expr:sc-cur-oper)))
-
+  #:datum-literals (expr param:syntax-expr)
+  (pattern ((~or* expr param:syntax-expr) oper-expr:sc-cur-oper)
+           #:attr normalized #'(expr oper-expr)))
 
 ;;; curation syntax classes 
 
@@ -636,7 +643,7 @@ All actualize sections should specify a variable name that will be used in inher
   #:datum-literals (TODO)
   (pattern (TODO text:str
                  (~optional (~seq #:prov prov:sc-cur-hyp))
-                 body:expr ...)))
+                 body:syntax-expr ...)))
 
 (define-syntax (define-sc-aspect-lift stx)
   (syntax-parse stx
@@ -649,7 +656,14 @@ All actualize sections should specify a variable name that will be used in inher
          #:literals (aspect-lifted)
          #:datum-literals (oper-name alt ...)
          (pattern ((~or* oper-name alt ...)
-                   (~or* quantity:sc-quantity dil:sc-dilution dil:sc-ratio boo:sc-bool fail:sc-cur-fail)
+                   ; FIXME hack we need a better solution for this :/ ; it implies equality
+                   ; of the string when compared to some value but that is overloaded
+                   ; and we definitely need to warn at the very least (or actually make it fatal)
+                   raw:str)
+                  #:attr lifted #f)
+         (pattern ((~or* oper-name alt ...)
+                   (~or*
+                    quantity:sc-quantity dil:sc-dilution dil:sc-ratio boo:sc-bool fail:sc-cur-fail)
                    (~optional (rest parse-rest elip+))
                    (~optional (~seq #:prov prov:sc-cur-hyp)))
                   #:attr lifted ;(syntax/loc this-syntax
@@ -1001,7 +1015,7 @@ All actualize sections should specify a variable name that will be used in inher
              inp:sc-cur-input
              out:sc-cur-output
              ) ...
-            body:expr ...)))
+            body:syntax-expr ...)))
 
 (define-syntax-class sc-cur-qualifiable
   (pattern (~or* inp:sc-cur-input
@@ -1103,7 +1117,7 @@ All actualize sections should specify a variable name that will be used in inher
   (pattern ((~or* objective* protc:objective*)
             (~or* name:nestr term:sc-cur-term)
             (~optional (~seq #:prov prov:sc-cur-hyp))
-            body:expr ...)))
+            body:syntax-expr ...)))
 
 
 (define-syntax-class sc-cur-input-instance
@@ -1112,7 +1126,7 @@ All actualize sections should specify a variable name that will be used in inher
   (pattern ((~or* input-instance protc:input-instance)
             (~or* name:nestr term:sc-cur-term)
             (~optional (~seq #:prov prov:sc-cur-hyp))
-            body:expr ...)))
+            body:syntax-expr ...)))
 
 ;; TODO really need a (dereference 'prov) id for things that appear more than once
 (define-syntax-class sc-cur-input
@@ -1140,7 +1154,7 @@ All actualize sections should specify a variable name that will be used in inher
              tod:sc-cur-todo
              fail:sc-cur-fail
              ; TODO tighter restrictions needed here
-             #;body:expr) ...
+             #;body:syntax-expr) ...
             )
            #:attr prov-id (attribute prov.id)
            #:attr term-label (attribute term.label)

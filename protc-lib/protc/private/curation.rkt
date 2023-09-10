@@ -8,7 +8,7 @@
   racket/base
   racket/path
   racket/syntax
-  syntax/parse
+  (rename-in syntax/parse [expr syntax-expr])
   "utils.rkt"
   #;
   "identifier-functions.rkt"
@@ -28,7 +28,7 @@
   (require rackunit
            "utils.rkt"
            "syntax-classes.rkt"
-           syntax/parse
+           (rename-in syntax/parse [expr syntax-expr])
            racket/function
            syntax/macro-testing
            (for-syntax racket/function))
@@ -37,7 +37,6 @@
       [(_ body)
        #'(check-exn exn:fail:syntax? (thunk (convert-syntax-error body)))
        ])))
-
 
 ;;; set up for using literal sets
 ;;  mflatt suggested the technique of expanding to the real
@@ -132,11 +131,13 @@
   (syntax-parse stx
     [(_ stx-name)
      #:with elip (datum->syntax this-syntax '...)
+     #:with tq (datum->syntax this-syntax '~?)
+     #:with ta (datum->syntax this-syntax '~@)
      #'(define-for-syntax (stx-name stx)
          (syntax-parse stx ; TODO
            [(_ name (~optional (~seq #:prov prov)) body elip)
             #'(begin
-                (quote (stx-name name (~? (~@ #:prov prov))))
+                (quote (stx-name name (tq (ta #:prov prov))))
                 body elip)]))]))
 
 ; TODO for all of these
@@ -188,7 +189,7 @@
          'black-box ; XXX many name errors for internal black boxes need to add binding context
          body ...)]
     #;
-    [thing #;(_ wut:id (~optional (~seq #:prov prov)) rest:expr ...)
+    [thing #;(_ wut:id (~optional (~seq #:prov prov)) rest:syntax-expr ...)
            #''thing]))
 
 (define-for-syntax (r-input stx)
@@ -249,6 +250,11 @@
      #:with recurse stx
      #'(quote recurse)]))
 
+(define (bool value) value)
+
+(module+ test
+  (aspect "ad libitum" (parameter* (bool #t))))
+
 (module+ test
   ; default interpretation of nested inputs is a make spec that only lists inputs
   (input "top level thing" #:prov (hyp: 'p)
@@ -285,7 +291,13 @@
   (parameter* (param:dimensions (param:quantity 1 (param:unit 'meters 'milli))
                                 (param:quantity 9 (param:unit 'meters 'milli))))
   (invariant (fuzzy-quantity "room temperature" "temperature"))
+
+  (invariant "SIGH")
+
   (parameter* (param:quantity 10000 (param:prefix-unit 'fold)))
+
+  (param:quantity (expr (range 2 3)) (unit 'meters 'milli)) ; XXX TODO
+  (quantity (expr (range 2 3)) (unit 'meters 'milli))
   )
 
 (define-for-syntax (r-output stx)
@@ -323,7 +335,7 @@
               ; protc/ur to direct-model or protc/base or whatever because this is the point at
               ; which we know that things should be flattened and how they were originally nested
               #;
-              other:expr) ...)
+              other:syntax-expr) ...)
      #:with spec-name (if (attribute prov.id)
                           (if (number? (syntax-e #'prov.id))
                            (fmtid "_~a" #'prov.id)  ; recall that #'_id doesn't work because the type is not strictly known
@@ -410,7 +422,7 @@
 (define-for-syntax (r-aspect stx)
   (syntax-parse stx
     #:disable-colon-notation
-    #:local-conventions ([nexpr expr])
+    #:local-conventions ([nexpr syntax-expr])
     #:conventions (conv-ur-parts)
     #:literal-sets (ls-aspect)
     [(_ (~or* name term) (~optional (~seq #:prov prov))
@@ -431,7 +443,7 @@
                 _ ...)
                nexpr) ; bind the name so nested expansion can continue
               #;
-              other:expr) ...)
+              other:syntax-expr) ...)
      #:with recurse stx
      #'(begin
          (quote recurse)
@@ -558,7 +570,7 @@
     #:literals (rest)
     [(~and
       all:sc-cur-parameter*
-      (_ value:expr
+      (_ value:syntax-expr
          (~optional (rest parse-rest ...+))
          (~optional (~seq #:prov prov))))
      #:with recurse stx
@@ -571,7 +583,7 @@
     #:literals (rest)
     [(~and
       all:sc-cur-invariant
-      (_ value:expr
+      (_ value:syntax-expr
          (~optional (rest parse-rest ...+))
          (~optional (~seq #:prov prov))))
      #:with recurse stx
@@ -636,7 +648,7 @@
 
   (define-syntax (unit-> stx)
     (syntax-parse stx
-      [(_ name:expr prefix:expr)
+      [(_ name:syntax-expr prefix:syntax-expr)
        #:with n (fmtid "~a" (datum->syntax #'name (syntax-local-eval #'name)))
        #:with p (fmtid "~a" (datum->syntax #'prefix (syntax-local-eval #'prefix)))
        #'(unit n p)]
