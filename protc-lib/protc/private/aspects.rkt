@@ -1,8 +1,6 @@
 #lang racket/base
 
 (require racket/string
-         (prefix-in methods-helper/ NIF-Ontology/rkt/ttl/methods-helper)  ; TODO syntax for this ... store-in
-         (prefix-in methods/ NIF-Ontology/rkt/ttl/methods)
          rdf/utils
          "identifier-functions.rkt"
          (for-syntax racket/base syntax/parse "utils.rkt"))
@@ -286,8 +284,12 @@
   (define mM (aspect 'mM 'milli-molarity "SI unit of weight" '(* _m M)))  ; TODO auto prefix conversion because this is icky
   )
 
+#; ; XXX requires NIF-Ontology
 (module+ test
-  (require racket/path)
+  (require
+   racket/path
+   (prefix-in methods-helper/ NIF-Ontology/rkt/ttl/methods-helper)  ; TODO syntax for this ... store-in
+   (prefix-in methods/ NIF-Ontology/rkt/ttl/methods))
   (define store (append methods-helper/store methods/store))  ; FIXME DANGERZONE overlapping bnode values!
   (define-values (add-triple add-triples get-triples match-triples) (instrument-store store))
   (map (compose (λ (p) (path-replace-extension p "")) file-name-from-path gen-value triple-s) (match-triples #:p (rdf: 'type) #:o (owl: 'Ontology)))
