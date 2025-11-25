@@ -2,7 +2,9 @@
 
 ;;; the the target language for protcur
 
-(require protc/private/kernel
+(require (except-in
+          protc/private/kernel
+          black-box)
          protc/private/provide
          (only-in
           protc/private/curation
