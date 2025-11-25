@@ -4,7 +4,10 @@
 (provide (except-out (all-from-out racket/base)
                      #%top
                      read read-syntax version)
-         (rename-out [version racket-version]))
+         (rename-out [version racket-version])
+         black-box)
+
+(define (black-box v) (error "sigh"))
 
 (module module-wrapper racket/base
   (require racket/syntax syntax/parse syntax/strip-context)
